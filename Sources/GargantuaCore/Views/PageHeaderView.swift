@@ -54,6 +54,8 @@ public struct PageHeaderView<Trailing: View>: View {
 
                 trailing()
 
+                TrialStatusChip()
+
                 GargantuaBrandMark()
                     .frame(width: 40, height: 40)
                     .accessibilityLabel("Gargantua")

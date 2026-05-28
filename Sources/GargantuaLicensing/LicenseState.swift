@@ -12,7 +12,9 @@ public enum GateDecision: Sendable, Equatable {
     case blocked(reason: BlockReason)
 }
 
-public enum BlockReason: Sendable, Equatable {
+public enum BlockReason: Sendable, Equatable, Hashable, Identifiable {
     case trialExpired
     case noLicense
+
+    public var id: Self { self }
 }

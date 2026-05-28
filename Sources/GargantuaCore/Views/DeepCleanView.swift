@@ -1,3 +1,4 @@
+import AppKit
 import GargantuaLicensing
 import OSLog
 import SwiftUI
@@ -46,6 +47,8 @@ public struct DeepCleanView: View {
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var blockedReason: BlockReason?
+    @State private var licenseStore = LicenseStore()
 
     public var body: some View {
         ZStack {
@@ -90,6 +93,36 @@ public struct DeepCleanView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: session.showConfirmation)
+        .sheet(item: $blockedReason) { reason in
+            UnlockGargantuaSheet(
+                reason: reason,
+                onDismiss: { blockedReason = nil },
+                onBuy: {
+                    openBuyURL()
+                    blockedReason = nil
+                },
+                onActivate: { keyString in attemptActivate(keyString) }
+            )
+        }
+    }
+
+    private func attemptActivate(_ keyString: String) -> UnlockGargantuaSheet.ActivationOutcome {
+        do {
+            _ = try licenseStore.activate(keyString: keyString)
+            Task { await LicenseStateModel.shared.refresh() }
+            return .ok
+        } catch LicenseKeyCodecError.malformedKey {
+            return .error("License key is malformed.")
+        } catch LicenseStoreError.invalidSignature {
+            return .error("Signature didn't verify.")
+        } catch {
+            return .error(error.localizedDescription)
+        }
+    }
+
+    private func openBuyURL() {
+        guard let url = URL(string: "https://gargantua.dev/buy") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     /// Asymmetric phase transition matching SmartUninstallerView so the
@@ -232,12 +265,14 @@ public struct DeepCleanView: View {
     private func confirmCleanup(_ items: [ScanResult], method: CleanupMethod) {
         session.beginCleanup(method: method)
         session.activeTask = Task {
-            // License gate fronts every Deep Clean execute. Phase 3 will swap
-            // the severTether fallback for an "Unlock Gargantua" sheet that
-            // links to FastSpring checkout.
+            // License gate fronts every Deep Clean execute. On blocked, sever
+            // the cleanup phase and present the Unlock sheet instead.
             if case .blocked(let reason) = await LicenseGate.shared.canExecuteDestructiveAction() {
                 logger.info("Deep Clean blocked by license gate: \(String(describing: reason))")
-                await MainActor.run { session.severTether() }
+                await MainActor.run {
+                    session.severTether()
+                    blockedReason = reason
+                }
                 return
             }
             let engine = CleanupEngine()

@@ -5,6 +5,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case automation = "Automation"
     case network = "Network"
     case storage = "Storage"
+    case license = "License"
     case about = "About"
 
     var id: String { rawValue }
@@ -15,6 +16,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .automation: "clock.arrow.circlepath"
         case .network: "dot.radiowaves.left.and.right"
         case .storage: "externaldrive"
+        case .license: "key.fill"
         case .about: "info.circle"
         }
     }
@@ -25,7 +27,8 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .automation: "Scheduled scans and menu bar widget."
         case .network: "MCP server transport for external clients."
         case .storage: "Scan roots, exclusions, and protected paths."
-        case .about: "Updates, version, and licensing."
+        case .license: "Activate Gargantua or check your trial status."
+        case .about: "Updates and version."
         }
     }
 }

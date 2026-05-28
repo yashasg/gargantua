@@ -118,6 +118,7 @@ public struct SettingsView: View {
         case .automation: "Scheduled scans and menu bar visibility."
         case .network: "MCP transport for external clients."
         case .storage: "Scan roots, exclusions, and protected paths."
+        case .license: "Activation and trial status."
         case .about: "Updates and version information."
         }
     }
@@ -145,6 +146,8 @@ public struct SettingsView: View {
             PersonalScopeSettingsSection(persistence: persistence)
             PathExclusionSettingsSection(persistence: persistence)
             ProtectedRootsSettingsSection()
+        case .license:
+            LicenseSettingsSection()
         case .about:
             updatesSection
             aboutSection

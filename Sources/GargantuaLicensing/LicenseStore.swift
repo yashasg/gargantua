@@ -64,6 +64,15 @@ public final class LicenseStore: @unchecked Sendable {
         return receipt
     }
 
+    /// Activate from the customer-facing key string emailed by FastSpring.
+    /// Phase 3 expects callers to invoke `await LicenseStateModel.shared.refresh()`
+    /// after this returns so observers re-render.
+    @discardableResult
+    public func activate(keyString: String) throws -> LicenseReceipt {
+        let receipt = try LicenseKeyCodec.decode(keyString)
+        return try save(receipt)
+    }
+
     public func clear() throws {
         lock.lock()
         defer { lock.unlock() }
