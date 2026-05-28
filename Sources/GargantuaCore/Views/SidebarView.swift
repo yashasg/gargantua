@@ -68,9 +68,6 @@ public struct SidebarView: View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    GargantuaSidebarBrandHeader(isCollapsed: isCollapsed)
-                        .padding(.horizontal, GargantuaSpacing.space4)
-
                     ForEach(sections) { section in
                         SidebarSectionView(
                             section: section,
@@ -126,57 +123,3 @@ public struct SidebarView: View {
     }
 }
 
-private struct GargantuaSidebarBrandHeader: View {
-    let isCollapsed: Bool
-
-    var body: some View {
-        let size: CGFloat = isCollapsed ? 32 : 66
-        let height: CGFloat = isCollapsed ? 88 : 132
-        GargantuaBrandMark()
-            .frame(width: size, height: size)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .frame(height: height)
-            .accessibilityLabel("Gargantua")
-    }
-}
-
-private struct GargantuaBrandMark: View {
-    var body: some View {
-        Group {
-            if let image = Self.image {
-                image
-                    .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            } else {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(GargantuaColors.surface2)
-                    .overlay {
-                        Image(systemName: "circle.hexagongrid.circle")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(GargantuaColors.accent)
-                    }
-            }
-        }
-    }
-
-    private static let image: Image? = {
-        guard let url = Bundle.module.url(
-            forResource: "gargantua-logo",
-            withExtension: "png",
-            subdirectory: "Brand"
-        ) else {
-            return nil
-        }
-
-        #if os(macOS)
-            guard let nsImage = NSImage(contentsOf: url) else { return nil }
-            return Image(nsImage: nsImage)
-        #elseif os(iOS)
-            guard let uiImage = UIImage(contentsOfFile: url.path) else { return nil }
-            return Image(uiImage: uiImage)
-        #else
-            return nil
-        #endif
-    }()
-}

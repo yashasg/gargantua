@@ -53,6 +53,10 @@ public struct PageHeaderView<Trailing: View>: View {
                 Spacer()
 
                 trailing()
+
+                GargantuaBrandMark()
+                    .frame(width: 40, height: 40)
+                    .accessibilityLabel("Gargantua")
             }
             .padding(.horizontal, GargantuaSpacing.space4)
             .padding(.vertical, GargantuaSpacing.space4)
