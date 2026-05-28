@@ -12,9 +12,15 @@ name: Release
 #     cask URL points back at gargantua's release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  # Tag-push trigger is disabled: releases are cut locally via Scripts/publish.sh.
+  # Re-enable by uncommenting once GitHub Secrets (APPLE_DEVELOPER_ID_CERT_P12,
+  # APPLE_DEVELOPER_ID_CERT_PASSWORD, KEYCHAIN_PASSWORD, APPLE_NOTARY_API_KEY_P8,
+  # SPARKLE_ED_PRIVATE_KEY, APPLE_TEAM_ID, APPLE_SIGNING_IDENTITY,
+  # APPLE_NOTARY_API_KEY_ID, APPLE_NOTARY_API_KEY_ISSUER_ID,
+  # HOMEBREW_TAP_PUSH_TOKEN) are configured.
+  # push:
+  #   tags:
+  #     - 'v*'
   workflow_dispatch:
     inputs:
       dry_run:
