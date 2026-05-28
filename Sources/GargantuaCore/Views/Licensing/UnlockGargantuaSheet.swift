@@ -1,30 +1,29 @@
+import AppKit
 import GargantuaLicensing
 import SwiftUI
 
 /// Presented when a destructive action is intercepted by `LicenseGate`. Mirrors
 /// the `DestructiveConfirmSheet` chrome so the visual language stays consistent
-/// across confirmation modals. Phase 4 wires the Buy button to FastSpring's
+/// across confirmation modals. Phase 5 wires the Buy button to FastSpring's
 /// checkout URL — for now it opens a placeholder.
 public struct UnlockGargantuaSheet: View {
     public let reason: BlockReason
     public let onDismiss: () -> Void
     public let onBuy: () -> Void
-    public let onActivate: (String) -> ActivationOutcome
+    public let onActivate: (URL) -> ActivationOutcome
 
     public enum ActivationOutcome: Equatable {
         case ok
         case error(String)
     }
 
-    @State private var keyDraft: String = ""
     @State private var feedback: String?
-    @State private var showsKeyField = false
 
     public init(
         reason: BlockReason,
         onDismiss: @escaping () -> Void,
         onBuy: @escaping () -> Void,
-        onActivate: @escaping (String) -> ActivationOutcome
+        onActivate: @escaping (URL) -> ActivationOutcome
     ) {
         self.reason = reason
         self.onDismiss = onDismiss
@@ -51,34 +50,19 @@ public struct UnlockGargantuaSheet: View {
                 }
             }
 
-            if showsKeyField {
-                VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
-                    Text("License key")
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink3)
-
-                    TextField("Paste the key from your purchase email", text: $keyDraft, axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .font(GargantuaFonts.monoData)
-                        .lineLimit(3 ... 6)
-
-                    if let feedback {
-                        Text(feedback)
-                            .font(GargantuaFonts.caption)
-                            .foregroundStyle(GargantuaColors.protected_)
-                    }
-                }
+            if let feedback {
+                Text(feedback)
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.protected_)
             }
 
             HStack(spacing: GargantuaSpacing.space3) {
-                if !showsKeyField {
-                    Button(action: { showsKeyField = true }, label: {
-                        Text("Already bought? Enter key")
-                            .font(GargantuaFonts.body)
-                            .foregroundStyle(GargantuaColors.ink2)
-                    })
-                    .buttonStyle(.plain)
-                }
+                Button(action: pickLicenseFile, label: {
+                    Text("Open license file…")
+                        .font(GargantuaFonts.body)
+                        .foregroundStyle(GargantuaColors.ink2)
+                })
+                .buttonStyle(.plain)
 
                 Spacer()
 
@@ -87,24 +71,10 @@ public struct UnlockGargantuaSheet: View {
                 }
                 .keyboardShortcut(.cancelAction)
 
-                if showsKeyField {
-                    GargantuaButton("Activate", icon: "key.fill", tone: .primary) {
-                        let outcome = onActivate(keyDraft)
-                        switch outcome {
-                        case .ok:
-                            onDismiss()
-                        case .error(let message):
-                            feedback = message
-                        }
-                    }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(keyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                } else {
-                    GargantuaButton("Buy Gargantua · $29", icon: "arrow.up.right.square", tone: .primary) {
-                        onBuy()
-                    }
-                    .keyboardShortcut(.defaultAction)
+                GargantuaButton("Buy Gargantua · $29", icon: "arrow.up.right.square", tone: .primary) {
+                    onBuy()
                 }
+                .keyboardShortcut(.defaultAction)
             }
         }
         .padding(GargantuaSpacing.space5)
@@ -117,6 +87,24 @@ public struct UnlockGargantuaSheet: View {
         )
     }
 
+    private func pickLicenseFile() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedFileTypes = ["gargantualicense", "plist", "xml"]
+        panel.prompt = "Activate"
+        panel.title = "Open Gargantua license file"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let outcome = onActivate(url)
+        switch outcome {
+        case .ok:
+            onDismiss()
+        case .error(let message):
+            feedback = message
+        }
+    }
+
     private var title: String {
         switch reason {
         case .trialExpired: "Tether severed"
@@ -127,9 +115,9 @@ public struct UnlockGargantuaSheet: View {
     private var subtitle: String {
         switch reason {
         case .trialExpired:
-            "Your 14-day window has closed. Activate Gargantua to keep applying destructive operations. Scans and previews stay open."
+            "Your 14-day window has closed. Open your .gargantualicense file to keep applying destructive operations. Scans and previews stay open."
         case .noLicense:
-            "Sign the manifest to continue. Activate a license — or finish the trial first."
+            "Sign the manifest to continue. Open the license file from your purchase email — or finish the trial first."
         }
     }
 }

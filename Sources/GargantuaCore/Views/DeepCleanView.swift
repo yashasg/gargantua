@@ -101,20 +101,20 @@ public struct DeepCleanView: View {
                     openBuyURL()
                     blockedReason = nil
                 },
-                onActivate: { keyString in attemptActivate(keyString) }
+                onActivate: { url in attemptActivate(fileURL: url) }
             )
         }
     }
 
-    private func attemptActivate(_ keyString: String) -> UnlockGargantuaSheet.ActivationOutcome {
+    private func attemptActivate(fileURL: URL) -> UnlockGargantuaSheet.ActivationOutcome {
         do {
-            _ = try licenseStore.activate(keyString: keyString)
+            _ = try licenseStore.save(fileURL: fileURL)
             Task { await LicenseStateModel.shared.refresh() }
             return .ok
-        } catch LicenseKeyCodecError.malformedKey {
-            return .error("License key is malformed.")
         } catch LicenseStoreError.invalidSignature {
             return .error("Signature didn't verify.")
+        } catch LicenseStoreError.malformedReceipt {
+            return .error("Not a recognizable Gargantua license file.")
         } catch {
             return .error(error.localizedDescription)
         }

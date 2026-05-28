@@ -7,7 +7,7 @@ struct LicenseGateTests {
     private func tempFileURL() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("gargantua-gate-tests", isDirectory: true)
-            .appendingPathComponent(UUID().uuidString, isDirectory: false)
+            .appendingPathComponent("\(UUID().uuidString).gargantualicense", isDirectory: false)
     }
 
     private func makeGate(
@@ -17,7 +17,7 @@ struct LicenseGateTests {
     ) -> LicenseGate {
         let store = LicenseStore(
             fileURL: receiptURL ?? tempFileURL(),
-            publicKey: LicenseSigningKeys.developmentPublicKey
+            publicKey: TestKeys.developmentPublicKey
         )
         let clock = TrialClock(storage: storage, now: now)
         return LicenseGate(store: store, clock: clock)
@@ -53,8 +53,8 @@ struct LicenseGateTests {
             #expect(decision == .blocked(reason: .trialExpired))
         }
 
-        @Test("Saved valid receipt grants .licensed state regardless of trial clock")
-        func validReceiptOverridesTrial() async throws {
+        @Test("Saved valid license overrides trial expiry")
+        func validLicenseOverridesTrial() async throws {
             let url = tempFileURL()
             defer { try? FileManager.default.removeItem(at: url) }
             let start = Date(timeIntervalSince1970: 1_750_000_000)
@@ -63,9 +63,17 @@ struct LicenseGateTests {
 
             let store = LicenseStore(
                 fileURL: url,
-                publicKey: LicenseSigningKeys.developmentPublicKey
+                publicKey: TestKeys.developmentPublicKey
             )
-            try store.save(try TestKeys.validReceipt(email: "paid@user.com"))
+            let plistData = try TestKeys.signedLicensePlist(fields: [
+                "Product": "Gargantua",
+                "Name": "Paid User",
+                "Email": "paid@user.com",
+                "Order": "ORDER-9",
+                "Timestamp": "Thu, 28 May 2026 12:00:00 +0000",
+            ])
+            try store.save(plistData: plistData)
+
             let clock = TrialClock(storage: storage, now: { day30 })
             let gate = LicenseGate(store: store, clock: clock)
 

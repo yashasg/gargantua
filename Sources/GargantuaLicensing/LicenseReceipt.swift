@@ -1,23 +1,40 @@
 import Foundation
 
-public struct LicenseReceipt: Sendable, Equatable, Codable {
-    public let email: String
-    public let name: String
-    public let activatedAt: Date
-    public let signatureBase64: String
+/// AquaticPrime-style license plist. FastSpring emits these as `.gargantualicense`
+/// files at sale time, with arbitrary customer-info fields plus a `Signature` data
+/// field. We verify the signature against the canonical form (all fields except
+/// `Signature`, sorted by key, values concatenated as UTF-8 bytes) and accept
+/// any field set the storefront chooses to send.
+public struct LicenseReceipt: Sendable, Equatable {
+    public static let signatureKey = "Signature"
 
-    public init(email: String, name: String, activatedAt: Date, signatureBase64: String) {
-        self.email = email
-        self.name = name
-        self.activatedAt = activatedAt
-        self.signatureBase64 = signatureBase64
+    /// All license fields except `Signature`, as written by FastSpring. Keys
+    /// commonly seen: `Name`, `Email`, `Product`, `Order`, `Timestamp`.
+    public let fields: [String: String]
+
+    /// Raw signature bytes extracted from the plist's `Signature` data entry.
+    public let signature: Data
+
+    public init(fields: [String: String], signature: Data) {
+        self.fields = fields
+        self.signature = signature
     }
 
+    public var email: String? { fields["Email"] }
+    public var name: String? { fields["Name"] }
+    public var product: String? { fields["Product"] }
+    public var order: String? { fields["Order"] }
+    public var timestampString: String? { fields["Timestamp"] }
+
+    /// Canonical message: values of non-signature fields, sorted alphabetically
+    /// by key, concatenated as UTF-8 bytes. AquaticPrime spec, matches what
+    /// FastSpring signs on the server side.
     public func canonicalMessage() -> Data {
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime]
-        let activatedAtString = isoFormatter.string(from: activatedAt)
-        let canonical = "gargantua-v1|\(email)|\(name)|\(activatedAtString)"
-        return Data(canonical.utf8)
+        var data = Data()
+        for key in fields.keys.sorted() {
+            guard let value = fields[key] else { continue }
+            data.append(Data(value.utf8))
+        }
+        return data
     }
 }
