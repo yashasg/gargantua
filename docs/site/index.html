@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gargantua — a native macOS cleaner for developers</title>
+<meta name="description" content="Gargantua reclaims disk space across caches, app leftovers, and developer artifacts that sandboxed App Store cleaners can't reach. Open source, $29 one-time.">
+<meta property="og:title" content="Gargantua — native macOS cleaner for developers">
+<meta property="og:description" content="Reclaim disk space across caches, app leftovers, and dev artifacts. Open source, $29 one-time.">
+<meta property="og:type" content="website">
+<style>
+  :root {
+    --void: hsl(220 14% 9%);
+    --surface1: hsl(220 12% 11%);
+    --surface2: hsl(220 11% 14%);
+    --surface3: hsl(220 10% 17%);
+    --ink: hsl(210 20% 94%);
+    --ink2: hsl(215 12% 65%);
+    --ink3: hsl(218 10% 45%);
+    --border: rgba(255,255,255,0.07);
+    --border-em: rgba(255,255,255,0.13);
+    --accent: hsl(213 90% 55%);
+    --accretion: hsl(38 85% 52%);
+    --safe: hsl(148 45% 42%);
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--void);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  /* Hero */
+  header.hero {
+    text-align: center;
+    padding: 96px 24px 64px;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, hsl(220 14% 13%), var(--void) 70%);
+  }
+  .hero img.icon { width: 132px; height: 132px; margin-bottom: 28px; filter: drop-shadow(0 8px 32px rgba(0,0,0,0.5)); }
+  .hero h1 { font-size: 52px; font-weight: 700; letter-spacing: -0.02em; }
+  .hero .tagline { font-size: 21px; color: var(--ink2); margin-top: 16px; font-weight: 400; }
+  .hero .voice { font-size: 15px; color: var(--ink3); font-style: italic; margin-top: 10px; }
+
+  .cta-row { display: flex; gap: 14px; justify-content: center; margin-top: 36px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 13px 26px; border-radius: var(--radius);
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: transform 0.12s ease, background 0.12s ease;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: hsl(213 90% 60%); }
+  .btn-ghost { background: var(--surface3); color: var(--ink); border: 1px solid var(--border-em); }
+  .btn-ghost:hover { background: hsl(220 10% 20%); }
+  .price-note { font-size: 13px; color: var(--ink3); margin-top: 18px; }
+
+  /* Sections */
+  section { padding: 72px 0; border-top: 1px solid var(--border); }
+  section h2 { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; text-align: center; }
+  section h2 + .sub { text-align: center; color: var(--ink3); font-size: 15px; margin-top: 10px; font-style: italic; }
+
+  /* Screenshots */
+  .shots { display: flex; flex-direction: column; gap: 40px; margin-top: 48px; }
+  .shot { background: var(--surface1); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .shot img { width: 100%; display: block; }
+  .shot .caption { padding: 16px 20px; font-size: 14px; color: var(--ink2); border-top: 1px solid var(--border); }
+  .shot .caption strong { color: var(--ink); font-weight: 600; }
+
+  /* Features */
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin-top: 48px; }
+  .feature { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; }
+  .feature h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+  .feature p { font-size: 14px; color: var(--ink2); }
+  .feature .dot { color: var(--accretion); }
+
+  /* Open source band */
+  .oss { background: var(--surface1); text-align: center; }
+  .oss p { max-width: 620px; margin: 18px auto 0; color: var(--ink2); font-size: 15px; }
+  .oss code { background: var(--void); border: 1px solid var(--border); border-radius: 5px; padding: 3px 8px; font-size: 13px; color: var(--accretion); font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  /* Footer */
+  footer { padding: 48px 24px; text-align: center; color: var(--ink3); font-size: 13px; border-top: 1px solid var(--border); }
+  footer a { color: var(--ink2); border-bottom: 1px solid var(--border-em); }
+  footer .meta { margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <img class="icon" src="gargantua-icon.png" alt="Gargantua app icon">
+    <h1>Gargantua</h1>
+    <p class="tagline">A native macOS cleaner for developers and power users.</p>
+    <p class="voice">Reclaim what the system left behind.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://buy.polar.sh/polar_cl_NrgUcsS3Cz6LespqGpiQ42pYnpdo8vi345tYG0uglbC">Buy Gargantua · $29</a>
+      <a class="btn btn-ghost" href="https://github.com/inceptyon-labs/gargantua/releases/latest">Download free trial</a>
+    </div>
+    <p class="price-note">One-time purchase · 14-day trial · activates on up to 3 Macs · no subscription</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>Built for the disk the sandbox can't see</h2>
+    <p class="sub">Caches, app leftovers, Docker layers, build artifacts — where the clutter actually lives.</p>
+    <div class="shots">
+      <div class="shot">
+        <img src="screenshots/gargantua-01-dashboard-16x9.png" alt="Gargantua Dashboard">
+        <div class="caption"><strong>Dashboard.</strong> Glance the system, pick where to dig in. A triage roadmap ranks where to clean first.</div>
+      </div>
+      <div class="shot">
+        <img src="screenshots/gargantua-02-deepclean-16x9.png" alt="Deep Clean">
+        <div class="caption"><strong>Deep Clean.</strong> Rule-based scan with per-finding safety classification — safe, review, protected. Nothing destructive without confirmation.</div>
+      </div>
+      <div class="shot">
+        <img src="screenshots/gargantua-03-duplicatefinder-16x9.png" alt="Duplicate Finder">
+        <div class="caption"><strong>Duplicate Finder.</strong> Backed by <code style="color:inherit">fclones</code>, with honest reclaimable-bytes math.</div>
+      </div>
+      <div class="shot">
+        <img src="screenshots/gargantua-04-diskexplorer-16x9.png" alt="Disk Explorer">
+        <div class="caption"><strong>Disk Explorer.</strong> Trace where bytes accrete in your filesystem. Drill into any folder.</div>
+      </div>
+      <div class="shot">
+        <img src="screenshots/gargantua-05-backgrounditems-16x9.png" alt="Background Items">
+        <div class="caption"><strong>Background Items.</strong> Trace what starts itself, then decide what to trust.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>What's inside</h2>
+    <div class="features">
+      <div class="feature"><h3><span class="dot">●</span> Smart Uninstaller</h3><p>Removes an app and scrubs every file it left behind — preferences, caches, login items, helpers.</p></div>
+      <div class="feature"><h3><span class="dot">●</span> Dev Artifact Purge</h3><p>Surgical targeting of node_modules, target/, .gradle/, DerivedData, and Docker layer caches.</p></div>
+      <div class="feature"><h3><span class="dot">●</span> File Health</h3><p>Orphaned files, broken symlinks, and things sitting in the wrong place.</p></div>
+      <div class="feature"><h3><span class="dot">●</span> Local AI explanations</h3><p>An on-device model explains <em>why</em> a file was flagged before you remove it.</p></div>
+      <div class="feature"><h3><span class="dot">●</span> Protected by default</h3><p>Home, /System, /Applications, /Library are off-limits unless you explicitly override.</p></div>
+      <div class="feature"><h3><span class="dot">●</span> Signed &amp; auto-updating</h3><p>Developer ID signed, notarized, with Sparkle delta updates.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="oss">
+  <div class="wrap">
+    <h2>Open source. Pay for the build.</h2>
+    <p>Gargantua is <strong>AGPL-3.0</strong> on GitHub. Clone it, audit it, and build a fully unlocked binary for free:</p>
+    <p style="margin-top:20px"><code>git clone https://github.com/inceptyon-labs/gargantua &amp;&amp; swift build</code></p>
+    <p>A license unlocks the notarized, signed, auto-updating build — and funds the development that keeps the source viable. Same app either way.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Gargantua is built by <a href="https://github.com/inceptyon-labs">Inceptyon Labs</a>, a one-person studio in Tampa, Florida.
+    <div class="meta">
+      <a href="https://github.com/inceptyon-labs/gargantua">Source</a> ·
+      <a href="https://github.com/inceptyon-labs/gargantua/releases">Releases</a> ·
+      <a href="mailto:support@inceptyon.io">support@inceptyon.io</a> ·
+      AGPL-3.0
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

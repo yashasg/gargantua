@@ -33,6 +33,17 @@
     <string>@BUILD@</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.utilities</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>@BUNDLE_ID@.activation</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>gargantua</string>
+            </array>
+        </dict>
+    </array>
     <key>LSMinimumSystemVersion</key>
     <string>@MACOS_MIN_VERSION@</string>
     <key>NSHighResolutionCapable</key>

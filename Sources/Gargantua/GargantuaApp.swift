@@ -45,6 +45,9 @@ struct GargantuaApp: App {
             MainContentView(updateSettingsViewModel: updateController.settingsViewModel)
                 .frame(minWidth: 700, minHeight: 500)
                 .preferredColorScheme(.dark)
+                .onOpenURL { url in
+                    LicenseActivationLink.handle(url)
+                }
         }
         .defaultSize(width: 900, height: 600)
         .commands {

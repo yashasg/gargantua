@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Commercial licensing** (release builds only, via `GARGANTUA_LICENSING=1`). A 14-day trial fronts the destructive-action paths (Deep Clean execute, Smart Uninstaller scrub); scans and previews stay free forever. Licenses are sold one-time through [Polar.sh](https://polar.sh) and activated by pasting a key in `Settings → License` (or via the `gargantua://activate?key=…` deep link). Activation binds to the Mac (up to 3), validates against Polar's public customer-portal API, and is cached locally with a 14-day offline grace window. Source builds remain fully unlocked under AGPL-3.0.
+- **Landing page** under `docs/site/` (static, ready for GitHub Pages) with the screenshot carousel, feature list, and Buy / Download-trial CTAs.
+
 ## [0.1.3] - 2026-05-27
 
 ## [0.1.2] - 2026-05-27
