@@ -16,10 +16,10 @@ Gargantua is a native macOS cleaner for developers and power users. It scans com
 
 The project is built as a Swift Package with four executables:
 
-- `Gargantua` — the SwiftUI macOS app
-- `GargantuaMCP` — a local Model Context Protocol server for automation-driven scans and guarded cleanups
-- `GargantuaScheduler` — a launchd-driven background runner used by Scheduled Scans
-- `GargantuaPrivilegedHelper` — an SMAppService/XPC helper for operations that require elevated trust
+- `Gargantua`: the SwiftUI macOS app
+- `GargantuaMCP`: a local Model Context Protocol server for automation-driven scans and guarded cleanups
+- `GargantuaScheduler`: a launchd-driven background runner used by Scheduled Scans
+- `GargantuaPrivilegedHelper`: an SMAppService/XPC helper for operations that require elevated trust
 
 ## Install
 
@@ -42,22 +42,22 @@ Most cleaner apps optimize for big numbers and vague confidence. Gargantua optim
 
 ## Features
 
-- **Deep Clean** — YAML-driven scan rules for browser caches, app caches, system logs, temp files, Trash, installers, developer artifacts, Docker, Homebrew, language build caches, and review-gated stale developer versions.
-- **Dev Purge** — narrow-scope view limited to developer artifacts, Docker, Homebrew, and stale developer versions so a routine cleanup can't accidentally widen into a full scan.
-- **Developer Tools** — tool-native Homebrew, Docker, Xcode Simulator, pnpm, Go, and Cargo cleanup previews and run buttons, with Docker `system df` JSON parsing when available and full-modal acknowledgment for protected prunes.
-- **Smart Uninstaller** — app bundle inspection plus post-uninstall remnant detection for support files, launch agents, preferences, and related state.
-- **Duplicate Finder** — duplicate-group detection backed by `fclones`, scoped to user-defined personal-scope roots.
-- **File Health** — empty-file, big-file, similar-image, and broken-symlink scans through bundled `czkawka` helpers.
-- **Disk Explorer** — interactive treemap and directory drill-down for understanding where space goes before cleaning.
-- **AI Models cleanup** — dedicated profile for downloaded LLM and diffusion model storage, with review-only duplicate/orphan model-file intelligence since re-downloading is expensive.
-- **Cleanup Profiles** — built-in (`Developer`, `Light Cleanup`, `Deep Clean`, `Dev Purge`, `AI Models`) and custom profiles that decide which rule categories run and which safety overrides apply.
-- **Explainability** — per-item explanations sourced from rules, metadata, and optional local or cloud model inference.
-- **Scheduled Scans** — launchd-backed background scans with interval presets, custom cron expressions, profile selection, and skip-on-battery.
-- **Menu Bar Widget** — glanceable status from the menu bar, optional launch-at-login.
-- **MCP Server** — local Model Context Protocol server for automation-driven scans and guarded cleanups (see below).
-- **Audit Trail** — MCP-triggered cleanup attempts are written to `~/Library/Logs/Gargantua/audit.json`.
-- **Auto Updates** — Sparkle 2 appcasts with EdDSA signatures, signed-feed validation, and stable/beta channels.
-- **Release Pipeline** — scripts for assembling, signing, notarizing, stapling, and packaging the app as a DMG.
+- **Deep Clean**: YAML-driven scan rules for browser caches, app caches, system logs, temp files, Trash, installers, developer artifacts, Docker, Homebrew, language build caches, and review-gated stale developer versions.
+- **Dev Purge**: narrow-scope view limited to developer artifacts, Docker, Homebrew, and stale developer versions so a routine cleanup can't accidentally widen into a full scan.
+- **Developer Tools**: tool-native Homebrew, Docker, Xcode Simulator, pnpm, Go, and Cargo cleanup previews and run buttons, with Docker `system df` JSON parsing when available and full-modal acknowledgment for protected prunes.
+- **Smart Uninstaller**: app bundle inspection plus post-uninstall remnant detection for support files, launch agents, preferences, and related state.
+- **Duplicate Finder**: duplicate-group detection backed by `fclones`, scoped to user-defined personal-scope roots.
+- **File Health**: empty-file, big-file, similar-image, and broken-symlink scans through bundled `czkawka` helpers.
+- **Disk Explorer**: interactive treemap and directory drill-down for understanding where space goes before cleaning.
+- **AI Models cleanup**: dedicated profile for downloaded LLM and diffusion model storage, with review-only duplicate/orphan model-file intelligence since re-downloading is expensive.
+- **Cleanup Profiles**: built-in (`Developer`, `Light Cleanup`, `Deep Clean`, `Dev Purge`, `AI Models`) and custom profiles that decide which rule categories run and which safety overrides apply.
+- **Explainability**: per-item explanations sourced from rules, metadata, and optional local or cloud model inference.
+- **Scheduled Scans**: launchd-backed background scans with interval presets, custom cron expressions, profile selection, and skip-on-battery.
+- **Menu Bar Widget**: glanceable status from the menu bar, optional launch-at-login.
+- **MCP Server**: local Model Context Protocol server for automation-driven scans and guarded cleanups (see below).
+- **Audit Trail**: MCP-triggered cleanup attempts are written to `~/Library/Logs/Gargantua/audit.json`.
+- **Auto Updates**: Sparkle 2 appcasts with EdDSA signatures, signed-feed validation, and stable/beta channels.
+- **Release Pipeline**: scripts for assembling, signing, notarizing, stapling, and packaging the app as a DMG.
 
 ## Safety Model
 
@@ -71,13 +71,13 @@ Gargantua's trust layer uses three safety levels:
 
 Rules live under `Sources/GargantuaCore/Resources/cleanup_rules/`, `Sources/GargantuaCore/Resources/uninstall_rules/`, and `Sources/GargantuaCore/Resources/command_rules/`. The bundled rule snapshot is deterministic; Gargantua does not load mutable remote rules at runtime. The reviewed snapshot ships five evidence shapes:
 
-- **Path-based cleanup rules** — 51 files / 287 rules across apps, browsers, developer tools, and system locations.
-- **Path-based remnant rules** — 2 generic files / 28 rules plus 7 app-pack files / 63 app-specific rules for Docker, Xcode, Android Studio, JetBrains, VS Code/Cursor/Zed, Unity/Unreal/Godot, and Raycast.
-- **Command-action rules** — 4 developer-tool commands (`xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`, `go clean -modcache`) recorded with tool version, exit code, and arguments per run. Advanced commands are isolated in an opt-in profile with explicit consequence copy.
-- **Code-native stale-version discovery** — Xcode DeviceSupport and JetBrains Toolbox version directories grouped by product/family/version with keep-latest, current-version, and pinned-path guards.
-- **Dynamic `pkgutil` receipt evidence** — Smart Uninstaller surfaces ownership provenance (pkg ID, version, install date) for any package whose receipt matches an app being uninstalled. Receipts are evidence, not deletion permission; shared system paths upgrade to `protected`.
+- **Path-based cleanup rules**: 51 files / 287 rules across apps, browsers, developer tools, and system locations.
+- **Path-based remnant rules**: 2 generic files / 28 rules plus 7 app-pack files / 63 app-specific rules for Docker, Xcode, Android Studio, JetBrains, VS Code/Cursor/Zed, Unity/Unreal/Godot, and Raycast.
+- **Command-action rules**: 4 developer-tool commands (`xcrun simctl delete unavailable`, `pnpm store prune`, `go clean -cache`, `go clean -modcache`) recorded with tool version, exit code, and arguments per run. Advanced commands are isolated in an opt-in profile with explicit consequence copy.
+- **Code-native stale-version discovery**: Xcode DeviceSupport and JetBrains Toolbox version directories grouped by product/family/version with keep-latest, current-version, and pinned-path guards.
+- **Dynamic `pkgutil` receipt evidence**: Smart Uninstaller surfaces ownership provenance (pkg ID, version, install date) for any package whose receipt matches an app being uninstalled. Receipts are evidence, not deletion permission; shared system paths upgrade to `protected`.
 
-Trust Layer parity is *evidence-shape* parity, not Mole-shell line parity — every shape is explainable, bounded, reversible, and audited. Deferred Mole behaviors (`nix-collect-garbage`, `npm cache clean`, version-retention loops, receipt-driven deletion) are tracked in [`docs/mole-rule-parity-audit.md`](docs/mole-rule-parity-audit.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
+Trust Layer parity is *evidence-shape* parity, not Mole-shell line parity. Every shape is explainable, bounded, reversible, and audited. Deferred Mole behaviors (`nix-collect-garbage`, `npm cache clean`, version-retention loops, receipt-driven deletion) are tracked in [`docs/mole-rule-parity-audit.md`](docs/mole-rule-parity-audit.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 A bundled **protected-roots policy** (`Sources/GargantuaCore/Resources/safety_policy/protected_roots.yaml`) hard-blocks cleanup at filesystem roots regardless of rule classification. It covers `/`, `/Applications`, `/Library`, `/System`, `/Users`, `~`, `~/Library`, `/private`, `/var`, `/var/folders/*/*/{C,T,X}`, and equivalents under `/System/Volumes/Data`. Users can add their own protected roots in Settings → Storage; bundled entries cannot be removed.
 
@@ -94,34 +94,34 @@ Everything below is configurable from **Settings**. Five tabs: AI · Automation 
 | **Cloud (Anthropic)** | Off | `api.anthropic.com` over TLS | API key in macOS Keychain |
 | **Claude Code Agent** | Off | Spawns local Claude Code CLI | Configuration in app prefs; CLI manages its own auth |
 
-- **Template engine** — the default. Generates explanations directly from YAML rule metadata. No model required, no network.
-- **Local MLX** — opt-in. Downloads `mlx-community/Llama-3.2-1B-Instruct-4bit` (~700 MB) to local storage. Runs on Apple Silicon via MLX. First explanation per session compiles Metal shaders. Idle engine unloads after 60 s.
-- **Cloud AI (Anthropic)** — off by default. Requires a user-supplied Anthropic API key, stored only in macOS Keychain, never written to disk in plaintext. Sends file paths, sizes, classifications, and confidence scores. File content snippets (4 KB max, redacted for tokens and keys) are sent **only** with the explicit "Allow file-content previews" toggle. Configurable monthly spend cap (default $0; hard ceiling enforced client-side). Default model: `claude-sonnet-4-20250514`.
-- **Claude Code Agent** — opt-in local agent runtime. Spawns the Claude Code CLI for non-interactive maintenance runs. **Tools are read-only by default**; destructive MCP tools must be explicitly granted per session. Configurable model, max turns, and scheduled-audit toggle.
+- **Template engine**: the default. Generates explanations directly from YAML rule metadata. No model required, no network.
+- **Local MLX**: opt-in. Downloads `mlx-community/Llama-3.2-1B-Instruct-4bit` (~700 MB) to local storage. Runs on Apple Silicon via MLX. First explanation per session compiles Metal shaders. Idle engine unloads after 60 s.
+- **Cloud AI (Anthropic)**: off by default. Requires a user-supplied Anthropic API key, stored only in macOS Keychain, never written to disk in plaintext. Sends file paths, sizes, classifications, and confidence scores. File content snippets (4 KB max, redacted for tokens and keys) are sent **only** with the explicit "Allow file-content previews" toggle. Configurable monthly spend cap (default $0; hard ceiling enforced client-side). Default model: `claude-sonnet-4-20250514`.
+- **Claude Code Agent**: opt-in local agent runtime. Spawns the Claude Code CLI for non-interactive maintenance runs. **Tools are read-only by default**; destructive MCP tools must be explicitly granted per session. Configurable model, max turns, and scheduled-audit toggle.
 
 In all engines: **AI can explain a classification but cannot lower it.** A `protected` finding remains `protected` regardless of what any model says.
 
 ### Storage (Settings → Storage)
 
-- **Scan Roots** — where Dev Purge looks for build artifacts. Empty list uses sensible defaults; user-added roots must be absolute or `~/`-prefixed and cannot be `/` or `$HOME` directly.
-- **Personal Scope** — folders the Duplicate Finder is allowed to traverse. Same path validation as scan roots. Seeded with sane defaults on first launch.
-- **Exclusions (whitelist)** — paths or glob patterns Gargantua should never propose for cleanup. Persists across scans; entries can be removed individually.
-- **Protected Roots** — bundled hard-protect list plus user-added entries. Bundled entries are read-only; user entries support `~/`, `${HOME}`, and absolute paths.
+- **Scan Roots**: where Dev Purge looks for build artifacts. Empty list uses sensible defaults; user-added roots must be absolute or `~/`-prefixed and cannot be `/` or `$HOME` directly.
+- **Personal Scope**: folders the Duplicate Finder is allowed to traverse. Same path validation as scan roots. Seeded with sane defaults on first launch.
+- **Exclusions (whitelist)**: paths or glob patterns Gargantua should never propose for cleanup. Persists across scans; entries can be removed individually.
+- **Protected Roots**: bundled hard-protect list plus user-added entries. Bundled entries are read-only; user entries support `~/`, `${HOME}`, and absolute paths.
 
 ### Automation (Settings → Automation)
 
-- **Scheduled scans** — launchd agent registered via SMAppService. Interval presets (hourly, daily, weekly) or a custom 5-field cron expression with validation. Selectable profile (default `Light`). Toggle to skip when on battery.
-- **Menu bar widget** — glanceable status, optional.
-- **Launch at login** — registered through `SMAppService.loginItem`.
+- **Scheduled scans**: launchd agent registered via SMAppService. Interval presets (hourly, daily, weekly) or a custom 5-field cron expression with validation. Selectable profile (default `Light`). Toggle to skip when on battery.
+- **Menu bar widget**: glanceable status, optional.
+- **Launch at login**: registered through `SMAppService.loginItem`.
 
 ### Network (Settings → Network)
 
-- **MCP Transport** — toggle SSE transport, change bind (`localhost` or `lan`), set port, and manage the bearer token (generate, rotate, revoke). Token lives in Keychain.
+- **MCP Transport**: toggle SSE transport, change bind (`localhost` or `lan`), set port, and manage the bearer token (generate, rotate, revoke). Token lives in Keychain.
 
 ### About (Settings → About)
 
-- **Updates** — Sparkle feed host, last check, channel (`stable` / `beta`), automatic checks, automatic downloads.
-- **Audit retention** — how long destructive-attempt audit entries are kept (default 90 days).
+- **Updates**: Sparkle feed host, last check, channel (`stable` / `beta`), automatic checks, automatic downloads.
+- **Audit retention**: how long destructive-attempt audit entries are kept (default 90 days).
 
 ## MCP Server
 
@@ -204,15 +204,15 @@ For Claude Desktop, Cursor, or Claude Code, use the first shape when the client 
 
 Read-only (Phase 2):
 
-- `scan` — dry-run scan for reclaimable items
-- `analyze` — health score, disk usage, and recommendations
-- `status` — current system health metrics
-- `explain` — explain a filesystem path or prior scan item
-- `list_profiles` — list built-in and custom cleanup profiles
+- `scan`: dry-run scan for reclaimable items
+- `analyze`: health score, disk usage, and recommendations
+- `status`: current system health metrics
+- `explain`: explain a filesystem path or prior scan item
+- `list_profiles`: list built-in and custom cleanup profiles
 
 Destructive (Phase 3):
 
-- `clean` — clean item IDs returned by a prior `scan`
+- `clean`: clean item IDs returned by a prior `scan`
 
 `clean` is guarded by server-side checks:
 
@@ -223,23 +223,23 @@ Destructive (Phase 3):
 - Every non-dry-run attempt writes an audit entry with the client identifier to `~/Library/Logs/Gargantua/audit.json`.
 - The app attempts a local notification with a short cancel window before files move.
 
-Phase 2 and Phase 3 tool registries are segregated in code so a Phase 2 consumer cannot accidentally advertise destructive tools — see [CONTRIBUTING.md](CONTRIBUTING.md#mcp-server-contributions).
+Phase 2 and Phase 3 tool registries are segregated in code so a Phase 2 consumer cannot accidentally advertise destructive tools; see [CONTRIBUTING.md](CONTRIBUTING.md#mcp-server-contributions).
 
 ## Security
 
 Gargantua runs with elevated trust on a user's machine. Defenses are layered:
 
-- **Trust layer** — every finding gets a `safe`/`review`/`protected` classification before any UI sees it. Destructive flows hard-reject `protected`.
-- **Bundled protected roots** — `protected_roots.yaml` blocks cleanup at filesystem roots regardless of rule classification. Users can extend it but cannot remove bundled entries.
-- **Privileged helper** — operations needing elevated trust are routed through `GargantuaPrivilegedHelper`, registered via SMAppService and reached over XPC. The app never calls `sudo` directly.
-- **MCP guardrails** — bearer-token auth (Keychain-backed) for non-local binds, per-client rate limit, hard `protected` reject, audit log, cancel-notification grace period, and segregated Phase 2/Phase 3 tool registries.
-- **Keychain-only secret storage** — Anthropic API key and MCP bearer token live in Keychain, never on disk in plaintext.
-- **Cloud AI redaction** — outbound cloud requests strip apparent secrets and tokens from any included content. File contents are only sent with explicit per-config consent, capped at 4 KB per item, with hard monthly spend caps.
-- **Hardened runtime + notarization** — release builds are signed with Developer ID, hardened runtime enabled, notarized, and stapled. Sparkle update artifacts are EdDSA-signed and feed-validated.
-- **Pre-commit secret scanning** — versioned `.githooks/` with `gitleaks` blocks committed credentials. See [CONTRIBUTING.md](CONTRIBUTING.md#development-setup).
-- **Dependency scanning** — `trivy fs` plus an OSV wrapper run against `Package.resolved` to flag CVEs in pinned SwiftPM dependencies.
+- **Trust layer**: every finding gets a `safe`/`review`/`protected` classification before any UI sees it. Destructive flows hard-reject `protected`.
+- **Bundled protected roots**: `protected_roots.yaml` blocks cleanup at filesystem roots regardless of rule classification. Users can extend it but cannot remove bundled entries.
+- **Privileged helper**: operations needing elevated trust are routed through `GargantuaPrivilegedHelper`, registered via SMAppService and reached over XPC. The app never calls `sudo` directly.
+- **MCP guardrails**: bearer-token auth (Keychain-backed) for non-local binds, per-client rate limit, hard `protected` reject, audit log, cancel-notification grace period, and segregated Phase 2/Phase 3 tool registries.
+- **Keychain-only secret storage**: Anthropic API key and MCP bearer token live in Keychain, never on disk in plaintext.
+- **Cloud AI redaction**: outbound cloud requests strip apparent secrets and tokens from any included content. File contents are only sent with explicit per-config consent, capped at 4 KB per item, with hard monthly spend caps.
+- **Hardened runtime + notarization**: release builds are signed with Developer ID, hardened runtime enabled, notarized, and stapled. Sparkle update artifacts are EdDSA-signed and feed-validated.
+- **Pre-commit secret scanning**: versioned `.githooks/` with `gitleaks` blocks committed credentials. See [CONTRIBUTING.md](CONTRIBUTING.md#development-setup).
+- **Dependency scanning**: `trivy fs` plus an OSV wrapper run against `Package.resolved` to flag CVEs in pinned SwiftPM dependencies.
 
-If you discover a security issue — especially anything involving the privileged helper, MCP guardrails, audit trails, cloud-AI redaction, or a path that could remove a `protected` item — please report it privately per [SECURITY.md](SECURITY.md). Do not open a public issue.
+If you discover a security issue, especially anything involving the privileged helper, MCP guardrails, audit trails, cloud-AI redaction, or a path that could remove a `protected` item, please report it privately per [SECURITY.md](SECURITY.md). Do not open a public issue.
 
 ## Build From Source
 
@@ -247,8 +247,8 @@ Requirements:
 
 - macOS 14 (Sonoma) or newer; **macOS 15 + the latest stable Xcode is required** to resolve the `mlx-swift-lm` dependency, which declares `swift-tools-version: 6.1`.
 - Apple Silicon is the only supported architecture for development and release builds.
-- Xcode Command Line Tools (`xcode-select --install`) — provides `codesign`, `notarytool`, `stapler`, `iconutil`, `swift`.
-- The Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`) — `mlx-swift`'s `BuildMetallibPlugin` shells out to `xcrun metal` to compile shaders.
+- Xcode Command Line Tools (`xcode-select --install`): provides `codesign`, `notarytool`, `stapler`, `iconutil`, `swift`.
+- The Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`): `mlx-swift`'s `BuildMetallibPlugin` shells out to `xcrun metal` to compile shaders.
 
 Clone and build:
 
@@ -284,9 +284,9 @@ Scripts/test.sh
 
 ### Open-source vs commercial builds
 
-Gargantua's source is AGPL-3.0. `swift build` from a clean clone produces a **fully unlocked** binary — no trial timer, no license gate, no buy CTA. That is the open-source path and it is always free.
+Gargantua's source is AGPL-3.0. `swift build` from a clean clone produces a **fully unlocked** binary: no trial timer, no license gate, no buy CTA. That is the open-source path and it is always free.
 
-Official notarized releases (the DMG on the GitHub Release, the Homebrew cask, the Polar.sh storefront) build with the `GARGANTUA_LICENSING=1` environment variable set. That flag activates a 14-day trial clock and the license gate that fronts destructive actions. After the trial, scans still run; Deep Clean / Uninstaller / Quarantine execute paths gate behind a license key. Licenses are sold through [Polar.sh](https://polar.sh) and validated against their public customer-portal API — see `docs/licensing/`.
+Official notarized releases (the DMG on the GitHub Release, the Homebrew cask, the Polar.sh storefront) build with the `GARGANTUA_LICENSING=1` environment variable set. That flag activates a 14-day trial clock and the license gate that fronts destructive actions. After the trial, scans still run; Deep Clean / Uninstaller / Quarantine execute paths gate behind a license key. Licenses are sold through [Polar.sh](https://polar.sh) and validated against their public customer-portal API; see `docs/licensing/`.
 
 If you maintain or contribute to Gargantua and want to test the licensed code path locally:
 
@@ -309,14 +309,14 @@ For non-interactive runs (you've already created the tag), use `Scripts/publish.
 
 Useful supporting scripts:
 
-- `Scripts/fetch-vendored-bins.sh` — refresh pinned helper binaries (`fclones`, `czkawka_cli`)
-- `Scripts/build-metallib.sh` — build the MLX Metal shader library used by local inference
-- `Scripts/smoke/verify-vendored-bins.sh` — confirm an installed app resolves its bundled helpers
-- `Scripts/smoke/privileged-helper.sh` — smoke-test privileged helper installation and status
+- `Scripts/fetch-vendored-bins.sh`: refresh pinned helper binaries (`fclones`, `czkawka_cli`)
+- `Scripts/build-metallib.sh`: build the MLX Metal shader library used by local inference
+- `Scripts/smoke/verify-vendored-bins.sh`: confirm an installed app resolves its bundled helpers
+- `Scripts/smoke/privileged-helper.sh`: smoke-test privileged helper installation and status
 
 ## Rule Contributions
 
-Rules use a **two-repo model**: rule-only PRs (schema, new paths, refinements) go to the public [`inceptyon-labs/gargantua-rules`](https://github.com/inceptyon-labs/gargantua-rules) repository. This app repo vendors a reviewed, deterministic snapshot under `Sources/GargantuaCore/Resources/`, which is what ships at runtime — there is no live remote rule fetch.
+Rules use a **two-repo model**: rule-only PRs (schema, new paths, refinements) go to the public [`inceptyon-labs/gargantua-rules`](https://github.com/inceptyon-labs/gargantua-rules) repository. This app repo vendors a reviewed, deterministic snapshot under `Sources/GargantuaCore/Resources/`, which is what ships at runtime; there is no live remote rule fetch.
 
 The full flow (PR → review → snapshot sync → release), schema crib, classification guidance, evidence checklist, and local-testing steps are in [CONTRIBUTING.md](CONTRIBUTING.md#contributing-rules).
 
@@ -349,29 +349,29 @@ Gargantua stands on a lot of open source.
 
 **Rule research**
 
-- [`tw93/Mole`](https://github.com/tw93/Mole) — many of the bundled cleanup paths (cloud, office, communication, virtualization, creative/media, productivity, launcher, game, remote desktop) were ported from Mole's shell-driven cleanup library and reviewed, classified, and rewritten as YAML rules with conservative safety classifications. See [`docs/mole-rule-parity-audit.md`](docs/mole-rule-parity-audit.md) for what's ported and what's deferred.
+- [`tw93/Mole`](https://github.com/tw93/Mole): many of the bundled cleanup paths (cloud, office, communication, virtualization, creative/media, productivity, launcher, game, remote desktop) were ported from Mole's shell-driven cleanup library and reviewed, classified, and rewritten as YAML rules with conservative safety classifications. See [`docs/mole-rule-parity-audit.md`](docs/mole-rule-parity-audit.md) for what's ported and what's deferred.
 
 **Vendored helper binaries** (built from source via `Scripts/fetch-vendored-bins.sh`)
 
-- [`pkolaczk/fclones`](https://github.com/pkolaczk/fclones) — backs the Duplicate Finder
-- [`qarmin/czkawka`](https://github.com/qarmin/czkawka) — backs the File Health scans (empty files, big files, similar images, broken symlinks)
+- [`pkolaczk/fclones`](https://github.com/pkolaczk/fclones): backs the Duplicate Finder
+- [`qarmin/czkawka`](https://github.com/qarmin/czkawka): backs the File Health scans (empty files, big files, similar images, broken symlinks)
 
 **Swift packages**
 
-- [`ml-explore/mlx-swift-lm`](https://github.com/ml-explore/mlx-swift-lm) and the broader [MLX](https://github.com/ml-explore/mlx) project — local AI inference on Apple Silicon
-- [`huggingface/swift-transformers`](https://github.com/huggingface/swift-transformers) — tokenizer for the local model
-- The [`mlx-community/Llama-3.2-1B-Instruct-4bit`](https://huggingface.co/mlx-community/Llama-3.2-1B-Instruct-4bit) MLX conversion of Meta's [Llama 3.2](https://www.llama.com/) — the optional local explanation model
-- [`jpsim/Yams`](https://github.com/jpsim/Yams) — YAML parsing for the rule layer
-- [`sparkle-project/Sparkle`](https://github.com/sparkle-project/Sparkle) — auto-update framework with EdDSA-signed appcasts
+- [`ml-explore/mlx-swift-lm`](https://github.com/ml-explore/mlx-swift-lm) and the broader [MLX](https://github.com/ml-explore/mlx) project: local AI inference on Apple Silicon
+- [`huggingface/swift-transformers`](https://github.com/huggingface/swift-transformers): tokenizer for the local model
+- The [`mlx-community/Llama-3.2-1B-Instruct-4bit`](https://huggingface.co/mlx-community/Llama-3.2-1B-Instruct-4bit) MLX conversion of Meta's [Llama 3.2](https://www.llama.com/): the optional local explanation model
+- [`jpsim/Yams`](https://github.com/jpsim/Yams): YAML parsing for the rule layer
+- [`sparkle-project/Sparkle`](https://github.com/sparkle-project/Sparkle): auto-update framework with EdDSA-signed appcasts
 
 **Security and supply-chain tooling**
 
-- [`gitleaks/gitleaks`](https://github.com/gitleaks/gitleaks) — pre-commit secret scanning
-- [`aquasecurity/trivy`](https://github.com/aquasecurity/trivy) — `Package.resolved` CVE scanning
-- [`google/osv-scanner`](https://github.com/google/osv-scanner) and the [OSV](https://osv.dev/) database — vulnerability checks against pinned SwiftPM revisions
-- [`muter-mutation-testing/muter`](https://github.com/muter-mutation-testing/muter) — optional mutation testing for changed Swift files
+- [`gitleaks/gitleaks`](https://github.com/gitleaks/gitleaks): pre-commit secret scanning
+- [`aquasecurity/trivy`](https://github.com/aquasecurity/trivy): `Package.resolved` CVE scanning
+- [`google/osv-scanner`](https://github.com/google/osv-scanner) and the [OSV](https://osv.dev/) database: vulnerability checks against pinned SwiftPM revisions
+- [`muter-mutation-testing/muter`](https://github.com/muter-mutation-testing/muter): optional mutation testing for changed Swift files
 
-If you ship a fork that adds dependencies, please update this list — credit is part of the contract.
+If you ship a fork that adds dependencies, please update this list; credit is part of the contract.
 
 ## License
 

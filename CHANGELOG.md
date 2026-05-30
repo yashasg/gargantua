@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Commercial licensing** (release builds only, via `GARGANTUA_LICENSING=1`). A 14-day trial fronts the destructive-action paths (Deep Clean execute, Smart Uninstaller scrub); scans and previews stay free forever. Licenses are sold one-time through [Polar.sh](https://polar.sh) and activated by pasting a key in `Settings → License` (or via the `gargantua://activate?key=…` deep link). Activation binds to the Mac (up to 3), validates against Polar's public customer-portal API, and is cached locally with a 14-day offline grace window. Source builds remain fully unlocked under AGPL-3.0.
+- **Commercial licensing** (release builds only, via `GARGANTUA_LICENSING=1`). A 14-day trial fronts the destructive-action paths (Deep Clean execute, Smart Uninstaller scrub); scans and previews stay free forever. Licenses are sold one-time through [Polar.sh](https://polar.sh) and activated by pasting a key in `Settings → License` (or via the `gargantua://activate?key=...` deep link). Activation binds to the Mac (up to 3), validates against Polar's public customer-portal API, and is cached locally with a 14-day offline grace window. Source builds remain fully unlocked under AGPL-3.0.
 - **Landing page** under `docs/site/` (static, ready for GitHub Pages) with the screenshot carousel, feature list, and Buy / Download-trial CTAs.
 
 ## [0.1.3] - 2026-05-27
@@ -69,4 +69,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML-driven cleanup and uninstall rules (19 cleanup files / 83 rules, 2 uninstall files / 12 rules).
 - MCP server (`GargantuaMCP`) with Phase 2 read-only tools (`scan`, `analyze`, `status`, `explain`, `list_profiles`) and Phase 3 destructive `clean` tool protected by protected-path hard-reject, 60s-per-client rate limit, audit trail, and cancel-notification grace period.
 - Privileged helper (`GargantuaPrivilegedHelper`) for operations requiring elevated trust.
-- Local AI explainability via MLX Swift for rule explanations — AI can explain a rule's safety classification but cannot lower it.
+- Local AI explainability via MLX Swift for rule explanations: AI can explain a rule's safety classification but cannot lower it.

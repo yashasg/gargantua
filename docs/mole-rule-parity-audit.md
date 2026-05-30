@@ -7,7 +7,7 @@ Mole commit date: 2026-04-24T08:02:08+08:00
 
 ## Summary
 
-Gargantua does not pursue Mole-shell line parity — Mole's cleanup is shell-driven rather than rule-file-driven, so there is no perfect one-to-one rule count, and ~50% of Mole's `safe_*` call sites are not path-based and cannot be reached by static path rules at all. The Trust Layer boundary is *evidence-shape* parity: a finding stays in scope if it is explainable, bounded, reversible, and audited, regardless of whether the evidence comes from a path, a command, or a `pkgutil` receipt.
+Gargantua does not pursue Mole-shell line parity. Mole's cleanup is shell-driven rather than rule-file-driven, so there is no perfect one-to-one rule count, and ~50% of Mole's `safe_*` call sites are not path-based and cannot be reached by static path rules at all. The Trust Layer boundary is *evidence-shape* parity: a finding stays in scope if it is explainable, bounded, reversible, and audited, regardless of whether the evidence comes from a path, a command, or a `pkgutil` receipt.
 
 After the app/cloud/office port plus the `gargantua-wpl6` "mole-parity gap closing" epic (CommandActionRule + starter set, pkgutil receipt expansion, and app-specific uninstall packs), the bundled snapshot ships five evidence shapes:
 
@@ -20,11 +20,11 @@ After the app/cloud/office port plus the `gargantua-wpl6` "mole-parity gap closi
 | Path-based generic uninstall/remnant | 2 | 28 |
 | Path-based app-specific uninstall packs | 7 | 63 |
 | Command-action rules (developer + advanced) | 4 | 4 |
-| Code-native stale-version discovery | n/a — discovered at scan time | Xcode DeviceSupport + JetBrains Toolbox version sets |
+| Code-native stale-version discovery | n/a: discovered at scan time | Xcode DeviceSupport + JetBrains Toolbox version sets |
 | **Total static rules** | **64** | **382** |
-| Dynamic `pkgutil` receipt evidence | n/a — discovered at uninstall time | one `RemnantItem` per BOM-matched, on-disk path |
+| Dynamic `pkgutil` receipt evidence | n/a: discovered at uninstall time | one `RemnantItem` per BOM-matched, on-disk path |
 
-The pkgutil channel is intentionally not file-counted: receipts are inspected per uninstall (`PackageReceiptExpander` → `ReceiptRemnantBuilder`) and surface as `RemnantItem`s tagged `pkgutil-bom` carrying pkg ID, version, install date, and ownership provenance. Receipts are *evidence*, not permission — shared system paths (`/Library/LaunchDaemons`, `/Library/PrivilegedHelperTools`, `/Library/Frameworks`, etc.) upgrade to `.protected_`, and protected-root entries drop on the floor.
+The pkgutil channel is intentionally not file-counted: receipts are inspected per uninstall (`PackageReceiptExpander` → `ReceiptRemnantBuilder`) and surface as `RemnantItem`s tagged `pkgutil-bom` carrying pkg ID, version, install date, and ownership provenance. Receipts are *evidence*, not permission: shared system paths (`/Library/LaunchDaemons`, `/Library/PrivilegedHelperTools`, `/Library/Frameworks`, etc.) upgrade to `.protected_`, and protected-root entries drop on the floor.
 
 For the legacy proxy: Mole at the audit commit has 524 cleanup-operation call sites matching `safe_clean`, `clean_tool_cache`, `safe_sudo_find_delete`, `safe_sudo_remove`, and `safe_remove` across `lib/clean`, `lib/optimize`, and `lib/uninstall`.
 
@@ -185,7 +185,7 @@ Remaining gaps for full Mole parity:
 
 ## Command-Action Hold List
 
-The following Mole-equivalent commands have an obvious adapter shape but are deliberately *not* in the bundled `command_rules/` snapshot. They sit on a "review-tier minimum, surprising semantics" hold list — they ship only after a more careful UX and dry-run story.
+The following Mole-equivalent commands have an obvious adapter shape but are deliberately *not* in the bundled `command_rules/` snapshot. They sit on a "review-tier minimum, surprising semantics" hold list; they ship only after a more careful UX and dry-run story.
 
 `go clean -modcache` graduated from this hold list in `gargantua-2nnq` as `advanced_command_action`: it is review-only, isolated in the `Advanced Commands` profile, declares `~/go/pkg/mod` as its affected root, and surfaces network/offline restore cost before cleanup.
 

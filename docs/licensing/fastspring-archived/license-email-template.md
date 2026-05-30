@@ -1,6 +1,6 @@
 # License-key email template
 
-The email FastSpring sends to a customer after purchase. Paste into the FastSpring email template configuration. Plain text — no HTML chrome. Mac-app indie convention.
+The email FastSpring sends to a customer after purchase. Paste into the FastSpring email template configuration. Plain text, no HTML chrome. Mac-app indie convention.
 
 ---
 
@@ -39,7 +39,7 @@ Inceptyon Labs
 
 ## Notes
 
-- `{{customer.first_name}}` / `{{license_key}}` are FastSpring's template variables (Liquid syntax) — adjust to whatever FastSpring's product email engine uses. Check their docs at activation time.
-- `{{license_key | url_encode}}` — needed because the key is base64url and may contain characters that need URL-escaping when the customer clicks the auto-activate link.
+- `{{customer.first_name}}` / `{{license_key}}` are FastSpring's template variables (Liquid syntax): adjust to whatever FastSpring's product email engine uses. Check their docs at activation time.
+- `{{license_key | url_encode}}`: needed because the key is base64url and may contain characters that need URL-escaping when the customer clicks the auto-activate link.
 - The deep-link path `gargantua://activate?key=...` is wired in `Sources/Gargantua/GargantuaApp.swift` (Phase 5 task to register the URL scheme in Info.plist if not already).
 - Keep it plain text. HTML email gets stripped by many clients and Gmail flags overly-styled marketing emails as Promotions. Plain text lands in the inbox.

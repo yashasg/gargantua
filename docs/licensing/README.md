@@ -12,26 +12,26 @@ Gargantua is sold through **Polar.sh** (Merchant of Record). Source stays AGPL-3
 
 ## Why Polar (not FastSpring)
 
-FastSpring gated account activation behind a sales call (contact was on a month's vacation). Polar is self-serve and instant. The FastSpring/AquaticPrime work — including the discovery that Apple removed DSA from `SecKey`, killing FastSpring's CocoaFob preset on modern macOS — is archived in [`fastspring-archived/`](fastspring-archived/) in case we ever revisit.
+FastSpring gated account activation behind a sales call (contact was on a month's vacation). Polar is self-serve and instant. The FastSpring/AquaticPrime work (including the discovery that Apple removed DSA from `SecKey`, killing FastSpring's CocoaFob preset on modern macOS) is archived in [`fastspring-archived/`](fastspring-archived/) in case we ever revisit.
 
 ## Security posture
 
 The activate / validate / deactivate endpoints are **public** (Polar docs: "can be safely used on a public client, like a desktop application"). The only identifier embedded in the binary is the `organization_id`, a public UUID. **No secret token ships in the app.**
 
-## Config — `Sources/GargantuaLicensing/LicensePolarConfig.swift`
+## Config: `Sources/GargantuaLicensing/LicensePolarConfig.swift`
 
-- `organizationID` — public UUID, `06a0b65b-785b-4970-bef8-8ebf6274f719`
-- `apiBaseURL` — `https://api.polar.sh/v1` (swap to `sandbox-api.polar.sh/v1` for sandbox dev)
-- `checkoutURL` — the hosted Polar checkout link (Buy button target)
-- `validationGraceInterval` — 14 days
+- `organizationID`: public UUID, `06a0b65b-785b-4970-bef8-8ebf6274f719`
+- `apiBaseURL`: `https://api.polar.sh/v1` (swap to `sandbox-api.polar.sh/v1` for sandbox dev)
+- `checkoutURL`: the hosted Polar checkout link (Buy button target)
+- `validationGraceInterval`: 14 days
 
 ## Architecture
 
-- `PolarLicenseClient` — `URLSession` client: `activate` / `validate` / `deactivate`. Maps HTTP 403 → `.activationLimitReached`, 404 → `.notFound`.
-- `LicenseStore` — persists the receipt, brokers the client, owns the offline-grace logic. Sync cache reads (gate never blocks on network); background `revalidate` extends grace + catches revocation.
-- `LicenseGate` — actor; `currentState()` reads cache + trial clock only. `#if GARGANTUA_LICENSING` switches source-build (always licensed) vs licensed behavior.
-- `LicenseStateModel` — `@Observable` singleton the UI binds to; seeds from cache on init, then revalidates.
-- `TrialClock` — 14-day trial before a license is required (UserDefaults-backed).
+- `PolarLicenseClient`: `URLSession` client: `activate` / `validate` / `deactivate`. Maps HTTP 403 → `.activationLimitReached`, 404 → `.notFound`.
+- `LicenseStore`: persists the receipt, brokers the client, owns the offline-grace logic. Sync cache reads (gate never blocks on network); background `revalidate` extends grace + catches revocation.
+- `LicenseGate`: actor; `currentState()` reads cache + trial clock only. `#if GARGANTUA_LICENSING` switches source-build (always licensed) vs licensed behavior.
+- `LicenseStateModel`: `@Observable` singleton the UI binds to; seeds from cache on init, then revalidates.
+- `TrialClock`: 14-day trial before a license is required (UserDefaults-backed).
 
 ## Issuing a test key
 

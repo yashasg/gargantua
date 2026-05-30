@@ -1,15 +1,15 @@
-# Plan B — Polar.sh
+# Plan B: Polar.sh
 
 If FastSpring drags past 72 hours or rejects activation, here's the pivot.
 
 ## Why Polar
 
-- **Self-serve signup** — instant dashboard access, no sales gate
-- **Merchant of Record** — VAT/EU sales tax handled, single payout
+- **Self-serve signup**: instant dashboard access, no sales gate
+- **Merchant of Record**: VAT/EU sales tax handled, single payout
 - **5% + $0.50** standard rate (Early Member 4% + $0.40 window closed May 27, 2026)
 - **Built-in license keys** with their own API + UI
-- **Indie-flavored brand** — designed for the "monetize many products" use case, which fits the Inceptyon Labs portfolio plan
-- **No CocoaFob/DSA deprecation traps** — their licensing is HTTP-API-based, not crypto-suite-locked
+- **Indie-flavored brand**: designed for the "monetize many products" use case, which fits the Inceptyon Labs portfolio plan
+- **No CocoaFob/DSA deprecation traps**: their licensing is HTTP-API-based, not crypto-suite-locked
 
 ## Cost of pivoting
 
@@ -22,13 +22,13 @@ If FastSpring drags past 72 hours or rejects activation, here's the pivot.
 
 **Files that change if you pivot:**
 
-- `Sources/GargantuaLicensing/LicenseStore.swift` — replace SecKey RSA verification with `URLSession` POST to Polar's validation endpoint. Cache validation result locally with short TTL (1-24 hours) so brief offline periods don't lock the user out.
-- `Sources/GargantuaLicensing/LicenseReceipt.swift` — slim to `{keyString: String, customerEmail: String, customerName: String, lastValidated: Date}`. No signature bytes, no plist canonicalization.
-- `Sources/GargantuaLicensing/LicenseSigningKeys.swift` — **delete**. Embedded RSA public key is moot under API validation.
-- `Sources/GargantuaCore/Views/Licensing/LicenseSettingsSection.swift` — file picker reverts to a paste-key TextField. Smaller UI surface.
-- `Sources/GargantuaCore/Views/Licensing/UnlockGargantuaSheet.swift` — same.
-- `Tests/GargantuaLicensingTests/` — mostly delete + rewrite around mocking Polar's API. Roughly 2/3 of the AquaticPrime tests become irrelevant.
-- `Scripts/dev-issue-license.sh` — **delete**. Polar issues real keys at any point via their dashboard's "issue test key" button.
+- `Sources/GargantuaLicensing/LicenseStore.swift`: replace SecKey RSA verification with `URLSession` POST to Polar's validation endpoint. Cache validation result locally with short TTL (1-24 hours) so brief offline periods don't lock the user out.
+- `Sources/GargantuaLicensing/LicenseReceipt.swift`: slim to `{keyString: String, customerEmail: String, customerName: String, lastValidated: Date}`. No signature bytes, no plist canonicalization.
+- `Sources/GargantuaLicensing/LicenseSigningKeys.swift`: **delete**. Embedded RSA public key is moot under API validation.
+- `Sources/GargantuaCore/Views/Licensing/LicenseSettingsSection.swift`: file picker reverts to a paste-key TextField. Smaller UI surface.
+- `Sources/GargantuaCore/Views/Licensing/UnlockGargantuaSheet.swift`: same.
+- `Tests/GargantuaLicensingTests/`: mostly delete + rewrite around mocking Polar's API. Roughly 2/3 of the AquaticPrime tests become irrelevant.
+- `Scripts/dev-issue-license.sh`: **delete**. Polar issues real keys at any point via their dashboard's "issue test key" button.
 
 Net: about a day of code work + 4–6 hours of UX/QA. Less code than the AquaticPrime rewrite added, since most of the cryptography we built becomes irrelevant.
 
@@ -38,7 +38,7 @@ Net: about a day of code work + 4–6 hours of UX/QA. Less code than the Aquatic
 
 - [ ] https://polar.sh → Sign up with `support@inceptyon.io`
 - [ ] Connect Stripe Connect account (Polar uses Stripe under the hood for processing)
-- [ ] Add Inceptyon Labs LLC business details — EIN, address, banking
+- [ ] Add Inceptyon Labs LLC business details: EIN, address, banking
 - [ ] Set up an organization called `inceptyon-labs` (matches GitHub org for brand consistency)
 
 ### 2. Create the Gargantua product
@@ -60,7 +60,7 @@ Net: about a day of code work + 4–6 hours of UX/QA. Less code than the Aquatic
 
 ### 4. Test purchase
 
-- [ ] Polar has a test mode toggle — flip it on
+- [ ] Polar has a test mode toggle: flip it on
 - [ ] Run a $0.50 charge with a test card
 - [ ] Receive license key in confirmation email
 - [ ] Switch to dev build of Gargantua (after the code pivot lands)
@@ -71,7 +71,7 @@ Net: about a day of code work + 4–6 hours of UX/QA. Less code than the Aquatic
 
 - [ ] Provide Polar's **product URL** (checkout link) → swap into `LicenseSettingsSection.openBuyURL()` and `DeepCleanView.openBuyURL()`
 - [ ] Provide Polar's **validation endpoint** → wire into `LicenseStore` (likely `https://api.polar.sh/v1/license-keys/validate`)
-- [ ] Generate an organization-scoped **API token** in Polar's dashboard → embed in `LicenseSigningKeys.swift` (or rename to `LicensePolarConfig.swift`) as a read-only key used to make validation calls. Note: this exposes the token in the binary — Polar's license-key validation endpoint is read-only by design, so this is the documented pattern.
+- [ ] Generate an organization-scoped **API token** in Polar's dashboard → embed in `LicenseSigningKeys.swift` (or rename to `LicensePolarConfig.swift`) as a read-only key used to make validation calls. Note: this exposes the token in the binary: Polar's license-key validation endpoint is read-only by design, so this is the documented pattern.
 
 ## When NOT to pivot
 

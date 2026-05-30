@@ -30,6 +30,7 @@ Packages/
 impeccable.md
 impeccible.md
 CLAUDE.md
+AGENTS.md
 Gargantua-PRD-*.md
 docs/design-brief-*.md
 docs/designs/
@@ -65,3 +66,4 @@ coverage.lcov
 /muter.report.json
 /muter.report.html
 /muter.report.xml
+NOTES.md

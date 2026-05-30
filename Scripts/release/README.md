@@ -75,9 +75,9 @@ git tag v0.1.0
 
 Outputs:
 
-- `dist/Gargantua.app`              — signed, notarized, stapled
-- `dist/Gargantua-0.1.0.dmg`        — stapled, ready to distribute
-- `dist/sparkle-updates/appcast.xml` — signed Sparkle appcast plus staged DMG
+- `dist/Gargantua.app`: signed, notarized, stapled
+- `dist/Gargantua-0.1.0.dmg`: stapled, ready to distribute
+- `dist/sparkle-updates/appcast.xml`: signed Sparkle appcast plus staged DMG
 
 ## Dev builds
 
@@ -86,7 +86,7 @@ Outputs:
 ```
 
 No tag required. Version becomes `0.0.0-<short-sha>`. Still fully signs
-and notarizes — useful for validating the whole pipeline between real
+and notarizes; useful for validating the whole pipeline between real
 release cuts.
 
 ## Smoke testing the pipeline itself
@@ -127,7 +127,7 @@ standalone for debugging (after the preceding stages have succeeded):
 | Appcast         | `appcast.sh`                 | stages DMG + markdown notes; runs `generate_appcast`. |
 
 **Why two notarizations?** The `.app` gets its own ticket so it stays
-Gatekeeper-clean once extracted to `/Applications` — including offline.
+Gatekeeper-clean once extracted to `/Applications`, including offline.
 The DMG gets its own ticket so the *downloaded artifact* is also
 verifiable (stapling only works on the specific thing that was submitted;
 a notarized `.app` inside a fresh DMG doesn't make the DMG notarized).
@@ -182,8 +182,8 @@ Then finish the user-facing smoke manually:
 4. Run the vendored helper smoke script above.
 5. Launch. Expect no quarantine prompt and no "unidentified developer"
    dialog.
-6. Trigger a Duplicate Finder scan on `~/Downloads` — macOS should
-   prompt for Downloads access (via TCC) using our `NSDownloadsFolder…`
+6. Trigger a Duplicate Finder scan on `~/Downloads`: macOS should
+   prompt for Downloads access (via TCC) using our `NSDownloadsFolder...`
    string from `Info.plist`, then scan without further prompts.
 
 This is what `gargantua-vzuz` tracks as its final acceptance.

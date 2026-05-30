@@ -1,6 +1,6 @@
 # Security Policy
 
-Gargantua runs with elevated trust on a user's machine — it reads, classifies, and in opt-in modes removes files. We take reports of security issues seriously and will prioritize them accordingly.
+Gargantua runs with elevated trust on a user's machine: it reads, classifies, and in opt-in modes removes files. We take reports of security issues seriously and will prioritize them accordingly.
 
 ## Supported Versions
 

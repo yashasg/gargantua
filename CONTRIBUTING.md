@@ -10,7 +10,7 @@ After cloning, activate the versioned git hooks so gitleaks runs on every commit
 git config core.hooksPath .githooks
 ```
 
-This is a one-time, per-clone step — the hook config lives in `.git/config`, which isn't versioned, so each fresh clone needs it. Install the binary too:
+This is a one-time, per-clone step. The hook config lives in `.git/config`, which isn't versioned, so each fresh clone needs it. Install the binary too:
 
 ```bash
 brew install gitleaks   # macOS
@@ -26,7 +26,7 @@ Adding or refining YAML cleanup and uninstall rules is the easiest way to contri
 | Repo | Role |
 | --- | --- |
 | [`inceptyon-labs/gargantua-rules`](https://github.com/inceptyon-labs/gargantua-rules) | **Source of truth.** Schema, templates, in-flight rules, rule-only PRs and discussion. |
-| `inceptyon-labs/gargantua` (this repo) | **Runtime authority.** Vendors a reviewed, deterministic snapshot under `Sources/GargantuaCore/Resources/`. The shipping app loads only this snapshot — there is no live remote rule fetch. |
+| `inceptyon-labs/gargantua` (this repo) | **Runtime authority.** Vendors a reviewed, deterministic snapshot under `Sources/GargantuaCore/Resources/`. The shipping app loads only this snapshot: there is no live remote rule fetch. |
 
 ### End-to-end flow
 
@@ -59,9 +59,9 @@ Active categories are: `browser_cache`, `browser_data`, `system_cache`, `system_
 
 ### Safety classification
 
-- `safe` — files are clearly disposable or trivially regenerated.
-- `review` — files may contain user preferences, session state, offline data, or sync metadata.
-- `protected` — removing the file could affect system boot, launch services, daemons, or privileged components.
+- `safe`: files are clearly disposable or trivially regenerated.
+- `review`: files may contain user preferences, session state, offline data, or sync metadata.
+- `protected`: removing the file could affect system boot, launch services, daemons, or privileged components.
 
 When in doubt, prefer `review`. Destructive flows in the app and in MCP `clean` hard-reject `protected` regardless of any AI-generated explanation.
 
@@ -122,12 +122,12 @@ A receipt tells us *some package* claimed to install a file. It does not tell us
 
 `PackageMatcher` filters the full receipt database (`pkgutil --pkgs`) down to candidates plausibly owned by an app, in priority order:
 
-1. **Exact bundle ID** — the receipt's package id equals the app's `bundleID`.
-2. **Bundle prefix** — the receipt id is `<bundleID>.<suffix>` (e.g., `com.docker.docker.helper`).
-3. **Reverse-DNS prefix** — the receipt id shares the bundle's first two components (e.g., any `com.docker.*`). Only applied when the prefix is at least two components long, so single-segment ids like `com` never widen.
-4. **App-name slug** — the receipt id contains a sanitized app-name slug (lowercase, alphanumerics only, ≥3 chars), bounded by `.`, `-`, `_`, or string ends. The component-delimiter check stops `Bar` from matching `barista`, and the length floor stops `Go` from matching `golang`.
+1. **Exact bundle ID**: the receipt's package id equals the app's `bundleID`.
+2. **Bundle prefix**: the receipt id is `<bundleID>.<suffix>` (e.g., `com.docker.docker.helper`).
+3. **Reverse-DNS prefix**: the receipt id shares the bundle's first two components (e.g., any `com.docker.*`). Only applied when the prefix is at least two components long, so single-segment ids like `com` never widen.
+4. **App-name slug**: the receipt id contains a sanitized app-name slug (lowercase, alphanumerics only, ≥3 chars), bounded by `.`, `-`, `_`, or string ends. The component-delimiter check stops `Bar` from matching `barista`, and the length floor stops `Go` from matching `golang`.
 
-Slug matching deliberately overshoots a bit — same-vendor sibling apps (Photoshop ↔ Illustrator) will pull each other's receipts in. That's fine because the Trust Layer below catches any false-positive surface area before it becomes destructive.
+Slug matching deliberately overshoots a bit: same-vendor sibling apps (Photoshop ↔ Illustrator) will pull each other's receipts in. That's fine because the Trust Layer below catches any false-positive surface area before it becomes destructive.
 
 #### System-prefix block list
 
@@ -138,43 +138,43 @@ System and platform-managed packages are blocked before any matching:
 | `com.apple.*` | Apple-owned receipts; expanding them risks proposing system file removal. |
 | `com.macports.*` | MacPorts manages its own uninstall flow. |
 
-These are filtered inside `PackageMatcher.matches(...)` — extending the list means editing `PackageMatcher.blockedSystemPrefixes`. New entries should describe a package family that ships from a non-app source (system installer, package manager) where receipt-driven removal would be unsafe or duplicative of the source's own tooling.
+These are filtered inside `PackageMatcher.matches(...)`; extending the list means editing `PackageMatcher.blockedSystemPrefixes`. New entries should describe a package family that ships from a non-app source (system installer, package manager) where receipt-driven removal would be unsafe or duplicative of the source's own tooling.
 
 #### Trust Layer classification
 
 `ReceiptRemnantBuilder` runs each candidate through these gates in order:
 
-1. **Path existence** — non-existent paths are dropped silently. Stale receipts (e.g., upgraded packages that moved files) leave entries pointing at paths that no longer exist; we never propose removing what isn't there.
-2. **Protected-root policy** — paths matching `protected_roots.yaml` are dropped. A BOM that lists a protected root is a receipt-internal misclassification, not permission to operate on the directory.
-3. **Shared-system path upgrade** — paths under `/Library/LaunchDaemons/`, `/Library/Frameworks/`, `/Library/PrivilegedHelperTools/`, `/Library/Extensions/`, or `/System/` upgrade from `.review` to `.protected_`, regardless of which receipt claims them. Cross-app shared infrastructure is not actionable from a single app's uninstall flow.
-4. **Default to `.review`, never `.safe`** — receipt-derived rows are always at minimum `.review` confirmation; the Trust Layer keeps the user in the loop. There is no way for a BOM-only path to reach `.safe`.
+1. **Path existence**: non-existent paths are dropped silently. Stale receipts (e.g., upgraded packages that moved files) leave entries pointing at paths that no longer exist; we never propose removing what isn't there.
+2. **Protected-root policy**: paths matching `protected_roots.yaml` are dropped. A BOM that lists a protected root is a receipt-internal misclassification, not permission to operate on the directory.
+3. **Shared-system path upgrade**: paths under `/Library/LaunchDaemons/`, `/Library/Frameworks/`, `/Library/PrivilegedHelperTools/`, `/Library/Extensions/`, or `/System/` upgrade from `.review` to `.protected_`, regardless of which receipt claims them. Cross-app shared infrastructure is not actionable from a single app's uninstall flow.
+4. **Default to `.review`, never `.safe`**: receipt-derived rows are always at minimum `.review` confirmation; the Trust Layer keeps the user in the loop. There is no way for a BOM-only path to reach `.safe`.
 
 #### Dedup against YAML rules
 
-When the same path appears in both a YAML remnant rule and a `pkgutil` BOM, the YAML rule wins. The scanner emits rule-derived rows first, populates `seenPaths` as it goes, and `ReceiptRemnantBuilder` skips any candidate already in `seenPaths`. Net effect: a curated rule's classification (including its `safety` and `confidence`) is preserved; the receipt is treated as supporting context, not a parallel claim. Within the receipt pass, identical paths claimed by two sibling receipts also dedupe to a single row — first receipt processed wins the provenance.
+When the same path appears in both a YAML remnant rule and a `pkgutil` BOM, the YAML rule wins. The scanner emits rule-derived rows first, populates `seenPaths` as it goes, and `ReceiptRemnantBuilder` skips any candidate already in `seenPaths`. Net effect: a curated rule's classification (including its `safety` and `confidence`) is preserved; the receipt is treated as supporting context, not a parallel claim. Within the receipt pass, identical paths claimed by two sibling receipts also dedupe to a single row; first receipt processed wins the provenance.
 
 #### Provenance on every row
 
 Every receipt-derived `RemnantItem` carries:
 
-- `ruleID` of the form `pkgutil-bom:<pkgID>` — distinguishes BOM-evidence from rule-evidence at a glance in audit logs.
-- `tags` includes `pkgutil-bom` — UI/MCP can filter for receipt rows.
-- `explanation` like `"Owned by package com.docker.docker (v4.30.0) installed 2025-12-04. Receipt evidence — review before removal."` — surfaces the receipt's package id, version, and install date so the user (and any downstream MCP consumer) can see exactly which installer placed the file.
+- `ruleID` of the form `pkgutil-bom:<pkgID>`: distinguishes BOM-evidence from rule-evidence at a glance in audit logs.
+- `tags` includes `pkgutil-bom`: UI/MCP can filter for receipt rows.
+- `explanation` like `"Owned by package com.docker.docker (v4.30.0) installed 2025-12-04. Receipt evidence: review before removal."`: surfaces the receipt's package id, version, and install date so the user (and any downstream MCP consumer) can see exactly which installer placed the file.
 
-When a sibling-app receipt over-matches (Adobe Photoshop's uninstall pulls in `com.adobe.illustrator` paths via the rev-DNS prefix), the `ruleID` and `explanation` still point at the *real* owning package — making the cross-app source visible instead of hiding it under the target app's bundle id.
+When a sibling-app receipt over-matches (Adobe Photoshop's uninstall pulls in `com.adobe.illustrator` paths via the rev-DNS prefix), the `ruleID` and `explanation` still point at the *real* owning package, making the cross-app source visible instead of hiding it under the target app's bundle id.
 
 #### Adding new receipt-aware behavior
 
-Most contributors won't need to touch the receipt pipeline directly — it's a parallel scan source, not a per-rule extension point. If you do:
+Most contributors won't need to touch the receipt pipeline directly; it's a parallel scan source, not a per-rule extension point. If you do:
 
 - New system-package prefix to block: extend `PackageMatcher.blockedSystemPrefixes` with a one-line comment explaining the family.
 - New shared-system path that should upgrade to `.protected_`: extend `ReceiptRemnantBuilder.protectedSharedPathPrefixes`.
-- New evidence to surface in audit / explain: keep encoding it in `RemnantItem.explanation` and `tags` rather than expanding `ScanResult` — the JSON schema for MCP and audit consumers is intentionally stable.
-- Cross-app cases: see `Tests/GargantuaCoreTests/Services/CrossAppSharedReceiptTests.swift` for the canonical Adobe Creative Cloud and Microsoft Office shapes — sibling-vendor reverse-DNS over-match, shared system daemons, shared user-library caches, and YAML-vs-receipt precedence.
+- New evidence to surface in audit / explain: keep encoding it in `RemnantItem.explanation` and `tags` rather than expanding `ScanResult`: the JSON schema for MCP and audit consumers is intentionally stable.
+- Cross-app cases: see `Tests/GargantuaCoreTests/Services/CrossAppSharedReceiptTests.swift` for the canonical Adobe Creative Cloud and Microsoft Office shapes: sibling-vendor reverse-DNS over-match, shared system daemons, shared user-library caches, and YAML-vs-receipt precedence.
 
 ### Command-action rules
 
-A second rule kind covers cleanup that can't be expressed as filesystem paths — operations where Gargantua asks an external tool to clean its own data. These ship as YAML under `Sources/GargantuaCore/Resources/command_rules/` and are loaded by `CommandActionRuleLoader`. They're audited as `kind: command` entries (separate from path entries) and run through `CommandActionExecutor`.
+A second rule kind covers cleanup that can't be expressed as filesystem paths: operations where Gargantua asks an external tool to clean its own data. These ship as YAML under `Sources/GargantuaCore/Resources/command_rules/` and are loaded by `CommandActionRuleLoader`. They're audited as `kind: command` entries (separate from path entries) and run through `CommandActionExecutor`.
 
 A complete command-action rule:
 
@@ -297,7 +297,7 @@ The script writes a Tenet-compatible JSON report to:
 ```
 
 If no Swift sources changed in scope, the script writes a small skip
-marker JSON to that same path and exits 0 — Tenet ingestion stays happy
+marker JSON to that same path and exits 0; Tenet ingestion stays happy
 without misreporting a zero score. The Muter config (`muter.conf.yml`)
 points the test runner at `Scripts/test.sh` so MLX metallib staging works
 inside Muter's sandbox; if you change the test command there, mirror the
@@ -314,18 +314,18 @@ See `.github/workflows/mutation.yml`.
 
 The MCP server code lives in two places:
 
-- `Sources/GargantuaMCP/main.swift` — the CLI entry point that wires transport, dispatcher, and handlers.
-- `Sources/GargantuaCore/Services/MCP/` — handlers, session cache, rate limiter, notification service, and the request dispatcher.
+- `Sources/GargantuaMCP/main.swift`: the CLI entry point that wires transport, dispatcher, and handlers.
+- `Sources/GargantuaCore/Services/MCP/`: handlers, session cache, rate limiter, notification service, and the request dispatcher.
 
 Tool descriptors are registered through two segregated registries:
 
-- `MCPPhase2Tools` — read-only tools. Exposed by default.
-- `MCPPhase3Tools` — destructive tools. Phase 2 code paths must never advertise them. A Phase 3 consumer opts in explicitly by passing `MCPPhase3Tools.all` (or `MCPPhase2Tools.all + MCPPhase3Tools.all`) to the dispatcher.
+- `MCPPhase2Tools`: read-only tools. Exposed by default.
+- `MCPPhase3Tools`: destructive tools. Phase 2 code paths must never advertise them. A Phase 3 consumer opts in explicitly by passing `MCPPhase3Tools.all` (or `MCPPhase2Tools.all + MCPPhase3Tools.all`) to the dispatcher.
 
 When adding a new tool:
 
 - If it only reads state, register it in `MCPPhase2Tools`.
 - If it can modify disk, network, or any other persistent state, register it in `MCPPhase3Tools` and plug it into the same guardrails the `clean` tool uses (audit writer, shared `MCPRateLimiter`, client identifier provider, user notification service).
-- Never merge the two registries inside `GargantuaCore` — keeping them separate means no accidental Phase 3 exposure through a Phase 2 consumer.
+- Never merge the two registries inside `GargantuaCore`: keeping them separate means no accidental Phase 3 exposure through a Phase 2 consumer.
 
 Integration coverage pattern: see `Tests/GargantuaCoreTests/Services/MCP/MCPStdioPhase3IntegrationTests.swift` for the pipe-backed stdio harness. Reuse it when adding destructive tools so the full transport + dispatch + guardrail chain is exercised, not just the handler.

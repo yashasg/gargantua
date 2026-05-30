@@ -1,6 +1,6 @@
 # FastSpring activation request email
 
-Paste-ready email to send to FastSpring's sales/onboarding team when they put account activation behind a "talk to us first" gate. Tight, factual, signals that you're a real indie with the product already set up — not someone fishing.
+Paste-ready email to send to FastSpring's sales/onboarding team when they put account activation behind a "talk to us first" gate. Tight, factual, signals that you're a real indie with the product already set up, not someone fishing.
 
 ## Where to send
 
@@ -12,7 +12,7 @@ Their onboarding contact path varies; try in order:
 ## Subject
 
 ```
-Account activation — Inceptyon Labs LLC / Gargantua ($29 macOS app)
+Account activation: Inceptyon Labs LLC / Gargantua ($29 macOS app)
 ```
 
 ## Body
@@ -23,7 +23,7 @@ Hi FastSpring team,
 I'm a solo indie developer at Inceptyon Labs LLC (Tampa, Florida) and I'd
 like to activate my FastSpring account so I can start selling.
 
-Product: Gargantua — a native macOS cleaner ($29 USD, one-time purchase,
+Product: Gargantua, a native macOS cleaner ($29 USD, one-time purchase,
 downloadable software). Source is open under AGPL-3.0; the paid product is
 the signed/notarized binary with Sparkle auto-updates. Repo:
 https://github.com/inceptyon-labs/gargantua
@@ -50,7 +50,7 @@ Standard merchant details:
 - Business type: LLC
 - EIN and banking info: ready to provide when needed
 - Refund policy: 30 days, no questions
-- Volume estimate: low at launch — Mac indie app, first product
+- Volume estimate: low at launch; Mac indie app, first product
 
 Please let me know what you need from me to get activated, or if there's
 a self-serve path I missed. Happy to hop on a quick call if that's faster
@@ -62,16 +62,16 @@ jason@inceptyon.io
 support@inceptyon.io
 ```
 
-## Tone notes — why this works
+## Tone notes: why this works
 
 - **Opens with the ask + company name** so they don't need to scroll
-- **One sentence on the product** — they sell to thousands of devs; they don't need a pitch deck
+- **One sentence on the product**: they sell to thousands of devs; they don't need a pitch deck
 - **Receipts that you've done the dashboard work** signal you're past tire-kicking
 - **Spelled-out merchant details** save them a follow-up email
-- **Volume honesty** — claiming high volume on a $29 indie app at launch reads as fake; "low at launch" reads as real and matches their underwriting expectations
-- **"Quick call" offer** is the unlock if email replies are slow — most onboarding ops would rather kill it in a 10-minute call than three days of email tag
+- **Volume honesty**: claiming high volume on a $29 indie app at launch reads as fake; "low at launch" reads as real and matches their underwriting expectations
+- **"Quick call" offer** is the unlock if email replies are slow: most onboarding ops would rather kill it in a 10-minute call than three days of email tag
 
 ## After you send
 
 - Expected reply window: 24–72 hours
-- If silent past 72 hours: ping the same thread once with "any update?" and start the Polar.sh signup in parallel — see `fallback-polar.md`
+- If silent past 72 hours: ping the same thread once with "any update?" and start the Polar.sh signup in parallel: see `fallback-polar.md`
