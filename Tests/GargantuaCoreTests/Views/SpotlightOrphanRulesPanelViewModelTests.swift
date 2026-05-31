@@ -2,8 +2,8 @@ import Testing
 @testable import GargantuaCore
 
 @MainActor
-@Suite("SpotlightOrphanRulesSettingsViewModel")
-struct SpotlightOrphanRulesSettingsViewModelTests {
+@Suite("SpotlightOrphanRulesPanelViewModel")
+struct SpotlightOrphanRulesPanelViewModelTests {
     /// Reader + writer sharing one mutable array, mirroring the real store so a
     /// prune is reflected by the next read.
     private final class FakeStore: SpotlightRulesReading, SpotlightRulesWriting, @unchecked Sendable {
@@ -22,8 +22,8 @@ struct SpotlightOrphanRulesSettingsViewModelTests {
         store: FakeStore,
         installed: Set<String> = [],
         gate: @escaping @Sendable () async -> Bool = { true }
-    ) -> SpotlightOrphanRulesSettingsViewModel {
-        SpotlightOrphanRulesSettingsViewModel(
+    ) -> SpotlightOrphanRulesPanelViewModel {
+        SpotlightOrphanRulesPanelViewModel(
             scanner: SpotlightOrphanRuleScanner(
                 reader: store,
                 writer: store,

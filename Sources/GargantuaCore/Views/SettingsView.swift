@@ -146,7 +146,6 @@ public struct SettingsView: View {
             PersonalScopeSettingsSection(persistence: persistence)
             PathExclusionSettingsSection(persistence: persistence)
             ProtectedRootsSettingsSection()
-            SpotlightOrphanRulesSettingsSection()
         case .license:
             LicenseSettingsSection()
         case .about:
