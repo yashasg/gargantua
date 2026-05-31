@@ -33,7 +33,8 @@ struct SpotlightOrphanRulesSettingsSection: View {
     var body: some View {
         SettingsSectionContainer(
             "Spotlight Rules",
-            subtitle: "Uninstalled apps can leave dead entries in System Settings → Spotlight. These are detected for review; removal is not yet available here.",
+            subtitle: "Uninstalled apps can leave dead entries in System Settings → Spotlight. "
+                + "These are detected for review; removal is not yet available here.",
             count: model.hasLoaded ? model.orphans.count : nil
         ) {
             if model.orphans.isEmpty {
