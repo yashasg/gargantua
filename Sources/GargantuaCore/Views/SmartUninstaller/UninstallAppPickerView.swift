@@ -48,6 +48,9 @@ struct UninstallAppPickerView: View {
                                     .frame(height: 1)
                             }
                         }
+
+                        SpotlightOrphanRulesPanel()
+                            .padding(GargantuaSpacing.space4)
                     }
                 }
             }
