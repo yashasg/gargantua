@@ -7,7 +7,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-black.svg?logo=apple" alt="macOS 14+">
-  <img src="https://img.shields.io/badge/Swift-5.10-orange.svg?logo=swift" alt="Swift 5.10">
+  <img src="https://img.shields.io/badge/Swift-6.1-orange.svg?logo=swift" alt="Swift 6.1">
   <a href="https://tenet-badges.jnew008538.workers.dev/projects/gargantua"><img src="https://tenet-badges.jnew008538.workers.dev/api/v1/badges/gargantua.svg" alt="Tenet score"></a>
   <img src="https://img.shields.io/badge/MCP-compatible-6e40c9.svg" alt="MCP compatible">
 </p>
