@@ -52,32 +52,42 @@ struct SpotlightOrphanRulesPanel: View {
     @StateObject private var model = SpotlightOrphanRulesPanelViewModel()
     @State private var showingConfirm = false
 
-    var body: some View {
-        SettingsSectionContainer(
-            "Leftover Spotlight Rules",
-            subtitle: "Apps you removed previously can leave dead entries in System Settings → Spotlight. "
-                + "Gargantua removes the orphaned ones; system and Apple rules are always kept.",
-            count: model.hasLoaded ? model.orphans.count : nil
-        ) {
-            if let notice = model.notice {
-                SettingsNoticeRow(
-                    icon: noticeIcon(notice),
-                    message: noticeMessage(notice),
-                    tone: noticeTone(notice)
-                )
-            }
+    /// Only surface the panel when there is something to act on (or report) —
+    /// no empty card cluttering a clean scan-results list.
+    private var isVisible: Bool {
+        !model.orphans.isEmpty || model.notice != nil
+    }
 
-            if model.orphans.isEmpty {
-                emptyRow
-            } else {
-                VStack(spacing: 1) {
-                    ForEach(model.orphans) { orphan in
-                        orphanRow(orphan)
+    var body: some View {
+        Group {
+            if isVisible {
+                SettingsSectionContainer(
+                    "Leftover Spotlight Rules",
+                    subtitle: "Apps you removed previously can leave dead entries in System Settings → Spotlight. "
+                        + "Gargantua removes the orphaned ones; system and Apple rules are always kept.",
+                    count: model.orphans.isEmpty ? nil : model.orphans.count
+                ) {
+                    if let notice = model.notice {
+                        SettingsNoticeRow(
+                            icon: noticeIcon(notice),
+                            message: noticeMessage(notice),
+                            tone: noticeTone(notice)
+                        )
+                    }
+
+                    if !model.orphans.isEmpty {
+                        VStack(spacing: 1) {
+                            ForEach(model.orphans) { orphan in
+                                orphanRow(orphan)
+                            }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+
+                        pruneRow
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-
-                pruneRow
+                .padding(.horizontal, GargantuaSpacing.space4)
+                .padding(.vertical, GargantuaSpacing.space3)
             }
         }
         .task { model.load() }
@@ -115,18 +125,6 @@ struct SpotlightOrphanRulesPanel: View {
             )
             .help("Remove Spotlight rules for apps that are no longer installed")
         }
-    }
-
-    private var emptyRow: some View {
-        HStack(spacing: GargantuaSpacing.space2) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 12))
-                .foregroundStyle(GargantuaColors.ink3)
-            Text(model.hasLoaded ? "No leftover Spotlight rules from removed apps." : "Checking…")
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-        }
-        .padding(.vertical, GargantuaSpacing.space1)
     }
 
     private func orphanRow(_ orphan: SpotlightOrphanRule) -> some View {

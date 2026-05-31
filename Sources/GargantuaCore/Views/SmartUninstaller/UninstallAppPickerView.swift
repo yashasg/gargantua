@@ -11,6 +11,9 @@ struct UninstallAppPickerView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+
+            SpotlightOrphanRulesPanel()
+
             toolbar
 
             Rectangle()
@@ -48,9 +51,6 @@ struct UninstallAppPickerView: View {
                                     .frame(height: 1)
                             }
                         }
-
-                        SpotlightOrphanRulesPanel()
-                            .padding(GargantuaSpacing.space4)
                     }
                 }
             }
