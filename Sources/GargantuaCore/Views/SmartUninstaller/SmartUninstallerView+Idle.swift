@@ -49,10 +49,6 @@ extension SmartUninstallerView {
                 }
                 .padding(.top, GargantuaSpacing.space2)
 
-                SpotlightOrphanRulesPanel()
-                    .frame(maxWidth: 480)
-                    .padding(.top, GargantuaSpacing.space4)
-
                 Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
