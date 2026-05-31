@@ -28,7 +28,7 @@ public enum CloudAIFeature: String, Codable, Sendable, CaseIterable {
 /// User-configurable Cloud AI settings.
 public struct CloudAIConfiguration: Codable, Sendable, Equatable {
     /// Default Anthropic model used for cloud requests.
-    public static let defaultModel = "claude-sonnet-4-20250514"
+    public static let defaultModel = "claude-sonnet-4-6"
     /// Default monthly spend cap, in cents.
     public static let defaultMonthlySpendCapCents = 500
     /// Default maximum output token budget for Cloud AI responses.

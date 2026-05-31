@@ -1,9 +1,9 @@
 # Mole Rule Parity Audit
 
-Audit date: 2026-04-24 UTC (refreshed 2026-05-09)
+Audit date: 2026-04-24 UTC (refreshed 2026-05-09; upstream re-checked 2026-05-30)
 Bean: `gargantua-81zc` (refresh: `gargantua-ds8g` under epic `gargantua-wpl6`)
-Mole source: `tw93/Mole@fd209bf1c8e7f1c07a3d5cb3f2c5c38ab730ad8e`
-Mole commit date: 2026-04-24T08:02:08+08:00
+Mole source ported: `tw93/Mole@fd209bf1c8e7f1c07a3d5cb3f2c5c38ab730ad8e` (2026-04-24)
+Upstream HEAD at re-check: `tw93/Mole@4f931b8` — v1.40.0, 2026-05-31
 
 ## Summary
 
@@ -38,6 +38,18 @@ For the legacy proxy: Mole at the audit commit has 524 cleanup-operation call si
 | Total | 524 |
 
 The current Gargantua snapshot is enough for the initial native scanner, but parity work remains substantial. Porting should be batched by risk and product value rather than by blindly translating every Mole shell line.
+
+## Upstream Delta — Mole v1.40.0 (re-checked 2026-05-30)
+
+Since the ported baseline (`fd209bf`, 2026-04-24), Mole shipped v1.40.0. Filtering out chores, refactors, and tests, two new cleanup behaviors are not yet represented in the Gargantua snapshot, and one previously-deferred gap is now obsolete upstream:
+
+| Upstream change | Status in Gargantua |
+| --- | --- |
+| `feat(clean): reclaim stale AI agent git worktrees` (tw93/Mole#985) | **New candidate** — not covered. On-brand dev/AI-tooling reclaim. Tracked as `gargantua-tppt`. |
+| `feat(optimize): prune orphaned Spotlight search rules` (tw93/Mole#1000) | **New candidate** — not covered; optimize-tier, lower value. Tracked as `gargantua-pk0p`. |
+| `refactor(clean): drop scan_external_volumes; never wired into main flow` | **Retires gap #5** (Rule Engine And Schema Gaps). Mole removed external-volume scanning, so it is no longer a parity target. |
+
+Other v1.40.0 changes are non-parity: status/battery-health accuracy fixes, install-attestation hardening, dead-code refactors, and `optimize`-tier corrections (Font Cache Rebuild and Dock Refresh removals) that Gargantua never implemented.
 
 ## Current Gargantua Coverage
 
@@ -172,7 +184,7 @@ Remaining gaps for full Mole parity:
 2. Privileged cleanup policy: sudo-required locations must be modeled through the privileged helper with explicit Trust Layer constraints and UX before they can be more than review-gated path findings.
 3. Active-file and current-version guards: Mole can skip files via `lsof`, running installer checks, current macOS version checks, and version-retention loops that YAML should not approximate as safe cleanup. Gargantua now has a first code-native retention guard for Xcode DeviceSupport and JetBrains Toolbox versions; remaining families stay deferred until their active-use identity is explicit.
 4. ~~Receipt/BOM-derived remnants: Mole can inspect package receipts for installed files. Gargantua has no declarative rule model for receipt expansion yet.~~ **Addressed.** `PackageReceiptExpander` (`gargantua-rloy`) runs `pkgutil --pkgs` / `--pkg-info` / `--files`, matches candidates through `PackageMatcher`, and produces `PackageReceiptCandidate`s carrying pkg ID, version, and install date. `ReceiptRemnantBuilder` converts those candidates into `RemnantItem`s with the `pkgutil-bom` tag, dropping protected roots and upgrading shared system paths to `.protected_`. Provenance surfaces in the Smart Uninstaller plan-review row (`gargantua-q05d`) as a `RECEIPT` badge + package identifier line, and in MCP's `explain` tool (`gargantua-4bub`) as a structured `receiptProvenance` field. Receipts are *evidence*, not deletion permission.
-5. External-volume policy: Mole can target external-volume `.Trashes`, `.TemporaryItems`, `.Spotlight-V100`, `.fseventsd`, and AppleDouble files with protocol checks. Gargantua should define an explicit external-volume scan/cleanup UX before porting those broadly.
+5. ~~External-volume policy: Mole can target external-volume `.Trashes`, `.TemporaryItems`, `.Spotlight-V100`, `.fseventsd`, and AppleDouble files with protocol checks. Gargantua should define an explicit external-volume scan/cleanup UX before porting those broadly.~~ **Obsolete.** Mole dropped `scan_external_volumes` (never wired into its main flow) in the v1.40.0 line, so external-volume cleanup is no longer a parity target. See **Upstream Delta** above.
 
 ## Recommended Port Order
 
@@ -181,7 +193,7 @@ Remaining gaps for full Mole parity:
 3. Continue remnant-rule expansion only when new app-specific ownership evidence or receipt/BOM support exists.
 4. Defer command-backed cleanup to dedicated adapters or Developer Tools flows.
 5. Defer privileged cleanup escalation beyond review findings until helper UX and Trust Layer policy are explicit.
-6. Define an external-volume cleanup policy before surfacing broad non-home-volume metadata/trash/cache rules.
+6. ~~Define an external-volume cleanup policy before surfacing broad non-home-volume metadata/trash/cache rules.~~ Dropped — Mole removed `scan_external_volumes` in the v1.40.0 line (see **Upstream Delta**); no longer a parity target.
 
 ## Command-Action Hold List
 
@@ -209,5 +221,6 @@ Open tail items, not blocking the epic:
 
 - Promotion of the remaining **command-action hold-list** entries (see below) once their UX models the consequence honestly.
 - Remaining **app pack** candidate: Maestro Studio, held back until active-session and project-adjacent paths can be separated.
+- New **upstream-delta** candidates from Mole v1.40.0 (see **Upstream Delta** above): AI-agent git worktree reclaim (`gargantua-tppt`) and orphaned Spotlight search-rule pruning (`gargantua-pk0p`).
 - The signature **Confidence Orbit** finally rendering on the Smart Uninstaller picker (`gargantua-bcpw`) is part of this epic's brand surface even though it's not strictly a parity item.
 - Public rule sync to `inceptyon-labs/gargantua-rules` remains the long-running maintenance task that is not gated on parity work.
