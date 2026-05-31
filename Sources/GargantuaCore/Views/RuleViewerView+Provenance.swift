@@ -65,23 +65,10 @@ extension RuleViewerView {
                     }
                 }
 
-                provenanceRow(label: "Source") {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: GargantuaSpacing.space2) {
-                            Text(rule.source.name)
-                                .font(GargantuaFonts.label)
-                                .foregroundStyle(GargantuaColors.ink)
-                            if rule.source.verifySignature {
-                                trustTag("Signature verified", color: GargantuaColors.safe)
-                            }
-                        }
-                        if let bundleID = rule.source.bundleID {
-                            Text(bundleID)
-                                .font(GargantuaFonts.monoPath)
-                                .foregroundStyle(GargantuaColors.ink3)
-                                .textSelection(.enabled)
-                        }
-                    }
+                provenanceRow(label: "Source") { sourceRowContent(rule) }
+
+                if let prov = rule.provenance, !prov.isEmpty {
+                    authorshipRows(prov)
                 }
 
                 provenanceRow(label: "After removal") {
@@ -120,6 +107,55 @@ extension RuleViewerView {
     }
 
     // MARK: - Rows
+
+    @ViewBuilder
+    private func sourceRowContent(_ rule: ScanRule) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: GargantuaSpacing.space2) {
+                Text(rule.source.name)
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink)
+                if rule.source.verifySignature {
+                    trustTag("Signature verified", color: GargantuaColors.safe)
+                }
+            }
+            if let bundleID = rule.source.bundleID {
+                Text(bundleID)
+                    .font(GargantuaFonts.monoPath)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    /// Authorship/review rows, shown only for rules that declare provenance.
+    @ViewBuilder
+    private func authorshipRows(_ prov: RuleProvenance) -> some View {
+        if let author = prov.author {
+            provenanceRow(label: "Authored by") {
+                Text(author)
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink)
+            }
+        }
+        if !prov.reviewedBy.isEmpty {
+            provenanceRow(label: "Reviewed by") {
+                HStack(spacing: GargantuaSpacing.space2) {
+                    Text(prov.reviewedBy.joined(separator: ", "))
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(GargantuaColors.ink)
+                    trustTag("Reviewed", color: GargantuaColors.safe)
+                }
+            }
+        }
+        if let addedIn = prov.addedIn {
+            provenanceRow(label: "Added in") {
+                Text(addedIn)
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink)
+            }
+        }
+    }
 
     private func provenanceRow<Content: View>(
         label: String,

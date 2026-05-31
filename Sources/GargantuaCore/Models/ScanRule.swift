@@ -87,6 +87,10 @@ public struct ScanRule: Codable, Sendable, Identifiable {
     /// scoped to specific cleanup profiles (e.g., `["developer", "deep"]`).
     public let safetyOverrides: [SafetyOverride]
 
+    /// Authorship/review provenance, when the upstream rule carries it. Optional
+    /// because the snapshot predates the field; absent for older rules.
+    public let provenance: RuleProvenance?
+
     public init(
         id: String,
         name: String,
@@ -106,7 +110,8 @@ public struct ScanRule: Codable, Sendable, Identifiable {
         regenerateCommand: String? = nil,
         category: String,
         tags: [String] = [],
-        safetyOverrides: [SafetyOverride] = []
+        safetyOverrides: [SafetyOverride] = [],
+        provenance: RuleProvenance? = nil
     ) {
         self.id = id
         self.name = name
@@ -127,6 +132,33 @@ public struct ScanRule: Codable, Sendable, Identifiable {
         self.category = category
         self.tags = tags
         self.safetyOverrides = safetyOverrides
+        self.provenance = provenance
+    }
+}
+
+/// Authorship and review provenance for a cleanup rule, sourced from the
+/// optional `provenance:` block in the upstream YAML. Every field is optional —
+/// a rule may declare any subset.
+public struct RuleProvenance: Codable, Sendable, Equatable {
+    /// Who authored the rule (handle or name).
+    public let author: String?
+
+    /// Maintainers who reviewed/signed off on the rule. A non-empty list is the
+    /// "reviewed" trust signal surfaced in the UI.
+    public let reviewedBy: [String]
+
+    /// Release or commit the rule first shipped in (e.g. "v1.4.0").
+    public let addedIn: String?
+
+    public init(author: String? = nil, reviewedBy: [String] = [], addedIn: String? = nil) {
+        self.author = author
+        self.reviewedBy = reviewedBy
+        self.addedIn = addedIn
+    }
+
+    /// True when no provenance was declared — used to skip empty UI/parsing.
+    public var isEmpty: Bool {
+        author == nil && reviewedBy.isEmpty && addedIn == nil
     }
 }
 

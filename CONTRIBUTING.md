@@ -55,6 +55,17 @@ Full schema and templates live at [gargantua-rules/docs](https://github.com/ince
     and playlists live elsewhere and are not touched.
 ```
 
+An optional `provenance` block records authorship and review so the app can
+surface it in the Rule Viewer's "Provenance & Trust" panel. Every field is
+optional; a non-empty `reviewed_by` is shown as the "Reviewed" trust signal:
+
+```yaml
+  provenance:
+    author: octocat                       # handle or name
+    reviewed_by: [maintainer-a]           # single string or list; maintainer signoff
+    added_in: v1.4.0                      # release/commit the rule first shipped in
+```
+
 Active categories are: `browser_cache`, `browser_data`, `system_cache`, `system_logs`, `temp_files`, `trash`, `app_cache`, `app_data`, `dev_artifacts`, `docker`, `homebrew`, `installers`, `similar_images`, `empty_files`, `broken_symlinks`, `ai_models`. Adding a new category is allowed but requires a matching update to the built-in profiles in `Sources/GargantuaCore/Models/CleanupProfile.swift` and the category UI.
 
 ### Safety classification

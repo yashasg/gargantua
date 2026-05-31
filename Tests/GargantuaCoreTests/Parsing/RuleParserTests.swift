@@ -389,6 +389,80 @@ struct RuleParserTests {
             #expect(description.contains("cleanup_rules/browser/chrome.yaml"))
         }
     }
+
+    // MARK: - Provenance
+
+    @Test("Parses provenance block with author, reviewers, and added_in")
+    func parseProvenance() throws {
+        let yaml = """
+        rules:
+          - id: example_cache
+            name: Example Cache
+            paths:
+              - ~/Library/Caches/com.example
+            safety: safe
+            confidence: 90
+            explanation: Disposable cache.
+            category: app_cache
+            source:
+              name: Example
+            provenance:
+              author: octocat
+              reviewed_by:
+                - maintainer-a
+                - maintainer-b
+              added_in: v1.4.0
+        """
+
+        let rule = try #require(try parser.parse(yaml: yaml).rules.first)
+        let prov = try #require(rule.provenance)
+        #expect(prov.author == "octocat")
+        #expect(prov.reviewedBy == ["maintainer-a", "maintainer-b"])
+        #expect(prov.addedIn == "v1.4.0")
+    }
+
+    @Test("Accepts a single-string reviewed_by")
+    func parseProvenanceScalarReviewer() throws {
+        let yaml = """
+        rules:
+          - id: example_cache
+            name: Example Cache
+            paths:
+              - ~/Library/Caches/com.example
+            safety: safe
+            confidence: 90
+            explanation: Disposable cache.
+            category: app_cache
+            source:
+              name: Example
+            provenance:
+              reviewed_by: solo-maintainer
+        """
+
+        let rule = try #require(try parser.parse(yaml: yaml).rules.first)
+        #expect(rule.provenance?.reviewedBy == ["solo-maintainer"])
+        #expect(rule.provenance?.author == nil)
+    }
+
+    @Test("Rule without a provenance block has nil provenance")
+    func parseMissingProvenance() throws {
+        let yaml = """
+        rules:
+          - id: example_cache
+            name: Example Cache
+            paths:
+              - ~/Library/Caches/com.example
+            safety: safe
+            confidence: 90
+            explanation: Disposable cache.
+            category: app_cache
+            source:
+              name: Example
+        """
+
+        let rule = try #require(try parser.parse(yaml: yaml).rules.first)
+        #expect(rule.provenance == nil)
+    }
 }
 
 @Suite("RuleLoader")

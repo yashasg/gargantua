@@ -11,6 +11,7 @@ extension RuleViewerView {
         lines.append(contentsOf: Self.yamlSourceBlock(rule))
         lines.append(contentsOf: Self.yamlAuxiliaryBlock(rule))
         lines.append(contentsOf: Self.yamlOverridesBlock(rule))
+        lines.append(contentsOf: Self.yamlProvenanceBlock(rule))
         return lines.joined(separator: "\n")
     }
 
@@ -62,6 +63,24 @@ extension RuleViewerView {
             for tag in rule.tags {
                 lines.append("    - \(tag)")
             }
+        }
+        return lines
+    }
+
+    private static func yamlProvenanceBlock(_ rule: ScanRule) -> [String] {
+        guard let prov = rule.provenance, !prov.isEmpty else { return [] }
+        var lines: [String] = ["  provenance:"]
+        if let author = prov.author {
+            lines.append("    author: \(author)")
+        }
+        if !prov.reviewedBy.isEmpty {
+            lines.append("    reviewed_by:")
+            for reviewer in prov.reviewedBy {
+                lines.append("      - \(reviewer)")
+            }
+        }
+        if let addedIn = prov.addedIn {
+            lines.append("    added_in: \(addedIn)")
         }
         return lines
     }

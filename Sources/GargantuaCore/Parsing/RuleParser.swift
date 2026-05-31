@@ -111,6 +111,7 @@ public struct RuleParser: Sendable {
         let regenerates = optionalBool("regenerates", from: mapping) ?? false
         let regenerateCommand = optionalString("regenerate_command", from: mapping)
         let safetyOverrides = try parseSafetyOverrides(from: mapping, index: index, filePath: filePath)
+        let provenance = parseProvenance(from: mapping)
 
         return ScanRule(
             id: id,
@@ -131,8 +132,31 @@ public struct RuleParser: Sendable {
             regenerateCommand: regenerateCommand,
             category: category,
             tags: tags,
-            safetyOverrides: safetyOverrides
+            safetyOverrides: safetyOverrides,
+            provenance: provenance
         )
+    }
+
+    /// Parse the optional `provenance:` block. Returns `nil` when absent or
+    /// empty so older rules carry no provenance rather than an empty shell.
+    ///
+    /// ```yaml
+    /// provenance:
+    ///   author: octocat
+    ///   reviewed_by: [maintainer-a, maintainer-b]   # or a single string
+    ///   added_in: v1.4.0
+    /// ```
+    private func parseProvenance(from mapping: Node.Mapping) -> RuleProvenance? {
+        guard let node = mapping["provenance"], let provMapping = node.mapping else {
+            return nil
+        }
+
+        let author = optionalString("author", from: provMapping)
+        let reviewedBy = optionalStringOrStringArray("reviewed_by", from: provMapping)
+        let addedIn = optionalString("added_in", from: provMapping)
+
+        let provenance = RuleProvenance(author: author, reviewedBy: reviewedBy, addedIn: addedIn)
+        return provenance.isEmpty ? nil : provenance
     }
 
     /// Parse a `min_size` field as either a raw byte count or a human-readable
@@ -358,6 +382,14 @@ public struct RuleParser: Sendable {
     private func optionalStringArray(_ key: String, from mapping: Node.Mapping) -> [String] {
         guard let node = mapping[key], let sequence = node.sequence else { return [] }
         return sequence.compactMap { $0.string }
+    }
+
+    /// Accept either a single string or an array of strings; missing → empty.
+    private func optionalStringOrStringArray(_ key: String, from mapping: Node.Mapping) -> [String] {
+        guard let node = mapping[key] else { return [] }
+        if let string = node.string { return [string] }
+        if let sequence = node.sequence { return sequence.compactMap { $0.string } }
+        return []
     }
 }
 
