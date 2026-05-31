@@ -1,14 +1,15 @@
 import SwiftUI
 
-/// Storage-tab section that lists orphaned `com.apple.Spotlight` preference
-/// rules — dead third-party bundle ids left in System Settings → Spotlight
-/// after an app is uninstalled — and offers a license-gated batch removal.
+/// Smart Uninstaller "leftovers" panel: lists orphaned `com.apple.Spotlight`
+/// preference rules — dead third-party bundle ids left in System Settings →
+/// Spotlight by apps that were removed previously — and offers a license-gated
+/// batch removal.
 ///
 /// Detection layers LaunchServices → mdfind → filesystem scan so an installed
 /// app is never mistaken for "gone". `System.*` / `com.apple.*` rules are never
 /// touched. Removal rewrites the array through cfprefsd (`SpotlightOrphanRuleScanner.prune()`).
 @MainActor
-final class SpotlightOrphanRulesSettingsViewModel: ObservableObject {
+final class SpotlightOrphanRulesPanelViewModel: ObservableObject {
     enum Notice: Equatable {
         case removed(Int)
         case alreadyClean
@@ -47,14 +48,14 @@ final class SpotlightOrphanRulesSettingsViewModel: ObservableObject {
     }
 }
 
-struct SpotlightOrphanRulesSettingsSection: View {
-    @StateObject private var model = SpotlightOrphanRulesSettingsViewModel()
+struct SpotlightOrphanRulesPanel: View {
+    @StateObject private var model = SpotlightOrphanRulesPanelViewModel()
     @State private var showingConfirm = false
 
     var body: some View {
         SettingsSectionContainer(
-            "Spotlight Rules",
-            subtitle: "Uninstalled apps can leave dead entries in System Settings → Spotlight. "
+            "Leftover Spotlight Rules",
+            subtitle: "Apps you removed previously can leave dead entries in System Settings → Spotlight. "
                 + "Gargantua removes the orphaned ones; system and Apple rules are always kept.",
             count: model.hasLoaded ? model.orphans.count : nil
         ) {
@@ -82,9 +83,8 @@ struct SpotlightOrphanRulesSettingsSection: View {
         .task { model.load() }
         .sheet(isPresented: $showingConfirm) {
             DestructiveConfirmSheet(
-                title: "Remove orphaned Spotlight rules?",
-                message: "Gargantua will drop \(model.orphans.count) Spotlight rule(s) whose apps are no longer installed. "
-                    + "System and Apple rules are never touched. Reinstalling an app restores its rule.",
+                title: "Remove these Spotlight rules?",
+                message: confirmMessage,
                 confirmLabel: "Remove \(model.orphans.count) rule\(model.orphans.count == 1 ? "" : "s")",
                 onCancel: { showingConfirm = false },
                 onConfirm: {
@@ -95,17 +95,25 @@ struct SpotlightOrphanRulesSettingsSection: View {
         }
     }
 
+    /// Itemized so the destructive confirm shows exactly which bundle ids go.
+    private var confirmMessage: String {
+        let list = model.orphans.map { "•  \($0.identifier)" }.joined(separator: "\n")
+        return "These rules belong to apps that are no longer installed and will be removed from "
+            + "System Settings → Spotlight:\n\n\(list)\n\nSystem and Apple rules are never touched. "
+            + "Reinstalling an app restores its rule."
+    }
+
     private var pruneRow: some View {
         HStack {
             Spacer()
             GargantuaButton(
-                model.isPruning ? "Removing…" : "Remove orphaned rules",
+                model.isPruning ? "Removing…" : "Remove leftover rules",
                 icon: "trash",
                 tone: .destructive,
                 isDisabled: model.isPruning,
                 action: { showingConfirm = true }
             )
-            .help("Remove Spotlight rules for uninstalled apps")
+            .help("Remove Spotlight rules for apps that are no longer installed")
         }
     }
 
@@ -114,7 +122,7 @@ struct SpotlightOrphanRulesSettingsSection: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 12))
                 .foregroundStyle(GargantuaColors.ink3)
-            Text(model.hasLoaded ? "No orphaned Spotlight rules found." : "Checking…")
+            Text(model.hasLoaded ? "No leftover Spotlight rules from removed apps." : "Checking…")
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink3)
         }
@@ -149,7 +157,7 @@ struct SpotlightOrphanRulesSettingsSection: View {
         .contentShape(Rectangle())
     }
 
-    private func noticeIcon(_ notice: SpotlightOrphanRulesSettingsViewModel.Notice) -> String {
+    private func noticeIcon(_ notice: SpotlightOrphanRulesPanelViewModel.Notice) -> String {
         switch notice {
         case .removed, .alreadyClean: return "checkmark.circle.fill"
         case .blocked: return "lock.fill"
@@ -157,17 +165,17 @@ struct SpotlightOrphanRulesSettingsSection: View {
         }
     }
 
-    private func noticeTone(_ notice: SpotlightOrphanRulesSettingsViewModel.Notice) -> SettingsNoticeRow.Tone {
+    private func noticeTone(_ notice: SpotlightOrphanRulesPanelViewModel.Notice) -> SettingsNoticeRow.Tone {
         switch notice {
         case .removed, .alreadyClean: return .safe
         case .blocked, .failed: return .protected
         }
     }
 
-    private func noticeMessage(_ notice: SpotlightOrphanRulesSettingsViewModel.Notice) -> String {
+    private func noticeMessage(_ notice: SpotlightOrphanRulesPanelViewModel.Notice) -> String {
         switch notice {
         case .removed(let count):
-            return "Removed \(count) orphaned Spotlight rule\(count == 1 ? "" : "s")."
+            return "Removed \(count) leftover Spotlight rule\(count == 1 ? "" : "s")."
         case .alreadyClean:
             return "Spotlight rules are already clean."
         case .blocked:

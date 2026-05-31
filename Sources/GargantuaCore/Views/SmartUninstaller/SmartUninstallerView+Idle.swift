@@ -1,6 +1,7 @@
 import SwiftUI
 
 extension SmartUninstallerView {
+
     // MARK: - Idle / Landing State
 
     private func uninstallerPreviewItem(icon: String, label: String) -> some View {
@@ -47,6 +48,10 @@ extension SmartUninstallerView {
                     viewModel.runTracked { await viewModel.loadApps() }
                 }
                 .padding(.top, GargantuaSpacing.space2)
+
+                SpotlightOrphanRulesPanel()
+                    .frame(maxWidth: 480)
+                    .padding(.top, GargantuaSpacing.space4)
 
                 Spacer()
             }
