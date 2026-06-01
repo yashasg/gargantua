@@ -22,7 +22,7 @@ The project is built as a Swift Package with four executables:
 - `GargantuaPrivilegedHelper`: an SMAppService/XPC helper for operations that require elevated trust
 
 <p align="center">
-  <img src="docs/site/screenshots/gargantua-01-dashboard-16x9.png" width="820" alt="Gargantua dashboard: cleanup roadmap, health score, and safe/review-tagged next actions">
+  <img src="docs/site/screenshots/readme-dashboard.png" width="760" alt="Gargantua dashboard: cleanup roadmap, health score, and safe/review-tagged next actions">
 </p>
 
 ## Install
@@ -230,7 +230,7 @@ For Claude Desktop, Cursor, or Claude Code, use the first shape when the client 
 
 ### Tools
 
-Read-only (Phase 2):
+Read-only:
 
 - `scan`: dry-run scan for reclaimable items
 - `analyze`: health score, disk usage, and recommendations
@@ -238,7 +238,7 @@ Read-only (Phase 2):
 - `explain`: explain a filesystem path or prior scan item
 - `list_profiles`: list built-in and custom cleanup profiles
 
-Destructive (Phase 3):
+Destructive:
 
 - `clean`: clean item IDs returned by a prior `scan`
 
@@ -251,7 +251,7 @@ Destructive (Phase 3):
 - Every non-dry-run attempt writes an audit entry with the client identifier to `~/Library/Logs/Gargantua/audit.json`.
 - The app attempts a local notification with a short cancel window before files move.
 
-Phase 2 and Phase 3 tool registries are segregated in code so a Phase 2 consumer cannot accidentally advertise destructive tools; see [CONTRIBUTING.md](CONTRIBUTING.md#mcp-server-contributions).
+The read-only and destructive tools live in separate registries in code, so a read-only server can't accidentally advertise the destructive `clean` tool — exposing it requires explicitly opting the destructive registry in. See [CONTRIBUTING.md](CONTRIBUTING.md#mcp-server-contributions).
 
 ## Security
 
@@ -260,7 +260,7 @@ Gargantua runs with elevated trust on a user's machine. Defenses are layered:
 - **Trust layer**: every finding gets a `safe`/`review`/`protected` classification before any UI sees it. Destructive flows hard-reject `protected`.
 - **Bundled protected roots**: `protected_roots.yaml` blocks cleanup at filesystem roots regardless of rule classification. Users can extend it but cannot remove bundled entries.
 - **Privileged helper**: operations needing elevated trust are routed through `GargantuaPrivilegedHelper`, registered via SMAppService and reached over XPC. The app never calls `sudo` directly.
-- **MCP guardrails**: bearer-token auth (Keychain-backed) for non-local binds, per-client rate limit, hard `protected` reject, audit log, cancel-notification grace period, and segregated Phase 2/Phase 3 tool registries.
+- **MCP guardrails**: bearer-token auth (Keychain-backed) for non-local binds, per-client rate limit, hard `protected` reject, audit log, cancel-notification grace period, and separate read-only/destructive tool registries.
 - **Keychain-only secret storage**: Anthropic API key and MCP bearer token live in Keychain, never on disk in plaintext.
 - **Cloud AI redaction**: outbound cloud requests strip apparent secrets and tokens from any included content. File contents are only sent with explicit per-config consent, capped at 4 KB per item, with hard monthly spend caps.
 - **Hardened runtime + notarization**: release builds are signed with Developer ID, hardened runtime enabled, notarized, and stapled. Sparkle update artifacts are EdDSA-signed and feed-validated.
