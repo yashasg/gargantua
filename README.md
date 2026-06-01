@@ -21,6 +21,10 @@ The project is built as a Swift Package with four executables:
 - `GargantuaScheduler`: a launchd-driven background runner used by Scheduled Scans
 - `GargantuaPrivilegedHelper`: an SMAppService/XPC helper for operations that require elevated trust
 
+<p align="center">
+  <img src="docs/site/screenshots/gargantua-01-dashboard-16x9.png" width="820" alt="Gargantua dashboard: cleanup roadmap, health score, and safe/review-tagged next actions">
+</p>
+
 ## Install
 
 ```sh
@@ -32,7 +36,7 @@ This pulls the signed, notarized DMG from the latest GitHub Release. Updates aft
 
 ## Why Gargantua Exists
 
-Most cleaner apps optimize for big numbers and vague confidence. Gargantua optimizes for traceability:
+Most cleaner apps optimize for a big "GB found" number and vague confidence. Gargantua optimizes for traceability:
 
 - Every finding comes from a rule, parser, or local scanner path that can be tested.
 - Every result is classified as `safe`, `review`, or `protected`.
@@ -40,12 +44,36 @@ Most cleaner apps optimize for big numbers and vague confidence. Gargantua optim
 - Cleanup actions prefer Trash and write audit records for destructive workflows.
 - Optional local or cloud explanations can summarize why a rule exists, but they cannot downgrade a safety classification.
 
+## What Makes Gargantua Different
+
+Mainstream cleaners are closed black boxes that ask you to trust an inflated number. Indie cleaners are usually a curated path list with no explanation of *why*. Gargantua is the only macOS cleaner that is open, auditable, agent-drivable, and explainable end to end.
+
+| | Typical cleaner | Gargantua |
+| --- | --- | --- |
+| **What you delete** | "1,000 junk files found" — opaque | Every item traces to a named rule with a `safe`/`review`/`protected` rating |
+| **Why it's safe** | Marketing copy | Per-item explanation from the rule's own metadata; AI can elaborate but **cannot downgrade** the rating |
+| **Who writes the rules** | Vendor, behind closed doors | Public, reviewed PRs in [`gargantua-rules`](https://github.com/inceptyon-labs/gargantua-rules); every bundled rule records the upstream commit it came from |
+| **Automation** | A button in a GUI | A local **MCP server** — Claude, Cursor, or Claude Code can scan and run guarded cleanups for you |
+| **AI** | Cloud, with your data | On-device by default (template or local MLX); cloud is opt-in, redacted, and spend-capped |
+| **Reversibility** | Permanent delete | Trash-first, with an audit log for every destructive attempt |
+| **Source** | Proprietary | AGPL-3.0 — `swift build` produces a fully unlocked binary, no trial, no CTA |
+
+The features that don't exist anywhere else in this category:
+
+- **A community rule-contribution model.** Cleanup logic isn't a vendor secret — it's a public, reviewed, versioned ruleset. Each bundled rule carries provenance (the exact `gargantua-rules` commit) surfaced in-app, so you can audit where a path came from and who reviewed it.
+- **A three-tier safety classification that AI can't override.** Findings are graded `safe` / `review` / `protected` before any UI sees them. A bundled protected-roots policy hard-blocks cleanup at filesystem roots no matter what a rule (or a model) says.
+- **Explainability as a first-class output.** Every finding answers "why is this here and why is it safe to remove" — from rule metadata directly, or from an optional local/cloud model that can add detail but never lower a rating.
+- **AI-agent automation over MCP.** Gargantua ships a local Model Context Protocol server with segregated read-only and destructive tool registries, bearer-token auth, per-client rate limits, and a hard `protected` reject. No other cleaner lets an AI agent drive it under guardrails.
+- **Local-first and telemetry-free.** The default explanation engine needs no network and no model. Local MLX inference runs entirely on Apple Silicon. Nothing phones home.
+- **Developer-native cleanup.** Tool-aware previews for Docker, Homebrew, Xcode simulators, pnpm, Go, and Cargo — run through each tool's own commands, not by blindly deleting directories.
+- **Open and free at the source.** The paid build only gates the *execution* of destructive actions behind a one-time license; scans always run, and a clean source build is fully unlocked forever.
+
 ## Features
 
 - **Deep Clean**: YAML-driven scan rules for browser caches, app caches, system logs, temp files, Trash, installers, developer artifacts, Docker, Homebrew, language build caches, and review-gated stale developer versions.
 - **Dev Purge**: narrow-scope view limited to developer artifacts, Docker, Homebrew, and stale developer versions so a routine cleanup can't accidentally widen into a full scan.
 - **Developer Tools**: tool-native Homebrew, Docker, Xcode Simulator, pnpm, Go, and Cargo cleanup previews and run buttons, with Docker `system df` JSON parsing when available and full-modal acknowledgment for protected prunes.
-- **Smart Uninstaller**: app bundle inspection plus post-uninstall remnant detection for support files, launch agents, preferences, and related state.
+- **Smart Uninstaller**: app bundle inspection plus post-uninstall remnant detection for support files, launch agents, preferences, and related state, including a `review`-gated prune of orphaned Spotlight search rules (dead `com.apple.Spotlight` entries macOS leaves behind and offers no UI to remove).
 - **Duplicate Finder**: duplicate-group detection backed by `fclones`, scoped to user-defined personal-scope roots.
 - **File Health**: empty-file, big-file, similar-image, and broken-symlink scans through bundled `czkawka` helpers.
 - **Disk Explorer**: interactive treemap and directory drill-down for understanding where space goes before cleaning.

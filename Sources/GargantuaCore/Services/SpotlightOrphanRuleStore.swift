@@ -71,7 +71,9 @@ public struct StoreSpotlightRuleRemover: SpotlightRuleRemoving {
 /// filesystem scan. Any hit means installed; only an all-miss means gone.
 public struct WorkspaceInstalledAppResolver: InstalledAppResolving {
     private let appRoots: [URL]
-    private let fileManager: FileManager
+    // FileManager isn't Sendable, but this resolver only issues read-only,
+    // thread-safe queries against it (and defaults to the shared instance).
+    nonisolated(unsafe) private let fileManager: FileManager
     private let processRunner: any ProcessRunner
     private let workspaceLookup: @Sendable (String) -> Bool
     /// Helper bundle ids (`…​.helper`/`.daemon`/`.agent`/`.xpc`) often belong to

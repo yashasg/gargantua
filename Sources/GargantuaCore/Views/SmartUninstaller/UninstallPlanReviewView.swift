@@ -215,7 +215,7 @@ struct UninstallPlanReviewView: View {
                         ? "Uninstall 1 item"
                         : "Uninstall \(selectedCount) items")
                         .font(GargantuaFonts.label)
-                        .foregroundStyle(GargantuaColors.ink)
+                        .foregroundStyle(.white)
                         .padding(.vertical, GargantuaSpacing.space2)
                         .padding(.horizontal, GargantuaSpacing.space4)
                         .background(viewModel.canProceed ? GargantuaColors.accent : GargantuaColors.accent.opacity(0.4))

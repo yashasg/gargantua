@@ -19,7 +19,9 @@ public struct GitWorktreeScanAdapter: ScanAdapter {
     private let policy: GitWorktreeScanPolicy
     private let categories: Set<String>?
     private let now: @Sendable () -> Date
-    private let fileManager: FileManager
+    // FileManager isn't Sendable, but this adapter only issues read-only,
+    // thread-safe queries against it (and defaults to the shared instance).
+    nonisolated(unsafe) private let fileManager: FileManager
 
     public init(
         policy: GitWorktreeScanPolicy,

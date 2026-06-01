@@ -7,7 +7,7 @@ import SwiftUI
 /// neutral, destructive, and ghost intents have one visual contract.
 struct GargantuaButton: View {
     enum Tone: Equatable {
-        /// Solid Hawking Blue fill, ink text. The page's prominent CTA.
+        /// Solid Hawking Blue fill, white text. The page's prominent CTA.
         case primary
         /// Surface-3 fill with Border-Em stroke. Inline neutral action.
         case neutral
@@ -67,7 +67,9 @@ struct GargantuaButton: View {
         if isDisabled { return GargantuaColors.ink4 }
         switch tone {
         case .primary, .destructive:
-            return GargantuaColors.ink
+            // Solid colored fill — white reads in both light and dark; `ink`
+            // flips to near-black in light and vanishes on the blue/red.
+            return .white
         case .neutral:
             return GargantuaColors.ink
         case .ghost(let color):

@@ -8,8 +8,9 @@ public struct TrialStatusChip: View {
     private let model: LicenseStateModel
     private let onTap: (() -> Void)?
 
-    public init(model: LicenseStateModel = .shared, onTap: (() -> Void)? = nil) {
-        self.model = model
+    @MainActor
+    public init(model: LicenseStateModel? = nil, onTap: (() -> Void)? = nil) {
+        self.model = model ?? .shared
         self.onTap = onTap
     }
 

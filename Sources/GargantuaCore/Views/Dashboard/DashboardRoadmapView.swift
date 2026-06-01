@@ -65,7 +65,7 @@ private struct DashboardRoadmapRow: View {
         HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
             Text("\(step.rank)")
                 .font(GargantuaFonts.monoData.weight(.semibold))
-                .foregroundStyle(isPrimary ? GargantuaColors.ink : GargantuaColors.ink2)
+                .foregroundStyle(isPrimary ? Color.white : GargantuaColors.ink2)
                 .frame(width: 28, height: 28)
                 .background(isPrimary ? GargantuaColors.accent : GargantuaColors.surface3)
                 .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
@@ -119,7 +119,7 @@ private struct DashboardRoadmapRow: View {
                 Label(actionIsDisabled ? "Scanning" : step.actionLabel, systemImage: buttonSystemImage)
                     .font(GargantuaFonts.label)
                     .labelStyle(.titleAndIcon)
-                    .foregroundStyle(GargantuaColors.ink)
+                    .foregroundStyle(buttonForeground)
                     .frame(width: 120)
                     .padding(.vertical, GargantuaSpacing.space2)
                     .background(buttonBackground)
@@ -167,6 +167,13 @@ private struct DashboardRoadmapRow: View {
             return actionIsDisabled ? GargantuaColors.ink4 : GargantuaColors.accent
         }
         return GargantuaColors.surface3
+    }
+
+    private var buttonForeground: Color {
+        if step.action == .scan && !actionIsDisabled {
+            return .white
+        }
+        return GargantuaColors.ink
     }
 
     private var buttonSystemImage: String {

@@ -97,7 +97,7 @@ struct DashboardTriageEvidenceView: View {
             Button(action: onScan) {
                 Text(hasRunTriage ? "Refresh Triage" : "Run Triage")
                     .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, GargantuaSpacing.space3)
                     .padding(.vertical, GargantuaSpacing.space2)
                     .background(GargantuaColors.accent)
