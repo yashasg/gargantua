@@ -215,7 +215,8 @@ extension DeveloperToolsView {
                 if !succeeded, case .ready(let availabilities, var previews) = session.phase {
                     previews[.docker] = .failed(
                         launched
-                            ? "Docker Desktop was nudged, but the daemon still did not respond. Open Docker Desktop once, or use Restart Docker and try again."
+                            ? "Docker Desktop was nudged, but the daemon still did not respond. "
+                            + "Open Docker Desktop once, or use Restart Docker and try again."
                             : "Docker Desktop could not be opened from Gargantua."
                     )
                     session.phase = .ready(availabilities: availabilities, previews: previews)

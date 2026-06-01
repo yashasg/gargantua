@@ -57,6 +57,9 @@ paths = [
   # Throwaway P256 test signing key (commit 10ffe21d, removed from HEAD).
   # Test-only fixture, never used for production signing (production = Polar.sh).
   '''(^|/)Tests/GargantuaLicensingTests/TestKeys\.swift$''',
+  # Local release env file: gitignored, untracked, never committed. Holds the
+  # Sparkle PUBLIC EdDSA key (a verification key, public by design — not a secret).
+  '''(^|/)\.env\.release$''',
 ]
 
 regexes = [

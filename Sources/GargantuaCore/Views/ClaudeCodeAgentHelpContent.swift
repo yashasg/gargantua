@@ -17,7 +17,8 @@ public enum ClaudeCodeAgentHelpContent {
     // MARK: Inline disclaimer
 
     public static let disclaimerLeadIn = "Agent Run is for situational questions"
-    public static let disclaimerLeadInDetail = "pre-upgrade triage, orphan-cache hunting, version cleanup, criterion filtering (\u{2018}haven\u{2019}t used in 6 months\u{2019})."
+    public static let disclaimerLeadInDetail = "pre-upgrade triage, orphan-cache hunting, "
+        + "version cleanup, criterion filtering (\u{2018}haven\u{2019}t used in 6 months\u{2019})."
 
     public static let disclaimerFallback = "For routine cleanup, run Deep Scan instead"
     public static let disclaimerFallbackDetail = "it\u{2019}s faster and produces the same result for the common case."
@@ -57,13 +58,15 @@ public enum ClaudeCodeAgentHelpContent {
             id: "criterion-filtering",
             useCase: "Criterion filtering",
             chipLabel: "Criterion filtering",
-            prompt: "Find [Adobe / Steam / dev] apps and assets I haven\u{2019}t touched in 6+ months. Don\u{2019}t recommend things I\u{2019}m actively using."
+            prompt: "Find [Adobe / Steam / dev] apps and assets I haven\u{2019}t touched in 6+ months. "
+                + "Don\u{2019}t recommend things I\u{2019}m actively using."
         ),
         ExamplePrompt(
             id: "project-archaeology",
             useCase: "Project archaeology",
             chipLabel: "Stale dev projects",
-            prompt: "What is the biggest potential cleanup in my ~/Development folder? Are there any project repositories I haven\u{2019}t opened in 6+ months that I could archive?"
+            prompt: "What is the biggest potential cleanup in my ~/Development folder? "
+                + "Are there any project repositories I haven\u{2019}t opened in 6+ months that I could archive?"
         ),
     ]
 

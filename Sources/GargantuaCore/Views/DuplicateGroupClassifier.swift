@@ -219,7 +219,8 @@ private let patterns: [PathPattern] = [
                 title: "Downloads",
                 icon: "arrow.down.circle",
                 category: .download,
-                explainer: "Files saved from the web or AirDrop. Removing isn't recoverable from inside the app — make sure you don't need them first.",
+                explainer: "Files saved from the web or AirDrop. Removing isn't recoverable from "
+                    + "inside the app — make sure you don't need them first.",
                 pathCrumb: crumb
             )
         }

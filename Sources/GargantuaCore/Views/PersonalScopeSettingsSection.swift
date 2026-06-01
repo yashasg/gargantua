@@ -143,7 +143,8 @@ struct PersonalScopeSettingsSection: View {
     init(
         persistence: PersistenceController,
         title: String = "Personal scope",
-        subtitle: String = "Folders Duplicate Finder treats as personal. Groups whose every file lives inside one of these are shown; everything else is hidden as managed noise."
+        subtitle: String = "Folders Duplicate Finder treats as personal. Groups whose every file "
+            + "lives inside one of these are shown; everything else is hidden as managed noise."
     ) {
         self._model = StateObject(wrappedValue: PersonalScopeSettingsViewModel(persistence: persistence))
         self.title = title

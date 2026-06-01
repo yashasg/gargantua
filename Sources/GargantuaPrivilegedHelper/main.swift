@@ -289,7 +289,10 @@ private struct CallerCodeSignatureValidator {
         let teamID = dict[kSecCodeInfoTeamIdentifier as String] as? String
         guard identifier == PrivilegedHelperConfiguration.appBundleID,
               teamID == PrivilegedHelperConfiguration.teamID else {
-            HelperLog.write("caller identity mismatch for pid \(connection.processIdentifier): identifier=\(identifier ?? "nil") teamID=\(teamID ?? "nil")")
+            HelperLog.write(
+                "caller identity mismatch for pid \(connection.processIdentifier): "
+                    + "identifier=\(identifier ?? "nil") teamID=\(teamID ?? "nil")"
+            )
             return false
         }
         return true

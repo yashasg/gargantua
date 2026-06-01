@@ -35,7 +35,11 @@ extension EventHorizonContext {
     private static let domainMappings: [DomainMapping] = [
         // Developer roots — most specific first so they don't get caught by ~/Library/Developer.
         DomainMapping(prefix: "~/Library/Developer/Xcode/DerivedData", root: "DerivedData", phrase: "Decoding derived data singularity"),
-        DomainMapping(prefix: "~/Library/Developer/Xcode/iOS DeviceSupport", root: "iOS DeviceSupport", phrase: "Mapping simulator artifact constellations"),
+        DomainMapping(
+            prefix: "~/Library/Developer/Xcode/iOS DeviceSupport",
+            root: "iOS DeviceSupport",
+            phrase: "Mapping simulator artifact constellations"
+        ),
         DomainMapping(prefix: "~/Library/Developer/Xcode/Archives", root: "Xcode Archives", phrase: "Cataloguing archived build remnants"),
         DomainMapping(prefix: "~/Library/Developer/CoreSimulator", root: "CoreSimulator", phrase: "Charting simulator orbit decay"),
         DomainMapping(prefix: "~/Library/Developer/Xcode", root: "Xcode", phrase: "Probing Xcode strata"),

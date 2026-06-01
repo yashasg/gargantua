@@ -172,7 +172,8 @@ private extension DashboardRoadmapPlanner {
                 rank: 0,
                 title: "Dev Artifact Purge",
                 status: "Developer cleanup",
-                detail: "Node, Docker, Homebrew, Xcode, and build outputs. Triage on the Light profile does not probe these — open this tool to scan them directly.",
+                detail: "Node, Docker, Homebrew, Xcode, and build outputs. Triage on the Light "
+                    + "profile does not probe these — open this tool to scan them directly.",
                 evidence: ["node_modules", "Docker", "build caches"],
                 systemImage: "hammer",
                 selection: "devPurge"

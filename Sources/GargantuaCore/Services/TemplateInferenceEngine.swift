@@ -49,7 +49,9 @@ public final class TemplateInferenceEngine: AIInferenceEngine {
                 + "stopping a process can disrupt the app that owns it."
         }
         if rule.category == "background_item_triage" {
-            return "\(result.name) was selected for background-item triage because \(rule.explanation) Recommended next step: investigate first; disable before removing any launch item."
+            return "\(result.name) was selected for background-item triage because "
+                + "\(rule.explanation) Recommended next step: investigate first; "
+                + "disable before removing any launch item."
         }
 
         var parts: [String] = []
