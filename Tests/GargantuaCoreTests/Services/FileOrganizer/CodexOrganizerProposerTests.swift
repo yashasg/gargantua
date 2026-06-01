@@ -112,7 +112,10 @@ struct CodexOrganizerProposerTests {
 
     @Test("A CLI that never returns is terminated and maps to timedOut")
     func timeoutThrows() async throws {
-        let proposer = try makeProposer(enabled: true, cliBody: "sleep 5\n", timeoutSeconds: 1)
+        // sleep far longer than any plausible scheduling delay so the only
+        // exit path is the timeout watcher firing — under parallel CI load a
+        // short sleep can finish naturally before a delayed watcher wakes.
+        let proposer = try makeProposer(enabled: true, cliBody: "sleep 600\n", timeoutSeconds: 1)
         let folder = try OrganizerProposerTestSupport.makeSourceFolder(files: ["a.pdf", "b.pdf"])
         defer { try? FileManager.default.removeItem(at: folder) }
 
