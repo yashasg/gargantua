@@ -1,7 +1,3 @@
-// File intentionally large: covers the full YAML schema for cleanup rules
-// in one place so a reader can find any field without bouncing across files.
-// swiftlint:disable file_length
-
 import Foundation
 import Yams
 
@@ -34,9 +30,6 @@ public enum RuleParseError: Error, CustomStringConvertible {
 }
 
 // Parses YAML rule files into typed `RuleFile` / `ScanRule` objects.
-// Type body covers the full set of field-level YAML decoders so the rule
-// schema is auditable from a single struct.
-// swiftlint:disable:next type_body_length
 public struct RuleParser: Sendable {
 
     public init() {}

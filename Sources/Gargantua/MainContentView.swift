@@ -2,8 +2,6 @@ import Foundation
 import GargantuaCore
 import SwiftUI
 
-// swiftlint:disable file_length
-
 // Root content view for the Gargantua window.
 //
 // Fills the entire window with `GargantuaColors.void_` so no system

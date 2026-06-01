@@ -18,6 +18,16 @@ function_body_length:
   warning: 80
   error: 120
 
+# File length — explicit policy (defaults are 400/1000 and were never enforced)
+file_length:
+  warning: 500
+  error: 1000
+
+# Type body length — explicit policy (default warning is 250)
+type_body_length:
+  warning: 300
+  error: 450
+
 # Identifier naming — allow short math vars and trailing underscores
 # for Swift keyword escapes (protected_, void_)
 identifier_name:

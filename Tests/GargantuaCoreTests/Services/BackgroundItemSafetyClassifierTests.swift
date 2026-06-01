@@ -6,7 +6,6 @@ import Testing
 // orphaned, known-with-bundle, unsigned, login items) plus the derived-reason
 // matrix lives here. Splitting would scatter tests that share helpers.
 @Suite("BackgroundItemSafetyClassifier")
-// swiftlint:disable:next type_body_length
 struct BackgroundItemSafetyClassifierTests {
 
     private let classifier = BackgroundItemSafetyClassifier()

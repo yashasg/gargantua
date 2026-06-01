@@ -1,8 +1,6 @@
 import AppKit
 import SwiftUI
 
-// swiftlint:disable file_length
-
 // Single row in the Process Inventory pane.
 //
 // Mirrors `BackgroundItemRow`'s layout: 3pt safety bar on the leading edge,

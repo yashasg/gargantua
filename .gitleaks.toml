@@ -49,6 +49,14 @@ paths = [
   '''(^|/)\.env\.release\.example$''',
   '''(^|/)README\.md$''',
   '''(^|/)docs/''',
+  # Build/scan artifacts: filesystem scans (--no-git) don't honor .gitignore,
+  # so exclude these explicitly or they flood the scan with false positives.
+  '''(^|/)\.build/''',
+  '''(^|/)\.healthcheck/''',
+  '''(^|/)dist/''',
+  # Throwaway P256 test signing key (commit 10ffe21d, removed from HEAD).
+  # Test-only fixture, never used for production signing (production = Polar.sh).
+  '''(^|/)Tests/GargantuaLicensingTests/TestKeys\.swift$''',
 ]
 
 regexes = [

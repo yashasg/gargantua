@@ -3,8 +3,6 @@ import Foundation
 import Testing
 @testable import GargantuaCore
 
-// swiftlint:disable file_length
-
 private struct SignalCall: Equatable {
     let signal: Int32
     let pid: Int32
