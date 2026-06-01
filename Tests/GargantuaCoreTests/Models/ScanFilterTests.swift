@@ -136,12 +136,16 @@ struct ScanFilterSetTests {
         let filter = ScanFilterSet(bundleIDs: ["com.apple.dt.Xcode"])
         let exact = makeFilterResult(id: "x", path: "/x", size: 1, safety: .safe, category: "c", bundleID: "com.apple.dt.Xcode")
         let mixedCase = makeFilterResult(id: "u", path: "/u", size: 1, safety: .safe, category: "c", bundleID: "COM.APPLE.DT.XCODE")
-        let other = makeFilterResult(id: "o", path: "/o", size: 1, safety: .safe, category: "c", bundleID: "com.example.App")
+        // Non-matches on BOTH sides of the filter value alphabetically, so the
+        // == .orderedSame check can't be swapped for <= / >= and still pass.
+        let before = makeFilterResult(id: "b", path: "/b", size: 1, safety: .safe, category: "c", bundleID: "com.aaa.app")
+        let after = makeFilterResult(id: "a", path: "/a", size: 1, safety: .safe, category: "c", bundleID: "com.zzz.app")
         let noBundle = makeFilterResult(id: "n", path: "/n", size: 1, safety: .safe, category: "c", bundleID: nil)
 
         #expect(filter.matches(exact))
         #expect(filter.matches(mixedCase))
-        #expect(!filter.matches(other))
+        #expect(!filter.matches(before))
+        #expect(!filter.matches(after))
         #expect(!filter.matches(noBundle))
     }
 
@@ -151,10 +155,14 @@ struct ScanFilterSetTests {
     func categoryMatchingIsCaseInsensitive() {
         let filter = ScanFilterSet(categories: ["Dev_Artifacts"])
         let exact = makeFilterResult(id: "x", path: "/x", size: 1, safety: .safe, category: "dev_artifacts")
-        let other = makeFilterResult(id: "o", path: "/o", size: 1, safety: .safe, category: "caches")
+        // Non-matches sorting before and after "dev_artifacts" so == .orderedSame
+        // can't be swapped for an ordering operator and still pass.
+        let before = makeFilterResult(id: "b", path: "/b", size: 1, safety: .safe, category: "aaa_caches")
+        let after = makeFilterResult(id: "a", path: "/a", size: 1, safety: .safe, category: "zzz_logs")
 
         #expect(filter.matches(exact))
-        #expect(!filter.matches(other))
+        #expect(!filter.matches(before))
+        #expect(!filter.matches(after))
     }
 
     // MARK: - size bounds (inclusive comparisons)
