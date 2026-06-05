@@ -131,10 +131,53 @@ fi
 
 log "Publishing Gargantua $VERSION (tag $TAG)..."
 
-# ----- Stage 1: build, sign, notarize, package ------------------------------
+# Single cleanup hook for every temp dir we create below. Set before any of
+# them exist so an early failure still tidies up.
+BUILD_PARENT=""
+TAP_DIR=""
+cleanup() {
+    if [ -n "$BUILD_PARENT" ] && [ -d "$BUILD_PARENT" ]; then
+        git -C "$REPO_ROOT" worktree remove --force "$BUILD_PARENT/src" 2>/dev/null || true
+        rm -rf "$BUILD_PARENT"
+        git -C "$REPO_ROOT" worktree prune 2>/dev/null || true
+    fi
+    [ -n "$TAP_DIR" ] && rm -rf "$TAP_DIR"
+}
+trap cleanup EXIT
 
-log "Running Scripts/release.sh ${RELEASE_FLAGS[*]}..."
-"$REPO_ROOT/Scripts/release.sh" "${RELEASE_FLAGS[@]}"
+# ----- Stage 1: build, sign, notarize, package ------------------------------
+#
+# Build from a pristine git worktree checked out at $TAG, NOT in-place from
+# REPO_ROOT. This guarantees the artifact is exactly the tagged commit and
+# isolates the build from any edits made to the working tree while the
+# multi-minute build + notarize runs (an in-place build will silently bake in
+# whatever happens to be on disk when each file compiles). .build/ and
+# .env.release are gitignored, so the worktree gets a fresh SPM build and we
+# hand-copy .env.release — the only build input git doesn't carry.
+if [ "$DRY_RUN" = 1 ]; then
+    # Snapshot smoke test: VERSION is a synthetic 0.0.0-<sha>, there's no tag to
+    # check out, and nothing gets signed or published. Build in place.
+    BUILD_ROOT="$REPO_ROOT"
+    log "Running Scripts/release.sh ${RELEASE_FLAGS[*]} (in-place, dry-run)..."
+    "$REPO_ROOT/Scripts/release.sh" "${RELEASE_FLAGS[@]}"
+else
+    BUILD_PARENT="$(mktemp -d -t gargantua-build-XXXXXX)"
+    BUILD_ROOT="$BUILD_PARENT/src"
+    log "Checking out $TAG into a clean build worktree..."
+    git worktree add --detach "$BUILD_ROOT" "$TAG" >/dev/null
+    if [ -f "$REPO_ROOT/.env.release" ]; then
+        cp -p "$REPO_ROOT/.env.release" "$BUILD_ROOT/.env.release"
+    fi
+    log "Running Scripts/release.sh ${RELEASE_FLAGS[*]} (clean worktree @ $TAG)..."
+    ( cd "$BUILD_ROOT" && ./Scripts/release.sh "${RELEASE_FLAGS[@]}" )
+
+    # Mirror the build output back to the canonical dist/ so downstream stages
+    # and the documented "artifacts live in dist/" contract are unchanged, and
+    # the artifacts survive the worktree cleanup below.
+    rm -rf "$REPO_ROOT/dist"
+    mkdir -p "$REPO_ROOT/dist"
+    cp -R "$BUILD_ROOT/dist/." "$REPO_ROOT/dist/"
+fi
 
 DMG_PATH="$REPO_ROOT/dist/Gargantua-${VERSION}.dmg"
 APPCAST_PATH="$REPO_ROOT/dist/sparkle-updates/appcast.xml"
@@ -189,7 +232,6 @@ DMG_SHA256="$(shasum -a 256 "$DMG_PATH" | awk '{print $1}')"
 log "DMG sha256: $DMG_SHA256"
 
 TAP_DIR="$(mktemp -d -t gargantua-tap-XXXXXX)"
-trap 'rm -rf "$TAP_DIR"' EXIT
 
 log "Cloning $TAP_REPO into $TAP_DIR..."
 gh repo clone "$TAP_REPO" "$TAP_DIR" -- --depth 1 >/dev/null
