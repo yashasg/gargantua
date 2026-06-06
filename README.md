@@ -420,4 +420,6 @@ If you ship a fork that adds dependencies, please update this list; credit is pa
 
 Gargantua is licensed under the [GNU Affero General Public License v3.0](LICENSE).
 
+The **Gargantua** name, application icon, and Inceptyon Labs branding are trademarks of Inceptyon Labs LLC and are **not** covered by the AGPL. You are free to use, modify, and redistribute the code, but modified builds must be rebranded. See [TRADEMARK.md](TRADEMARK.md) for details.
+
 YAML cleanup and uninstall rules under `Sources/GargantuaCore/Resources/` are sourced from the public [inceptyon-labs/gargantua-rules](https://github.com/inceptyon-labs/gargantua-rules) repository; see that repo's license for rule-specific terms.
