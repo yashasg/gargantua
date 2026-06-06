@@ -111,6 +111,12 @@ public struct PrivilegedUninstallErrorResponse: Codable, Sendable, Equatable {
         requestData: Data,
         withReply reply: @escaping (Data) -> Void
     )
+
+    /// Reports the helper's compiled-in `PrivilegedHelperConfiguration.helperVersion`
+    /// so the app can detect a stale daemon left loaded across an update and
+    /// force a reload. Helpers older than this method simply never reply, which
+    /// the app treats as "stale".
+    func helperVersion(withReply reply: @escaping (Int) -> Void)
 }
 
 public enum PrivilegedUninstallXPCCodec {

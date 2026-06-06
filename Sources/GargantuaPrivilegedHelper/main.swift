@@ -25,6 +25,10 @@ private final class PrivilegedHelperDelegate: NSObject, NSXPCListenerDelegate {
 private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstallXPCProtocol {
     private let backgroundItemValidator = PrivilegedBackgroundItemValidator()
 
+    func helperVersion(withReply reply: @escaping (Int) -> Void) {
+        reply(PrivilegedHelperConfiguration.helperVersion)
+    }
+
     func moveItemsToTrash(
         requestData: Data,
         withReply reply: @escaping (Data) -> Void

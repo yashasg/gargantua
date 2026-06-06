@@ -7,6 +7,16 @@ public enum PrivilegedHelperConfiguration {
     public static let helperBundleID = "com.inceptyon.gargantua.privileged-helper"
     public static let helperPlistName = "\(helperBundleID).plist"
 
+    /// Compiled into both the app and the helper. The app pings the running
+    /// daemon for its version before a privileged op; a mismatch (or a helper
+    /// too old to answer) means an app update left a stale daemon loaded, so the
+    /// app force-reloads it. **Bump on any change to the helper's behavior.**
+    ///
+    /// - 1: original uninstaller-only helper (no version ping).
+    /// - 2: tier-1 system allowlist, /private firmlink canonicalization,
+    ///   user-Trash relocation, and this version handshake.
+    public static let helperVersion = 2
+
     /// Code signing requirement the privileged helper enforces on incoming XPC
     /// connections. `anchor apple generic` pins the chain to a Developer ID
     /// signature; the leaf OU check binds the caller to our Team ID; the
@@ -112,6 +122,7 @@ public final class XPCPrivilegedUninstallHelper: PrivilegedUninstallHelping, @un
             guard status == .enabled else {
                 return failureResults(for: request, message: approvalMessage(for: status))
             }
+            try await reloadStaleHelperIfNeeded()
             return await send(request)
         } catch {
             return failureResults(for: request, message: error.localizedDescription)
@@ -127,6 +138,53 @@ public final class XPCPrivilegedUninstallHelper: PrivilegedUninstallHelping, @un
             return try installer.register()
         case .unknown:
             return current
+        }
+    }
+
+    /// True when the running daemon's reported version doesn't match this build.
+    /// A `nil` running version (an older helper with no `helperVersion` method,
+    /// or an unreachable one) counts as stale: when we can't confirm the helper
+    /// is current, reload rather than trust it.
+    static func shouldReloadHelper(running: Int?) -> Bool {
+        running != PrivilegedHelperConfiguration.helperVersion
+    }
+
+    /// Ping the running daemon; if an app update left a stale one loaded, force a
+    /// reload so launchd spawns the current binary on the next connection. The
+    /// daemon is on-demand (no KeepAlive), so unregister/register drops the stale
+    /// process and the subsequent `send` brings up the new one.
+    @MainActor
+    private func reloadStaleHelperIfNeeded() async throws {
+        let running = await currentHelperVersion()
+        guard Self.shouldReloadHelper(running: running) else { return }
+        _ = try? installer.unregister()
+        _ = try installer.register()
+        // Give launchd a moment to tear the stale job down before we reconnect.
+        try? await Task.sleep(nanoseconds: 200_000_000)
+    }
+
+    @MainActor
+    private func currentHelperVersion() async -> Int? {
+        await withCheckedContinuation { continuation in
+            let connection = NSXPCConnection(machServiceName: machServiceName, options: .privileged)
+            connection.remoteObjectInterface = NSXPCInterface(with: PrivilegedUninstallXPCProtocol.self)
+            connection.resume()
+
+            let proxy = connection.remoteObjectProxyWithErrorHandler { _ in
+                connection.invalidate()
+                continuation.resume(returning: nil)
+            } as? PrivilegedUninstallXPCProtocol
+
+            guard let proxy else {
+                connection.invalidate()
+                continuation.resume(returning: nil)
+                return
+            }
+
+            proxy.helperVersion { version in
+                connection.invalidate()
+                continuation.resume(returning: version)
+            }
         }
     }
 
