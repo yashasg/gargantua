@@ -1,6 +1,8 @@
 rules:
   - id: yandex_cache
     name: Yandex Browser Cache
+    skip_if_process_running:
+      - ru.yandex.desktop.yandex-browser
     paths:
       - "~/Library/Caches/Yandex/YandexBrowser"
       - "~/Library/Caches/Yandex/YandexBrowser/*/Cache"
@@ -20,6 +22,8 @@ rules:
 
   - id: yandex_gpu_shader_cache
     name: Yandex GPU and Shader Cache
+    skip_if_process_running:
+      - ru.yandex.desktop.yandex-browser
     paths:
       - "~/Library/Application Support/Yandex/YandexBrowser/*/GPUCache"
       - "~/Library/Application Support/Yandex/YandexBrowser/ShaderCache"
@@ -41,6 +45,8 @@ rules:
 
   - id: yandex_local_storage
     name: Yandex Local Storage
+    skip_if_process_running:
+      - ru.yandex.desktop.yandex-browser
     paths:
       - "~/Library/Application Support/Yandex/YandexBrowser/*/Local Storage"
     safety: review

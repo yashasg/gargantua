@@ -1,6 +1,8 @@
 rules:
   - id: dia_cache
     name: Dia Browser Cache
+    skip_if_process_running:
+      - company.thebrowser.dia
     paths:
       - "~/Library/Caches/company.thebrowser.dia"
       - "~/Library/Caches/company.thebrowser.dia/*/Cache"
@@ -20,6 +22,8 @@ rules:
 
   - id: dia_local_storage
     name: Dia Local Storage
+    skip_if_process_running:
+      - company.thebrowser.dia
     paths:
       - "~/Library/Application Support/Dia/*/Local Storage"
     safety: review

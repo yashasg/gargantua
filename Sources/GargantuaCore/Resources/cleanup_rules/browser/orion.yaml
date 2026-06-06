@@ -1,6 +1,8 @@
 rules:
   - id: orion_cache
     name: Orion Browser Cache
+    skip_if_process_running:
+      - com.kagi.kagimacOS
     paths:
       - "~/Library/Caches/com.kagi.kagimacOS"
     safety: safe
@@ -19,6 +21,8 @@ rules:
 
   - id: orion_local_storage
     name: Orion Local Storage
+    skip_if_process_running:
+      - com.kagi.kagimacOS
     paths:
       - "~/Library/Application Support/Orion/*/Local Storage"
     safety: review

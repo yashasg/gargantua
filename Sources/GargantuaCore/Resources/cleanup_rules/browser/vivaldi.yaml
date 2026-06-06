@@ -1,6 +1,8 @@
 rules:
   - id: vivaldi_cache
     name: Vivaldi Browser Cache
+    skip_if_process_running:
+      - com.vivaldi.Vivaldi
     paths:
       - "~/Library/Caches/com.vivaldi.Vivaldi"
       - "~/Library/Caches/com.vivaldi.Vivaldi/*/Cache"
@@ -29,6 +31,8 @@ rules:
 
   - id: vivaldi_gpu_shader_cache
     name: Vivaldi GPU and Shader Cache
+    skip_if_process_running:
+      - com.vivaldi.Vivaldi
     paths:
       - "~/Library/Application Support/Vivaldi/*/GPUCache"
       - "~/Library/Application Support/Vivaldi/ShaderCache"
@@ -50,6 +54,8 @@ rules:
 
   - id: vivaldi_service_worker
     name: Vivaldi Service Worker Cache
+    skip_if_process_running:
+      - com.vivaldi.Vivaldi
     paths:
       - "~/Library/Application Support/Vivaldi/*/Service Worker/CacheStorage"
       - "~/Library/Application Support/Vivaldi/*/Service Worker/ScriptCache"
@@ -69,6 +75,8 @@ rules:
 
   - id: vivaldi_local_storage
     name: Vivaldi Local Storage
+    skip_if_process_running:
+      - com.vivaldi.Vivaldi
     paths:
       - "~/Library/Application Support/Vivaldi/*/Local Storage"
     safety: review

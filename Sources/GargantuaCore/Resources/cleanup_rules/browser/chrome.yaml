@@ -1,6 +1,8 @@
 rules:
   - id: chrome_cache
     name: Chrome Browser Cache
+    skip_if_process_running:
+      - com.google.Chrome
     paths:
       - "~/Library/Caches/Google/Chrome"
       - "~/Library/Caches/Google/Chrome/Default/Cache"
@@ -32,6 +34,8 @@ rules:
 
   - id: chrome_code_cache
     name: Chrome Code Cache
+    skip_if_process_running:
+      - com.google.Chrome
     paths:
       - "~/Library/Caches/Google/Chrome/Default/Code Cache"
     safety: safe
@@ -49,6 +53,8 @@ rules:
 
   - id: chrome_service_worker
     name: Chrome Service Worker Cache
+    skip_if_process_running:
+      - com.google.Chrome
     paths:
       - "~/Library/Caches/Google/Chrome/Default/Service Worker"
       - "~/Library/Application Support/Google/Chrome/*/Service Worker/CacheStorage"
@@ -68,6 +74,8 @@ rules:
 
   - id: chrome_local_storage
     name: Chrome Local Storage
+    skip_if_process_running:
+      - com.google.Chrome
     paths:
       - "~/Library/Application Support/Google/Chrome/Default/Local Storage"
     safety: review
@@ -92,6 +100,8 @@ rules:
 
   - id: chrome_extensions_cache
     name: Chrome Extensions Cache
+    skip_if_process_running:
+      - com.google.Chrome
     paths:
       - "~/Library/Caches/Google/Chrome/Default/Extensions"
       - "~/Library/Application Support/Google/Chrome/component_crx_cache"
@@ -111,6 +121,8 @@ rules:
 
   - id: chrome_google_updater_cache
     name: GoogleUpdater Browser CRX Cache
+    skip_if_process_running:
+      - com.google.Chrome
     paths:
       - "~/Library/Application Support/Google/GoogleUpdater/crx_cache"
       - "~/Library/Application Support/Google/GoogleUpdater/*.old"
@@ -128,6 +140,8 @@ rules:
 
   - id: chrome_puppeteer_cache
     name: Puppeteer Browser Cache
+    skip_if_process_running:
+      - com.google.Chrome
     paths:
       - "~/.cache/puppeteer"
     safety: safe

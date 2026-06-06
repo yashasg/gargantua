@@ -1,6 +1,8 @@
 rules:
   - id: edge_cache
     name: Microsoft Edge Browser Cache
+    skip_if_process_running:
+      - com.microsoft.edgemac
     paths:
       - "~/Library/Caches/com.microsoft.edgemac"
       - "~/Library/Caches/com.microsoft.edgemac/*/Cache"
@@ -28,6 +30,8 @@ rules:
 
   - id: edge_code_cache
     name: Microsoft Edge Code Cache
+    skip_if_process_running:
+      - com.microsoft.edgemac
     paths:
       - "~/Library/Caches/com.microsoft.edgemac/*/Code Cache"
     safety: safe
@@ -46,6 +50,8 @@ rules:
 
   - id: edge_service_worker
     name: Microsoft Edge Service Worker Cache
+    skip_if_process_running:
+      - com.microsoft.edgemac
     paths:
       - "~/Library/Application Support/Microsoft Edge/*/Service Worker/CacheStorage"
       - "~/Library/Application Support/Microsoft Edge/*/Service Worker/ScriptCache"
@@ -65,6 +71,8 @@ rules:
 
   - id: edge_local_storage
     name: Microsoft Edge Local Storage
+    skip_if_process_running:
+      - com.microsoft.edgemac
     paths:
       - "~/Library/Application Support/Microsoft Edge/*/Local Storage"
     safety: review

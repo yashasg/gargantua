@@ -1,6 +1,8 @@
 rules:
   - id: arc_cache
     name: Arc Browser Cache
+    skip_if_process_running:
+      - company.thebrowser.Browser
     paths:
       - "~/Library/Caches/company.thebrowser.Browser"
       - "~/Library/Application Support/Arc/*/GPUCache"
@@ -30,6 +32,8 @@ rules:
 
   - id: arc_code_cache
     name: Arc Code Cache
+    skip_if_process_running:
+      - company.thebrowser.Browser
     paths:
       - "~/Library/Caches/company.thebrowser.Browser/Default/Code Cache"
     safety: safe
@@ -47,6 +51,8 @@ rules:
 
   - id: arc_local_storage
     name: Arc Local Storage
+    skip_if_process_running:
+      - company.thebrowser.Browser
     paths:
       - "~/Library/Application Support/Arc/User Data/Default/Local Storage"
     safety: review
@@ -71,6 +77,8 @@ rules:
 
   - id: arc_service_worker
     name: Arc Service Worker Cache
+    skip_if_process_running:
+      - company.thebrowser.Browser
     paths:
       - "~/Library/Caches/company.thebrowser.Browser/Default/Service Worker"
       - "~/Library/Application Support/Arc/*/Service Worker/CacheStorage"

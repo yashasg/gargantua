@@ -1,6 +1,8 @@
 rules:
   - id: brave_cache
     name: Brave Browser Cache
+    skip_if_process_running:
+      - com.brave.Browser
     paths:
       - "~/Library/Caches/BraveSoftware/Brave-Browser"
       - "~/Library/Caches/BraveSoftware/Brave-Browser/Default/Cache"
@@ -33,6 +35,8 @@ rules:
 
   - id: brave_code_cache
     name: Brave Code Cache
+    skip_if_process_running:
+      - com.brave.Browser
     paths:
       - "~/Library/Caches/BraveSoftware/Brave-Browser/Default/Code Cache"
     safety: safe
@@ -51,6 +55,8 @@ rules:
 
   - id: brave_service_worker
     name: Brave Service Worker Cache
+    skip_if_process_running:
+      - com.brave.Browser
     paths:
       - "~/Library/Caches/BraveSoftware/Brave-Browser/Default/Service Worker"
       - "~/Library/Application Support/BraveSoftware/Brave-Browser/*/Service Worker/CacheStorage"
@@ -71,6 +77,8 @@ rules:
 
   - id: brave_local_storage
     name: Brave Local Storage
+    skip_if_process_running:
+      - com.brave.Browser
     paths:
       - "~/Library/Application Support/BraveSoftware/Brave-Browser/Default/Local Storage"
     safety: review
@@ -96,6 +104,8 @@ rules:
 
   - id: brave_extensions_cache
     name: Brave Extensions Cache
+    skip_if_process_running:
+      - com.brave.Browser
     paths:
       - "~/Library/Caches/BraveSoftware/Brave-Browser/Default/Extensions"
       - "~/Library/Application Support/BraveSoftware/Brave-Browser/component_crx_cache"

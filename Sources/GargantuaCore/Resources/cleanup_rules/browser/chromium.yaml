@@ -1,6 +1,8 @@
 rules:
   - id: chromium_cache
     name: Chromium Browser Cache
+    skip_if_process_running:
+      - org.chromium.Chromium
     paths:
       - "~/Library/Caches/Chromium"
       - "~/Library/Caches/Chromium/*/Cache"
@@ -28,6 +30,8 @@ rules:
 
   - id: chromium_code_cache
     name: Chromium Code Cache
+    skip_if_process_running:
+      - org.chromium.Chromium
     paths:
       - "~/Library/Caches/Chromium/*/Code Cache"
     safety: safe
@@ -46,6 +50,8 @@ rules:
 
   - id: chromium_service_worker
     name: Chromium Service Worker Cache
+    skip_if_process_running:
+      - org.chromium.Chromium
     paths:
       - "~/Library/Application Support/Chromium/*/Service Worker/CacheStorage"
       - "~/Library/Application Support/Chromium/*/Service Worker/ScriptCache"
@@ -65,6 +71,8 @@ rules:
 
   - id: chromium_local_storage
     name: Chromium Local Storage
+    skip_if_process_running:
+      - org.chromium.Chromium
     paths:
       - "~/Library/Application Support/Chromium/*/Local Storage"
     safety: review

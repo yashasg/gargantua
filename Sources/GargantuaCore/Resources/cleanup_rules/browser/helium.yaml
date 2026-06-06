@@ -1,6 +1,8 @@
 rules:
   - id: helium_cache
     name: Helium Browser Cache
+    skip_if_process_running:
+      - net.imput.helium
     paths:
       - "~/Library/Caches/net.imput.helium"
       - "~/Library/Application Support/net.imput.helium/*/Application Cache"
@@ -20,6 +22,8 @@ rules:
 
   - id: helium_gpu_shader_cache
     name: Helium GPU and Shader Cache
+    skip_if_process_running:
+      - net.imput.helium
     paths:
       - "~/Library/Application Support/net.imput.helium/*/GPUCache"
       - "~/Library/Application Support/net.imput.helium/ShaderCache"
@@ -41,6 +45,8 @@ rules:
 
   - id: helium_extensions_cache
     name: Helium Extensions Cache
+    skip_if_process_running:
+      - net.imput.helium
     paths:
       - "~/Library/Application Support/net.imput.helium/component_crx_cache"
       - "~/Library/Application Support/net.imput.helium/extensions_crx_cache"
@@ -61,6 +67,8 @@ rules:
 
   - id: helium_local_storage
     name: Helium Local Storage
+    skip_if_process_running:
+      - net.imput.helium
     paths:
       - "~/Library/Application Support/net.imput.helium/*/Local Storage"
     safety: review
