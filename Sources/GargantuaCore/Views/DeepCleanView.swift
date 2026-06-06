@@ -82,7 +82,12 @@ public struct DeepCleanView: View {
             .animation(reduceMotion ? nil : .easeOut(duration: 0.65), value: session.phase)
 
             if session.showConfirmation, let results = session.scanResults {
-                let selected = results.filter { session.selectedResultIDs.contains($0.id) }
+                // Belt-and-suspenders: view-only items (protected roots, protected
+                // safety, non-allowlisted system paths) can never be executed even
+                // if a selection path let one slip in.
+                let selected = results.filter {
+                    session.selectedResultIDs.contains($0.id) && session.isSelectable($0.id)
+                }
                 ConfirmationModalView(
                     items: selected,
                     onConfirm: { method in confirmCleanup(selected, method: method) },

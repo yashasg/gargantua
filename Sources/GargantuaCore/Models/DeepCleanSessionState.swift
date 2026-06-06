@@ -25,6 +25,11 @@ public final class DeepCleanSessionState {
     public var scanResults: [ScanResult]?
     public var scanDuration: TimeInterval = 0
     public var selectedResultIDs: Set<String> = []
+    /// Per-result removability, reconciled at scan time (protected roots,
+    /// `protected` safety, and the privileged allowlist). View-only items are
+    /// surfaced but never selectable or executed. Keyed by `ScanResult.id`;
+    /// a missing entry means `.removable`.
+    public var removability: [String: Removability] = [:]
     public var isScanning = false
     public var showConfirmation = false
     public var isCleaning = false
@@ -51,6 +56,7 @@ public final class DeepCleanSessionState {
         scanDuration = 0
         scanResults = nil
         selectedResultIDs = []
+        removability = [:]
         cleanupResult = nil
         showConfirmation = false
         activeCleanupMethod = .trash
@@ -71,6 +77,7 @@ public final class DeepCleanSessionState {
         scanDuration = 0
         scanResults = nil
         selectedResultIDs = []
+        removability = [:]
         cleanupResult = nil
         showConfirmation = false
         activeCleanupMethod = .trash
@@ -85,6 +92,7 @@ public final class DeepCleanSessionState {
         scanProgress = ScanProgress()
         scanResults = nil
         selectedResultIDs = []
+        removability = [:]
         cleanupResult = nil
         showConfirmation = false
         pathStream.clear()
@@ -93,10 +101,38 @@ public final class DeepCleanSessionState {
 
     public func finishScan(results: [ScanResult], duration: TimeInterval) {
         scanDuration = duration
-        selectedResultIDs = Set(results.filter { $0.safety == .safe }.map(\.id))
+        // Reconcile removability fresh each scan so user-added protected roots
+        // are current. View-only items are excluded from the default selection;
+        // only removable, rule-`safe` items pre-select.
+        let map = RemovabilityReconciler().map(for: results)
+        removability = map
+        selectedResultIDs = Set(
+            results
+                .filter { $0.safety == .safe && (map[$0.id]?.isRemovable ?? true) }
+                .map(\.id)
+        )
         scanResults = results
         isScanning = false
         phase = .results
+    }
+
+    /// Whether the user may select this result for cleanup. View-only items
+    /// (protected roots, protected safety, non-allowlisted system paths) cannot
+    /// be selected — they are surfaced for visibility only.
+    public func isSelectable(_ id: String) -> Bool {
+        removability[id]?.isRemovable ?? true
+    }
+
+    /// The reason a result is view-only, if it is. `nil` when removable.
+    public func viewOnlyReason(_ id: String) -> String? {
+        removability[id]?.viewOnlyReason
+    }
+
+    /// Select a result if it is removable; view-only items are ignored so a
+    /// "select all" can never queue something that will fail on execute.
+    public func select(_ id: String) {
+        guard isSelectable(id) else { return }
+        selectedResultIDs.insert(id)
     }
 
     public func failScan(_ message: String) {
@@ -147,6 +183,7 @@ public final class DeepCleanSessionState {
             scanDuration = 0
             scanResults = nil
             selectedResultIDs = []
+            removability = [:]
             pathStream.clear()
             phase = .idle
         }
