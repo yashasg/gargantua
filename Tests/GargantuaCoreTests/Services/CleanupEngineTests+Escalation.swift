@@ -2,6 +2,29 @@ import Foundation
 import Testing
 @testable import GargantuaCore
 
+/// Fails the first N moveToTrash calls, then succeeds — models a transient hold
+/// (a dying app helper) that clears on retry.
+@MainActor
+final class FlakyTrashMover: TrashMoving {
+    private var failuresRemaining: Int
+    private let error: String
+    private(set) var attempts = 0
+
+    init(failuresBeforeSuccess: Int, error: String) {
+        self.failuresRemaining = failuresBeforeSuccess
+        self.error = error
+    }
+
+    func moveToTrash(_ url: URL) async throws -> URL? {
+        attempts += 1
+        if failuresRemaining > 0 {
+            failuresRemaining -= 1
+            throw TrashMoveFailure(message: error)
+        }
+        return URL(fileURLWithPath: "/Users/test/.Trash/\(url.lastPathComponent)")
+    }
+}
+
 @MainActor
 final class StubPrivilegedHelper: PrivilegedUninstallHelping {
     enum Mode {
@@ -147,6 +170,38 @@ extension CleanupResultTests {
         let data = try PrivilegedUninstallXPCCodec.encoder.encode(item)
         let decoded = try PrivilegedUninstallXPCCodec.decoder.decode(PrivilegedUninstallItem.self, from: data)
         #expect(decoded.operation == .deleteFromTrash)
+    }
+
+    @Test("A transient trash failure is retried and can succeed (e.g. a just-quit app releasing its cache)")
+    @MainActor
+    func transientFailureRetriesToSuccess() async {
+        let item = makeItem(id: "brave", path: "/tmp/gargantua-brave-cache", size: 10)
+        let mover = FlakyTrashMover(failuresBeforeSuccess: 2, error: "\u{201C}Cache\u{201D} couldn\u{2019}t be removed.")
+        let engine = CleanupEngine(
+            homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser,
+            trashMover: mover
+        )
+
+        let result = await engine.clean([item], method: .trash)
+
+        #expect(result.allSucceeded)
+        #expect(mover.attempts == 3) // 2 failures + 1 success
+    }
+
+    @Test("Permission failures are not retried — they go straight to escalation")
+    @MainActor
+    func permissionFailureNotRetried() async {
+        let item = makeItem(id: "root", path: "/tmp/gargantua-root", size: 10)
+        let mover = RecordingTrashMover(outcome: .failure("Operation not permitted"))
+        let engine = CleanupEngine(
+            homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser,
+            trashMover: mover
+        )
+
+        let result = await engine.clean([item], method: .trash)
+
+        #expect(result.failedItems.count == 1)
+        #expect(mover.movedURLs.count == 1) // single attempt, no retry
     }
 
     @Test("Without a privileged helper, permission failures stay failed")

@@ -252,20 +252,41 @@ public final class CleanupEngine: Sendable {
         }
     }
 
+    /// Removal attempts and the delay between them for a *transient* failure —
+    /// e.g. a just-quit app whose helper process is still releasing a cache file.
+    /// Permission/ownership failures are never retried (they escalate instead),
+    /// so the 37-items-failed permission case adds no extra latency.
+    private static let maxRemovalAttempts = 3
+    private static let transientRetryDelay: UInt64 = 700_000_000 // 0.7s
+
+    /// A failure that may clear on its own (a process releasing a handle), as
+    /// opposed to a permission/ownership failure (escalates) or a missing file.
+    private func isTransientRemovalFailure(_ message: String) -> Bool {
+        !CleanupFailureClassifier.isElevatable(message)
+            && !message.lowercased().contains("no such file")
+    }
+
     /// Move a single URL to Trash. Finder Automation is tried first, with the
     /// direct macOS Trash API kept as a fallback for denied or failed events.
+    /// Retries a transient hold (e.g. a browser's helper still releasing the
+    /// cache right after the user quit it via the Quit button).
     @MainActor
     private func recycleSingle(url: URL, item: ScanResult) async -> CleanupItemResult {
-        do {
-            let trashURL = try await trashMover.moveToTrash(url)
-            return CleanupItemResult(item: item, succeeded: true, trashURL: trashURL)
-        } catch {
-            return CleanupItemResult(
-                item: item,
-                succeeded: false,
-                error: error.localizedDescription
-            )
+        var lastError = "unknown error"
+        for attempt in 1 ... Self.maxRemovalAttempts {
+            do {
+                let trashURL = try await trashMover.moveToTrash(url)
+                return CleanupItemResult(item: item, succeeded: true, trashURL: trashURL)
+            } catch {
+                lastError = error.localizedDescription
+                if attempt < Self.maxRemovalAttempts, isTransientRemovalFailure(lastError) {
+                    try? await Task.sleep(nanoseconds: Self.transientRetryDelay)
+                    continue
+                }
+                break
+            }
         }
+        return CleanupItemResult(item: item, succeeded: false, error: lastError)
     }
 
     /// Permanently delete a single URL. Runs on a detached task so the
@@ -275,18 +296,23 @@ public final class CleanupEngine: Sendable {
     /// modal confirmed a "Delete Permanently" cleanup.
     private func deleteSingle(url: URL, item: ScanResult) async -> CleanupItemResult {
         let pathToRemove = url
-        do {
-            try await Task.detached(priority: .userInitiated) {
-                try FileManager.default.removeItem(at: pathToRemove)
-            }.value
-            return CleanupItemResult(item: item, succeeded: true)
-        } catch {
-            return CleanupItemResult(
-                item: item,
-                succeeded: false,
-                error: error.localizedDescription
-            )
+        var lastError = "unknown error"
+        for attempt in 1 ... Self.maxRemovalAttempts {
+            do {
+                try await Task.detached(priority: .userInitiated) {
+                    try FileManager.default.removeItem(at: pathToRemove)
+                }.value
+                return CleanupItemResult(item: item, succeeded: true)
+            } catch {
+                lastError = error.localizedDescription
+                if attempt < Self.maxRemovalAttempts, isTransientRemovalFailure(lastError) {
+                    try? await Task.sleep(nanoseconds: Self.transientRetryDelay)
+                    continue
+                }
+                break
+            }
         }
+        return CleanupItemResult(item: item, succeeded: false, error: lastError)
     }
 
     /// Resolves to true when `url` refers to the user's Trash directory.
