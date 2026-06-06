@@ -114,19 +114,31 @@ extension CleanupSummaryView {
 
     // MARK: - Failure Section
 
-    private var mostFailuresArePermissionErrors: Bool {
-        guard !result.failedItems.isEmpty else { return false }
-        let permissionCount = result.failedItems.filter { item in
-            guard let error = item.error?.lowercased() else { return false }
-            return error.contains("permission") || error.contains("not permitted")
-                || error.contains("access") || error.contains("operation not allowed")
+    private var permissionFailureCount: Int {
+        result.failedItems.filter {
+            CleanupFailureClassifier.isElevatable($0.error)
         }.count
-        return permissionCount * 2 >= result.failedItems.count
     }
 
-    private static let fullDiskAccessURL = URL(
-        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
-    )!
+    /// Pick the remediation that matches the *real* cause. Full Disk Access is
+    /// only the blocker when it is genuinely missing — when it is granted, a
+    /// permission failure means the items are owned by macOS or another user
+    /// (needs elevated removal) or Finder Automation was denied, not a toggle
+    /// the user has already flipped.
+    private var dominantFailureGuidance: PermissionFailureGuidance? {
+        guard !result.failedItems.isEmpty,
+              permissionFailureCount * 2 >= result.failedItems.count
+        else { return nil }
+
+        if !PermissionChecker.hasFullDiskAccess {
+            return .fullDiskAccess
+        }
+
+        let automationCount = result.failedItems.filter {
+            CleanupFailureClassifier.kind(of: $0.error) == .automation
+        }.count
+        return automationCount * 2 >= permissionFailureCount ? .automation : .ownership
+    }
 
     var failureSection: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
@@ -142,8 +154,8 @@ extension CleanupSummaryView {
                 Spacer()
             }
 
-            if mostFailuresArePermissionErrors {
-                PermissionFailurePrompt(settingsURL: Self.fullDiskAccessURL)
+            if let guidance = dominantFailureGuidance {
+                PermissionFailurePrompt(guidance: guidance)
             }
 
             ScrollView {
@@ -326,8 +338,57 @@ extension CleanupSummaryView {
 
 // MARK: - Permission Failure Prompt
 
+enum PermissionFailureGuidance {
+    /// Full Disk Access is genuinely missing.
+    case fullDiskAccess
+    /// Finder Automation (Apple Events) was denied.
+    case automation
+    /// Items are owned by macOS or another user; need the privileged helper.
+    case ownership
+
+    var title: String {
+        switch self {
+        case .fullDiskAccess: "These items require Full Disk Access"
+        case .automation: "These items need Automation permission"
+        case .ownership: "These items are owned by the system"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .fullDiskAccess:
+            "Open System Settings, click the \"+\" button, then add Gargantua from your Applications folder."
+        case .automation:
+            "Gargantua moves items to the Trash through Finder. Allow it to control Finder under Automation, "
+                + "or it will fall back to the direct Trash API."
+        case .ownership:
+            "Full Disk Access can't delete files owned by macOS or another user. Approve Gargantua's privileged "
+                + "helper under Login Items & Extensions so it can remove them, then run the clean again."
+        }
+    }
+
+    var buttonLabel: String {
+        switch self {
+        case .fullDiskAccess: "Open Full Disk Access Settings"
+        case .automation: "Open Automation Settings"
+        case .ownership: "Open Login Items & Extensions"
+        }
+    }
+
+    var settingsURL: URL {
+        switch self {
+        case .fullDiskAccess:
+            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
+        case .automation:
+            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!
+        case .ownership:
+            URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")!
+        }
+    }
+}
+
 struct PermissionFailurePrompt: View {
-    let settingsURL: URL
+    let guidance: PermissionFailureGuidance
 
     @Environment(\.openURL) private var openURL
 
@@ -338,23 +399,23 @@ struct PermissionFailurePrompt: View {
                     .font(.system(size: 14))
                     .foregroundStyle(GargantuaColors.review)
 
-                Text("These items require Full Disk Access")
+                Text(guidance.title)
                     .font(GargantuaFonts.label)
                     .foregroundStyle(GargantuaColors.ink)
             }
 
-            Text("Open System Settings, click the \"+\" button, then add Gargantua from your Applications folder.")
+            Text(guidance.detail)
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink2)
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
-                openURL(settingsURL)
+                openURL(guidance.settingsURL)
             } label: {
                 HStack(spacing: GargantuaSpacing.space1) {
                     Image(systemName: "gear")
                         .font(.system(size: 11))
-                    Text("Open Full Disk Access Settings")
+                    Text(guidance.buttonLabel)
                         .font(GargantuaFonts.caption)
                 }
                 .foregroundStyle(GargantuaColors.accent)

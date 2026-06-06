@@ -115,7 +115,7 @@ public struct DuplicateFinderContainerView: View {
     }
 
     private func trashConfirmed(_ items: [ScanResult], method: CleanupMethod) async {
-        let engine = CleanupEngine()
+        let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
         let result = await engine.clean(items, method: method)
         do {
             try AuditWriter().record(result: result)

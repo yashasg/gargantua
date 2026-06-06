@@ -269,7 +269,7 @@ public struct DeepCleanView: View {
                 }
                 return
             }
-            let engine = CleanupEngine()
+            let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
             let result = await engine.clean(items, method: method, observer: session.pathStream)
             do {
                 try AuditWriter().record(result: result)

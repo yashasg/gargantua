@@ -63,12 +63,20 @@ public final class CleanupEngine: Sendable {
     private let trashMover: any TrashMoving
     private let protectedRootPolicy: ProtectedRootPolicy
     private let commandActionRunner: CommandActionCleanupRouter
+    /// When set, items that fail removal with a permission/ownership error are
+    /// retried through the root-privileged helper. Left `nil` in headless
+    /// contexts (the MCP server) and tests so they never silently escalate.
+    private let privilegedHelper: (any PrivilegedUninstallHelping)?
 
-    public init() {
+    /// - Parameter privilegedHelper: pass `XPCPrivilegedUninstallHelper()` from
+    ///   interactive flows to recover root-owned items that POSIX `EPERM`
+    ///   blocked. Defaults to `nil` (no escalation).
+    public init(privilegedHelper: (any PrivilegedUninstallHelping)? = nil) {
         self.homeDirectory = FileManager.default.homeDirectoryForCurrentUser
         self.trashMover = FinderFirstTrashMover()
         self.protectedRootPolicy = .loadDefault()
         self.commandActionRunner = CommandActionCleanupRouter.production()
+        self.privilegedHelper = privilegedHelper
     }
 
     /// Test-only initializer. Use the default `init()` in app code.
@@ -76,12 +84,14 @@ public final class CleanupEngine: Sendable {
         homeDirectoryForTesting: URL,
         trashMover: any TrashMoving = FinderFirstTrashMover(),
         protectedRootPolicy: ProtectedRootPolicy = .loadDefault(),
-        commandActionRunner: CommandActionCleanupRouter = .disabled
+        commandActionRunner: CommandActionCleanupRouter = .disabled,
+        privilegedHelper: (any PrivilegedUninstallHelping)? = nil
     ) {
         self.homeDirectory = homeDirectoryForTesting
         self.trashMover = trashMover
         self.protectedRootPolicy = protectedRootPolicy
         self.commandActionRunner = commandActionRunner
+        self.privilegedHelper = privilegedHelper
     }
 
     /// Remove the given scan results with the selected cleanup method.
@@ -129,7 +139,62 @@ public final class CleanupEngine: Sendable {
             results.append(result)
         }
 
-        return CleanupResult(itemResults: results, cleanupMethod: method)
+        let recovered = await escalatePermissionFailures(results, observer: observer)
+        return CleanupResult(itemResults: recovered, cleanupMethod: method)
+    }
+
+    /// Retry permission-class failures through the root-privileged helper.
+    ///
+    /// Full Disk Access lets us read root-owned paths but not delete them; the
+    /// helper (running as root) is the only path that can recycle them. No-ops
+    /// when no helper was injected, so headless/test callers are unaffected.
+    /// Escalation always moves to Trash even for a `.delete` request — the
+    /// helper supports recycle only, and recoverable-but-trashed beats failed.
+    @MainActor
+    private func escalatePermissionFailures(
+        _ results: [CleanupItemResult],
+        observer: (any ScanProgressObserving)?
+    ) async -> [CleanupItemResult] {
+        guard let privilegedHelper else { return results }
+
+        let escalatable = results.enumerated().filter { _, result in
+            !result.succeeded
+                && !result.item.isCommandAction
+                && CleanupFailureClassifier.isElevatable(result.error)
+        }
+        guard !escalatable.isEmpty else { return results }
+
+        let request = PrivilegedUninstallRequest(
+            planID: UUID(),
+            scanResults: escalatable.map(\.element.item)
+        )
+        let elevated = await privilegedHelper.movePrivilegedItemsToTrash(
+            request,
+            authorization: .privilegedHelperApproved
+        )
+        let elevatedByID = Dictionary(
+            elevated.map { ($0.item.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        var merged = results
+        for (index, original) in escalatable {
+            guard let outcome = elevatedByID[original.item.id] else { continue }
+            merged[index] = CleanupItemResult(
+                item: original.item,
+                succeeded: outcome.succeeded,
+                trashURL: outcome.trashURL,
+                error: outcome.succeeded ? nil : outcome.error
+            )
+            if outcome.succeeded {
+                observer?.didEmit(ScanProgressEvent(
+                    path: original.item.path,
+                    outcome: .match,
+                    bytes: original.item.size
+                ))
+            }
+        }
+        return merged
     }
 
     @MainActor

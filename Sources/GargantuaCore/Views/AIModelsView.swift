@@ -284,7 +284,7 @@ extension AIModelsView {
     fileprivate func confirmCleanup(_ items: [ScanResult], method: CleanupMethod) {
         session.beginCleanup(method: method)
         Task {
-            let engine = CleanupEngine()
+            let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
             let result = await engine.clean(items, method: method, observer: session.pathStream)
             do {
                 try AuditWriter().record(result: result)

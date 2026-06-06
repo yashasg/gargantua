@@ -89,7 +89,8 @@ extension FileHealthContainerView {
         state.beginCleanup()
 
         Task { @MainActor in
-            let result = await CleanupEngine().clean(items, method: .trash)
+            let result = await CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
+                .clean(items, method: .trash)
             do {
                 try AuditWriter().record(
                     result: result,

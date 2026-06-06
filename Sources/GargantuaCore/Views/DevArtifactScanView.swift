@@ -218,7 +218,7 @@ extension DevArtifactScanView {
         pathStream.clear()
         phase = .cleaning
         activeTask = Task {
-            let engine = CleanupEngine()
+            let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
             let result = await engine.clean(items, method: method, observer: pathStream)
             do {
                 try AuditWriter().record(result: result)
