@@ -13,9 +13,12 @@ private let logger = Logger(subsystem: "com.gargantua.core", category: "NativeSc
 /// rules were hand-ported from Mole's domain knowledge and are now the
 /// authoritative source of truth for what is scannable and how it is classified.
 public struct NativeScanAdapter: ScanAdapter {
-    private let rules: [ScanRule]
-    private let profile: CleanupProfile
-    private let classifier: SafetyClassifier
+    // Internal (not private) so the `classify(path:)` extension in
+    // NativeScanAdapter+Classify.swift can reverse-match against the same
+    // rules/profile/classifier the forward scan uses.
+    let rules: [ScanRule]
+    let profile: CleanupProfile
+    let classifier: SafetyClassifier
     private let scanRoots: [URL]
     private let expander: PathExpander
     private let processChecker: any RunningProcessChecking

@@ -146,7 +146,7 @@ extension NativeScanAdapter {
         }
     }
 
-    private static func makeResult(
+    static func makeResult(
         rule: ScanRule,
         path: String,
         counter: inout Int,
@@ -227,7 +227,7 @@ extension NativeScanAdapter {
         )
     }
 
-    private static func expandTilde(_ path: String) -> String {
+    static func expandTilde(_ path: String) -> String {
         guard path.hasPrefix("~") else { return path }
         return (path as NSString).expandingTildeInPath
     }
@@ -273,7 +273,7 @@ extension NativeScanAdapter {
         return "\(rule.name) — \(last)"
     }
 
-    private static func isExcluded(child: URL, excludes: [String]) -> Bool {
+    static func isExcluded(child: URL, excludes: [String]) -> Bool {
         let name = child.lastPathComponent
         let fullPath = child.path
         for pattern in excludes {
@@ -289,7 +289,7 @@ extension NativeScanAdapter {
     }
 
     /// Minimal fnmatch — supports `*` only. Good enough for cleanup rule excludes.
-    private static func fnmatch(pattern: String, name: String) -> Bool {
+    static func fnmatch(pattern: String, name: String) -> Bool {
         let parts = pattern.split(separator: "*", omittingEmptySubsequences: false).map(String.init)
         var cursor = name.startIndex
         for (i, part) in parts.enumerated() {

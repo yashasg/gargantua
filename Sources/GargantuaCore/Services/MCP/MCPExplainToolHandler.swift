@@ -11,10 +11,10 @@ import Foundation
 // provider swap from today's AI-free shell to an `AIInferenceEngine`-backed
 // source without touching the handler.
 //
-// Scope: this Task (gargantua-o4ef) wires a default provider in
-// `Sources/GargantuaMCP/main.swift` that returns a conservative "review"
-// classification from filesystem metadata for `path` inputs and rejects
-// `item_id` lookups as unsupported until a persisted-result bridge arrives.
+// Scope: the default provider in `Sources/GargantuaMCP/main.swift` returns a
+// conservative "review" classification from filesystem metadata for `path`
+// inputs, and resolves `item_id` inputs against the scan-session cache to
+// return the scan-time classification verbatim.
 
 /// Tool handler for `explain`.
 public struct MCPExplainToolHandler: Sendable {
@@ -83,17 +83,44 @@ public extension MCPExplainToolHandler {
     /// provider must not treat the empty-array case as an error.
     typealias ReceiptLookup = @Sendable (String) -> [PackageReceipt]
 
+    /// Resolves an `item_id` from a prior scan to its cached `ScanResult`.
+    ///
+    /// Production wires this to `MCPScanSessionCache.lookup(id:)` (see
+    /// `Sources/GargantuaMCP/main.swift`); tests inject a stub. Returning `nil`
+    /// signals "no such id in the current scan session" — the provider turns
+    /// that into an `invalidParams` so a stale id is a loud client error, not a
+    /// silent fallback to a fabricated path response.
+    typealias ItemLookup = @Sendable (String) -> ScanResult?
+
+    /// Classifies an arbitrary absolute path against the rule set, returning the
+    /// Trust Layer verdict a scan would assign it, or `nil` when no rule claims
+    /// the path.
+    ///
+    /// Production wires this to `NativeScanAdapter.classify(path:)` (see
+    /// `Sources/GargantuaMCP/main.swift`); tests inject a stub. A hit lets the
+    /// `path` branch return a real classification instead of the AI-pending
+    /// "review" shell.
+    typealias PathClassify = @Sendable (String) -> ScanResult?
+
     /// Default AI-free `ExplainProvider` backed by filesystem metadata.
     ///
     /// Behavior:
-    /// - `item_id` inputs throw `MCPToolError.invalidParams` (lookup not yet
-    ///   supported; a persisted scan-result bridge replaces this later).
+    /// - `item_id` inputs resolve against `itemLookup` (the scan-session
+    ///   cache). A hit returns the scan-time classification verbatim
+    ///   (safety/confidence/explanation), enriched with receipt provenance the
+    ///   same way the `path` branch is. A miss throws
+    ///   `MCPToolError.invalidParams` — a stale id is a client bug, not a
+    ///   silent no-op.
     /// - Missing, empty, or non-absolute `path` inputs throw
     ///   `MCPToolError.invalidParams`. Absolute-only is enforced because
     ///   `MCPPhase2Tools.explain` advertises `path` as an "Absolute filesystem
     ///   path"; accepting relative paths would resolve against the MCP
     ///   process's current working directory and produce surprising results
     ///   depending on launch context.
+    /// - An accepted `path` is first run through `pathClassify` (the rule
+    ///   engine). When a rule in the active profile claims it, the real
+    ///   Trust Layer verdict is returned. Only when no rule matches does the
+    ///   provider fall back to the AI-pending shell described below.
     /// - Missing or inaccessible paths (file not found, permission denied)
     ///   return a shell response with no `size`/`lastAccessed` rather than
     ///   erroring. The shell's contract is to always render a conservative
@@ -116,13 +143,18 @@ public extension MCPExplainToolHandler {
     /// `Sendable` and this closure is `@Sendable`. Tests exercise it with
     /// real temporary files.
     static func defaultFilesystemProvider(
-        receiptLookup: @escaping ReceiptLookup = { _ in [] }
+        receiptLookup: @escaping ReceiptLookup = { _ in [] },
+        itemLookup: @escaping ItemLookup = { _ in nil },
+        pathClassify: @escaping PathClassify = { _ in nil }
     ) -> ExplainProvider {
         return { input in
-            if input.itemId != nil {
-                throw MCPToolError.invalidParams(
-                    "item_id lookup is not yet supported via MCP; supply an absolute filesystem path instead."
-                )
+            if let itemId = input.itemId {
+                guard let result = itemLookup(itemId) else {
+                    throw MCPToolError.invalidParams(
+                        "Unknown item_id '\(itemId)'. It may be from an expired or cleared scan session; re-run scan and use a fresh id."
+                    )
+                }
+                return output(from: result, receiptLookup: receiptLookup)
             }
             guard let path = input.path, !path.isEmpty else {
                 // `MCPExplainInput` already enforces path-xor-item_id at
@@ -134,6 +166,14 @@ public extension MCPExplainToolHandler {
                 throw MCPToolError.invalidParams(
                     "explain requires an absolute filesystem path (starting with '/')."
                 )
+            }
+
+            // Prefer a real rule-engine verdict: if any rule in the active
+            // profile claims this path, return the same classification a scan
+            // would. Only when no rule matches do we fall back to the
+            // AI-pending "review" shell below.
+            if let classified = pathClassify(path) {
+                return output(from: classified, receiptLookup: receiptLookup)
             }
 
             let url = URL(fileURLWithPath: path)
@@ -171,6 +211,35 @@ public extension MCPExplainToolHandler {
                 receipts: provenance.isEmpty ? nil : provenance
             )
         }
+    }
+
+    /// Shape a cached `ScanResult` (resolved from an `item_id`) into the
+    /// explain output. Unlike the `path` branch, safety/confidence/explanation
+    /// come straight from the scan-time classification rather than the
+    /// AI-pending shell, and `size` uses the scan's recursive total (correct
+    /// for directories). Receipt provenance is prepended for parity with the
+    /// `path` branch.
+    private static func output(
+        from result: ScanResult,
+        receiptLookup: ReceiptLookup
+    ) -> MCPExplainOutput {
+        let receipts = receiptLookup(result.path)
+        let provenance = receipts.map(MCPReceiptProvenance.init(_:))
+        let explanation: String
+        if let leadingProvenance = receiptProvenanceSentence(for: receipts) {
+            explanation = "\(leadingProvenance) \(result.explanation)"
+        } else {
+            explanation = result.explanation
+        }
+        return MCPExplainOutput(
+            name: result.name,
+            safety: result.safety.rawValue,
+            confidence: result.confidence,
+            explanation: explanation,
+            size: AlertItem.formatBytes(result.size),
+            lastAccessed: result.lastAccessed,
+            receipts: provenance.isEmpty ? nil : provenance
+        )
     }
 
     /// Build a one-line "Owned by package <id> (v<version>) installed <date>."

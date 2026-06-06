@@ -182,9 +182,29 @@ private let receiptExpander = PackageReceiptExpander()
 private let explainReceiptLookup: MCPExplainToolHandler.ReceiptLookup = { path in
     receiptExpander.lookupReceipts(forPath: path)
 }
+
+// Rule-engine classifier for `explain` by path. An accepted absolute path is
+// reverse-matched against the active profile's rule set so it gets the same
+// Trust Layer verdict a scan would assign — without running a full scan. The
+// adapter is rebuilt per call (rare, interactive) so it always reflects the
+// current active profile and any edited rule files. A failure (rules dir
+// missing, profile store down) returns nil so the provider falls back to the
+// AI-pending shell rather than erroring.
+private let explainPathClassify: MCPExplainToolHandler.PathClassify = { path in
+    do {
+        let profile = try loadProfileCatalog().resolve(nil)
+        let adapter = try NativeScanAdapter.loadDefaults(profile: profile)
+        return adapter.classify(path: path)
+    } catch {
+        stderrLog("explain path classify failed: \(error)")
+        return nil
+    }
+}
 let explainHandler = MCPExplainToolHandler(
     explainProvider: MCPExplainToolHandler.defaultFilesystemProvider(
-        receiptLookup: explainReceiptLookup
+        receiptLookup: explainReceiptLookup,
+        itemLookup: { id in scanSessionCache.lookup(id: id) },
+        pathClassify: explainPathClassify
     ),
     log: stderrLog
 )

@@ -7,15 +7,70 @@ struct MCPExplainDefaultProviderTests {
 
     // MARK: Input validation
 
-    @Test("item_id input is rejected with invalidParams")
-    func itemIdRejected() throws {
+    @Test("unknown item_id is rejected with invalidParams")
+    func unknownItemIdRejected() throws {
+        // Default itemLookup returns nil — an id with no matching scan-session
+        // entry is a client bug, not a silent no-op.
         let provider = MCPExplainToolHandler.defaultFilesystemProvider()
         do {
             _ = try provider(MCPExplainInput(itemId: "abc"))
             Issue.record("provider should have thrown")
         } catch MCPToolError.invalidParams(let message) {
             #expect(message.contains("item_id"))
+            #expect(message.contains("abc"))
         }
+    }
+
+    @Test("known item_id resolves to the scan-time classification")
+    func knownItemIdResolves() throws {
+        let cached = ScanResult(
+            id: "czkawka-broken_files-3",
+            name: "broken.png",
+            path: "/tmp/broken.png",
+            size: 172_447,
+            safety: .review,
+            confidence: 55,
+            explanation: "File appears corrupt. Verify before removing.",
+            source: SourceAttribution(name: "Czkawka"),
+            category: "broken_files"
+        )
+        let provider = MCPExplainToolHandler.defaultFilesystemProvider(
+            itemLookup: { id in id == cached.id ? cached : nil }
+        )
+
+        let output = try provider(MCPExplainInput(itemId: cached.id))
+
+        #expect(output.name == "broken.png")
+        #expect(output.safety == "review")
+        #expect(output.confidence == 55)
+        #expect(output.explanation == "File appears corrupt. Verify before removing.")
+        #expect(output.size != nil)
+    }
+
+    @Test("item_id resolution enriches the explanation with receipt provenance")
+    func itemIdResolveSurfacesProvenance() throws {
+        let cached = ScanResult(
+            id: "native-app_cache-0",
+            name: "Cache_Data",
+            path: "/tmp/Cache_Data",
+            size: 2_744_320,
+            safety: .review,
+            confidence: 82,
+            explanation: "App cache.",
+            source: SourceAttribution(name: "Application Support"),
+            category: "app_cache"
+        )
+        let receipt = PackageReceipt(pkgID: "com.example.app", version: "1.2.3")
+        let provider = MCPExplainToolHandler.defaultFilesystemProvider(
+            receiptLookup: { _ in [receipt] },
+            itemLookup: { _ in cached }
+        )
+
+        let output = try provider(MCPExplainInput(itemId: cached.id))
+
+        #expect(output.receipts?.first?.pkgID == "com.example.app")
+        #expect(output.explanation.contains("Owned by package com.example.app"))
+        #expect(output.explanation.contains("App cache."))
     }
 
     @Test("empty path input is rejected with invalidParams")
@@ -186,6 +241,51 @@ struct MCPExplainDefaultProviderTests {
         let output = try provider(MCPExplainInput(path: url.path))
 
         #expect(output.receipts == nil)
+    }
+
+    // MARK: Rule-engine path classification
+
+    @Test("a path the rule engine claims returns the real verdict, not the shell")
+    func pathClassifyHitReturnsRealVerdict() throws {
+        let url = try Self.writeTempFile(bytes: 8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let verdict = ScanResult(
+            id: "system_logs-0",
+            name: "CrashReporter",
+            path: url.path,
+            size: 4096,
+            safety: .safe,
+            confidence: 90,
+            explanation: "Application log files. Safe to remove when not needed.",
+            source: SourceAttribution(name: "macOS"),
+            category: "system_logs"
+        )
+        let provider = MCPExplainToolHandler.defaultFilesystemProvider(
+            pathClassify: { p in p == url.path ? verdict : nil }
+        )
+
+        let output = try provider(MCPExplainInput(path: url.path))
+
+        #expect(output.safety == "safe")
+        #expect(output.confidence == 90)
+        #expect(output.explanation.contains("Safe to remove"))
+        #expect(!output.explanation.contains("AI-backed analysis is not yet wired"))
+    }
+
+    @Test("a path no rule claims falls back to the AI-pending shell")
+    func pathClassifyMissFallsBackToShell() throws {
+        let url = try Self.writeTempFile(bytes: 8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let provider = MCPExplainToolHandler.defaultFilesystemProvider(
+            pathClassify: { _ in nil }
+        )
+
+        let output = try provider(MCPExplainInput(path: url.path))
+
+        #expect(output.safety == "review")
+        #expect(output.explanation.contains("AI-backed analysis is not yet wired"))
     }
 
     // MARK: Wiring through the handler
