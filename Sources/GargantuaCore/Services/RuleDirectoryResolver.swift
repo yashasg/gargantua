@@ -17,10 +17,10 @@ public enum RuleDirectoryResolver {
         let fm = FileManager.default
 
         #if DEBUG
-        if let envPath = ProcessInfo.processInfo.environment["GARGANTUA_RULES_DIR"], !envPath.isEmpty {
-            let url = URL(fileURLWithPath: envPath, isDirectory: true)
-            if fm.fileExists(atPath: url.path) { return url }
-        }
+            if let envPath = ProcessInfo.processInfo.environment["GARGANTUA_RULES_DIR"], !envPath.isEmpty {
+                let url = URL(fileURLWithPath: envPath, isDirectory: true)
+                if fm.fileExists(atPath: url.path) { return url }
+            }
         #endif
 
         if let resourceURL = Bundle.gargantuaCoreResources.resourceURL {

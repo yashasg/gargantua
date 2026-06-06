@@ -408,9 +408,9 @@ public struct CzkawkaAdapter: ScanAdapter {
         let declaredExt = URL(fileURLWithPath: finding.path).pathExtension.lowercased()
         let explanation = declaredExt.isEmpty
             ? "Valid \(formatName), not corrupt — it has no extension. "
-                + "Add .\(actualExtension) if you want the name to match."
+            + "Add .\(actualExtension) if you want the name to match."
             : "Valid \(formatName), not corrupt — it's saved with a .\(declaredExt) extension. "
-                + "Rename to .\(actualExtension) to match the real format."
+            + "Rename to .\(actualExtension) to match the real format."
 
         return ScanResult(
             id: "czkawka-\(CzkawkaCategory.brokenFiles.rawValue)-\(counter)",

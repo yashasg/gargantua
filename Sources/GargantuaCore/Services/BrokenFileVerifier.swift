@@ -60,8 +60,8 @@ public struct ImageIOBrokenFileVerifier: BrokenFileVerifier {
            let declaredType = UTType(filenameExtension: declaredExt),
            let realType,
            declaredType == realType
-               || declaredType.conforms(to: realType)
-               || realType.conforms(to: declaredType) {
+           || declaredType.conforms(to: realType)
+           || realType.conforms(to: declaredType) {
             return .validMatchingExtension
         }
 
