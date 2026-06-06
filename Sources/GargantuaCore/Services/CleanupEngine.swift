@@ -180,15 +180,26 @@ public final class CleanupEngine: Sendable {
         var merged = results
         for (index, original) in escalatable {
             guard let outcome = elevatedByID[original.item.id] else { continue }
-            // On failure keep the original permission/ownership error rather than
-            // the helper's opaque XPC/registration message: it is the true cause,
-            // it stays meaningful to the user, and it keeps the summary's failure
-            // classifier stable so the right remediation prompt shows.
+            // Keep the original permission/ownership error (so the summary's
+            // classifier still routes to the right remediation prompt) but append
+            // the helper's reason when it differs — otherwise a real helper-side
+            // failure (rejected path, trashItem error) is invisible and
+            // undiagnosable, which is exactly how the firmlink bug stayed hidden.
+            let mergedError: String?
+            if outcome.succeeded {
+                mergedError = nil
+            } else if let helperError = outcome.error,
+                      let originalError = original.error,
+                      helperError != originalError {
+                mergedError = "\(originalError) (privileged removal also failed: \(helperError))"
+            } else {
+                mergedError = outcome.error ?? original.error
+            }
             merged[index] = CleanupItemResult(
                 item: original.item,
                 succeeded: outcome.succeeded,
                 trashURL: outcome.trashURL,
-                error: outcome.succeeded ? nil : original.error
+                error: mergedError
             )
             if outcome.succeeded {
                 observer?.didEmit(ScanProgressEvent(

@@ -186,12 +186,17 @@ private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstall
 
         let url = URL(fileURLWithPath: item.path)
         let standardized = url.standardizedFileURL
-        guard standardized.path == item.path else {
+        // Compare on the canonical (firmlink-collapsed) form: macOS rewrites an
+        // existing /private/var path to /var, which is not path trickery and must
+        // not be rejected. Real `..`/symlink redirection still fails these guards.
+        guard PrivilegedRemovabilityPolicy.canonical(standardized.path)
+            == PrivilegedRemovabilityPolicy.canonical(item.path) else {
             throw PrivilegedHelperError.rejectedPath(item.path)
         }
 
         let symlinkResolved = standardized.resolvingSymlinksInPath()
-        guard symlinkResolved.path == standardized.path else {
+        guard PrivilegedRemovabilityPolicy.canonical(symlinkResolved.path)
+            == PrivilegedRemovabilityPolicy.canonical(standardized.path) else {
             throw PrivilegedHelperError.symlinkRejected(item.path)
         }
 

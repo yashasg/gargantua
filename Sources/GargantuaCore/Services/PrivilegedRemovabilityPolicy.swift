@@ -53,13 +53,29 @@ public struct PrivilegedRemovabilityPolicy: Sendable {
 
     public init() {}
 
-    /// Whether the privileged helper may remove `path`.
+    /// Collapse the macOS firmlink aliases so `/private/var`, `/private/tmp`, and
+    /// `/private/etc` compare equal to `/var`, `/tmp`, `/etc`.
     ///
-    /// `path` is expected to be already standardized and symlink-resolved by the
-    /// caller (the helper does this in `validate(_:)` before asking). `isDirectory`
-    /// distinguishes the app-bundle and launch-daemon-plist rules.
-    public func allows(path: String, isDirectory: Bool) -> Bool {
-        // Uninstaller scope (pre-existing behavior).
+    /// `URL.standardizedFileURL` rewrites an existing `/private/var/...` path to
+    /// `/var/...`, so the candidate path the helper validates and the roots in
+    /// this policy must both be normalized to one form or they never match. This
+    /// is exactly why the tier-1 `/private/var/db/*` roots failed in the field
+    /// while the firmlink-free `/Applications` and `/Library` roots worked.
+    public static func canonical(_ path: String) -> String {
+        for prefix in ["/private/var", "/private/tmp", "/private/etc"] {
+            if path == prefix { return String(path.dropFirst("/private".count)) }
+            if path.hasPrefix(prefix + "/") { return String(path.dropFirst("/private".count)) }
+        }
+        return path
+    }
+
+    /// Whether the privileged helper may remove `path`. Accepts either the
+    /// `/private/var` or the canonical `/var` form (and likewise tmp/etc).
+    /// `isDirectory` distinguishes the app-bundle and launch-daemon-plist rules.
+    public func allows(path rawPath: String, isDirectory: Bool) -> Bool {
+        let path = Self.canonical(rawPath)
+
+        // Uninstaller scope (pre-existing behavior; these roots have no firmlink).
         if path.hasPrefix("/Applications/"), path.hasSuffix(".app"), isDirectory,
            isDirectChild(path, of: "/Applications") {
             return true
@@ -73,14 +89,15 @@ public struct PrivilegedRemovabilityPolicy: Sendable {
             return true
         }
 
-        // Tier-1 system roots (recursive).
-        if Self.subtreeRoots.contains(where: { isInSubtree(path, root: $0) }) {
+        // Tier-1 system roots (recursive). Roots are canonicalized too so the
+        // `/private/var/...` entries match the canonical `/var/...` candidate.
+        if Self.subtreeRoots.contains(where: { isInSubtree(path, root: Self.canonical($0)) }) {
             return true
         }
 
         // Narrow suffix-in-root carve-outs.
         if Self.suffixUnderRoot.contains(where: {
-            path.hasSuffix($0.suffix) && isInSubtree(path, root: $0.root)
+            path.hasSuffix($0.suffix) && isInSubtree(path, root: Self.canonical($0.root))
         }) {
             return true
         }

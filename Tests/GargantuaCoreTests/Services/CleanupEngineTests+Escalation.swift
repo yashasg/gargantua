@@ -83,9 +83,12 @@ extension CleanupResultTests {
 
         #expect(helper.received.count == 1)
         #expect(result.failedItems.count == 1)
-        // The original EPERM message survives so the summary classifier still
-        // routes to an ownership remediation prompt.
-        #expect(result.itemResults.first?.error == "Operation not permitted")
+        // The original EPERM message survives (so the summary classifier still
+        // routes to an ownership prompt) AND the helper's real reason is appended
+        // so the actual failure is never hidden.
+        let error = result.itemResults.first?.error
+        #expect(error?.contains("Operation not permitted") == true)
+        #expect(error?.contains("SMAppServiceErrorDomain error 1") == true)
     }
 
     @Test("Non-permission failures are not escalated")

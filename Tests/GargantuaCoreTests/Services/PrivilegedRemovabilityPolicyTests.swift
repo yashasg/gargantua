@@ -44,6 +44,20 @@ struct PrivilegedRemovabilityPolicyTests {
         #expect(policy.allows(path: "/private/var/db/powerlog", isDirectory: true))
     }
 
+    @Test("Canonical /var form matches the /private/var roots (firmlink regression)")
+    func firmlinkCanonicalizationAllowed() {
+        // macOS standardizedFileURL rewrites /private/var/... -> /var/..., which
+        // is what the helper actually validates. Both forms must be allowed or
+        // tier-1 silently fails (the field bug).
+        #expect(policy.allows(path: "/var/db/powerlog/Library", isDirectory: true))
+        #expect(policy.allows(path: "/var/db/powerlog/Library/foo.PLSQL", isDirectory: false))
+        #expect(policy.allows(path: "/var/db/reportmemoryexception/MemoryLimitViolations/x", isDirectory: false))
+        #expect(policy.allows(path: "/tmp/x", isDirectory: false))
+        #expect(policy.allows(path: "/private/tmp/x", isDirectory: false))
+        // The canonical /var form of the held-back diagnostics store is still rejected.
+        #expect(!policy.allows(path: "/var/db/diagnostics/logd.1.log", isDirectory: false))
+    }
+
     @Test("code_sign_clone files under var/folders are allowed, but nothing else there")
     func varFoldersSuffixCarveOut() {
         #expect(policy.allows(
