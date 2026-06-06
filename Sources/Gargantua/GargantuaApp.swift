@@ -33,6 +33,10 @@ struct GargantuaApp: App {
             let path = CommandLine.arguments.dropFirst(index + 1).first
             Self.runPrivilegedHelperSmokeTrash(path: path)
         }
+        if let index = CommandLine.arguments.firstIndex(of: "--privileged-helper-smoke-empty-trash") {
+            let path = CommandLine.arguments.dropFirst(index + 1).first
+            Self.runPrivilegedHelperSmokeEmptyTrash(path: path)
+        }
         _updateController = StateObject(wrappedValue: AppUpdateController())
         _menuBarStatusModel = StateObject(wrappedValue: MenuBarStatusModel())
     }
@@ -162,6 +166,44 @@ struct GargantuaApp: App {
                 if let trashURL = result.trashURL {
                     print("trash: \(trashURL.path)")
                 }
+                exit(EXIT_SUCCESS)
+            } else {
+                fputs("privileged-helper smoke failed: \(result.error ?? "unknown error")\n", stderr)
+                exit(EXIT_FAILURE)
+            }
+        }
+        RunLoop.main.run()
+        exit(EXIT_FAILURE)
+    }
+
+    private static func runPrivilegedHelperSmokeEmptyTrash(path: String?) -> Never {
+        guard let path, !path.isEmpty else {
+            fputs("usage: Gargantua --privileged-helper-smoke-empty-trash ~/.Trash/Item\n", stderr)
+            exit(EXIT_FAILURE)
+        }
+
+        let item = PrivilegedUninstallItem(
+            id: "smoke",
+            path: path,
+            category: RemnantCategory.other.rawValue,
+            size: 0,
+            operation: .deleteFromTrash
+        )
+        let request = PrivilegedUninstallRequest(planID: UUID(), items: [item], invokingUserID: getuid())
+        let helper = XPCPrivilegedUninstallHelper()
+
+        Task { @MainActor in
+            let results = await helper.movePrivilegedItemsToTrash(
+                request,
+                authorization: .privilegedHelperApproved
+            )
+            guard let result = results.first else {
+                fputs("privileged-helper smoke failed: no result returned\n", stderr)
+                exit(EXIT_FAILURE)
+            }
+
+            if result.succeeded {
+                print("privileged-helper smoke deleted from Trash: \(result.item.path)")
                 exit(EXIT_SUCCESS)
             } else {
                 fputs("privileged-helper smoke failed: \(result.error ?? "unknown error")\n", stderr)

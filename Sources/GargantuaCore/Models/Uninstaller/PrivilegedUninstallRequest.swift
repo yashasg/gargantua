@@ -40,6 +40,10 @@ public struct PrivilegedUninstallResponse: Codable, Sendable, Equatable {
 public struct PrivilegedUninstallItem: Codable, Sendable, Equatable, Identifiable {
     public enum Operation: String, Codable, Sendable {
         case moveToTrash = "move_to_trash"
+        /// Permanently remove an item that is already a direct child of the
+        /// invoking user's own `~/.Trash`. Used to empty root-owned junk the user
+        /// can't unlink themselves. The helper refuses any path outside that Trash.
+        case deleteFromTrash = "delete_from_trash"
     }
 
     public let id: String

@@ -235,7 +235,7 @@ public final class CleanupEngine: Sendable {
         // recycled. Empty its contents instead so "Move to Trash" and
         // "Delete Permanently" both do the right thing.
         if isTrashContainer(url) {
-            return emptyTrashContainer(item: item)
+            return await emptyTrashContainer(item: item)
         }
 
         switch method {
@@ -305,7 +305,8 @@ public final class CleanupEngine: Sendable {
     /// Empty the Trash: enumerate its top-level contents and remove each.
     /// Reports aggregate success/failure on a single `CleanupItemResult`
     /// keyed to the original "Trash" scan item.
-    private func emptyTrashContainer(item: ScanResult) -> CleanupItemResult {
+    @MainActor
+    private func emptyTrashContainer(item: ScanResult) async -> CleanupItemResult {
         let fm = FileManager.default
         let children: [URL]
         do {
@@ -326,14 +327,16 @@ public final class CleanupEngine: Sendable {
             return CleanupItemResult(item: item, succeeded: true)
         }
 
-        var failures: [(name: String, message: String)] = []
+        var failures: [(url: URL, message: String)] = []
         for child in children {
             do {
                 try fm.removeItem(at: child)
             } catch {
-                failures.append((child.lastPathComponent, error.localizedDescription))
+                failures.append((child, error.localizedDescription))
             }
         }
+
+        failures = await escalateTrashFailures(failures)
 
         if failures.isEmpty {
             return CleanupItemResult(item: item, succeeded: true)
@@ -341,12 +344,45 @@ public final class CleanupEngine: Sendable {
 
         let summary: String
         if failures.count == 1 {
-            summary = "\(failures[0].name): \(failures[0].message)"
+            summary = "\(failures[0].url.lastPathComponent): \(failures[0].message)"
         } else {
-            let preview = failures.prefix(3).map(\.name).joined(separator: ", ")
+            let preview = failures.prefix(3).map { $0.url.lastPathComponent }.joined(separator: ", ")
             let more = failures.count > 3 ? " and \(failures.count - 3) more" : ""
             summary = "\(failures.count) Trash items could not be removed (\(preview)\(more))"
         }
         return CleanupItemResult(item: item, succeeded: false, error: summary)
+    }
+
+    /// Root-owned items in the user's own Trash (e.g. an installer's root agent
+    /// the user can't unlink) get a bounded privileged delete. The helper only
+    /// removes direct children of this user's `~/.Trash`. Returns the failures
+    /// that remain after escalation.
+    @MainActor
+    private func escalateTrashFailures(
+        _ failures: [(url: URL, message: String)]
+    ) async -> [(url: URL, message: String)] {
+        guard let privilegedHelper, !failures.isEmpty else { return failures }
+        let elevatable = failures.filter { CleanupFailureClassifier.isElevatable($0.message) }
+        guard !elevatable.isEmpty else { return failures }
+
+        let request = PrivilegedUninstallRequest(
+            planID: UUID(),
+            items: elevatable.map {
+                PrivilegedUninstallItem(
+                    id: $0.url.path,
+                    path: $0.url.path,
+                    category: RemnantCategory.other.rawValue,
+                    size: 0,
+                    operation: .deleteFromTrash
+                )
+            },
+            invokingUserID: getuid()
+        )
+        let results = await privilegedHelper.movePrivilegedItemsToTrash(
+            request,
+            authorization: .privilegedHelperApproved
+        )
+        let removedPaths = Set(results.filter(\.succeeded).map(\.item.path))
+        return failures.filter { !removedPaths.contains($0.url.path) }
     }
 }

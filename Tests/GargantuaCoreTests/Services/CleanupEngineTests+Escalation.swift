@@ -109,6 +109,46 @@ extension CleanupResultTests {
         #expect(result.failedItems.count == 1)
     }
 
+    @Test("Root-owned Trash items are escalated as deleteFromTrash and cleared on success")
+    @MainActor
+    func trashFailuresEscalateAsDeleteFromTrash() async throws {
+        let fixture = try makeFakeTrash(children: ["stuck.app": Data("x".utf8)])
+        let fm = FileManager.default
+        defer {
+            try? fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fixture.trash.path)
+            try? fm.removeItem(at: fixture.home)
+        }
+        // Make the Trash directory read-only so removeItem on its child fails
+        // with a permission error, standing in for a root-owned item.
+        try fm.setAttributes([.posixPermissions: 0o555], ofItemAtPath: fixture.trash.path)
+
+        let helper = StubPrivilegedHelper(mode: .succeedAll)
+        let engine = CleanupEngine(
+            homeDirectoryForTesting: fixture.home,
+            privilegedHelper: helper
+        )
+        let trashItem = makeItem(id: "trash", path: fixture.trash.path)
+
+        let result = await engine.clean([trashItem], method: .delete)
+
+        #expect(helper.received.count == 1)
+        #expect(helper.received.first?.items.first?.operation == .deleteFromTrash)
+        #expect(helper.received.first?.invokingUserID == getuid())
+        // The stub reports the child removed, so the aggregate Trash result clears.
+        #expect(result.allSucceeded)
+    }
+
+    @Test("deleteFromTrash operation round-trips through Codable")
+    func deleteFromTrashOperationCodable() throws {
+        let item = PrivilegedUninstallItem(
+            id: "x", path: "/Users/x/.Trash/y", category: "other", size: 0,
+            operation: .deleteFromTrash
+        )
+        let data = try PrivilegedUninstallXPCCodec.encoder.encode(item)
+        let decoded = try PrivilegedUninstallXPCCodec.decoder.decode(PrivilegedUninstallItem.self, from: data)
+        #expect(decoded.operation == .deleteFromTrash)
+    }
+
     @Test("Without a privileged helper, permission failures stay failed")
     @MainActor
     func permissionFailureWithoutHelperStaysFailed() async {

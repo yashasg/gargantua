@@ -15,7 +15,9 @@ public enum PrivilegedHelperConfiguration {
     /// - 1: original uninstaller-only helper (no version ping).
     /// - 2: tier-1 system allowlist, /private firmlink canonicalization,
     ///   user-Trash relocation, and this version handshake.
-    public static let helperVersion = 2
+    /// - 3: bounded `deleteFromTrash` operation (empty root-owned items from the
+    ///   invoking user's own Trash).
+    public static let helperVersion = 3
 
     /// Code signing requirement the privileged helper enforces on incoming XPC
     /// connections. `anchor apple generic` pins the chain to a Developer ID

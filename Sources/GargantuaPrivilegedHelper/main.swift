@@ -167,14 +167,22 @@ private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstall
         invokingUserID: UInt32?
     ) -> PrivilegedUninstallItemResult {
         do {
-            let url = try validate(item)
-            let trashURL = try moveToTrash(url, invokingUserID: invokingUserID)
-            return PrivilegedUninstallItemResult(
-                id: item.id,
-                path: item.path,
-                succeeded: true,
-                trashPath: trashURL.path
-            )
+            switch item.operation {
+            case .moveToTrash:
+                let url = try validate(item)
+                let trashURL = try moveToTrash(url, invokingUserID: invokingUserID)
+                return PrivilegedUninstallItemResult(
+                    id: item.id,
+                    path: item.path,
+                    succeeded: true,
+                    trashPath: trashURL.path
+                )
+            case .deleteFromTrash:
+                let url = try validateTrashChild(item, invokingUserID: invokingUserID)
+                try FileManager.default.removeItem(at: url)
+                // Permanently removed (it was already in the Trash) — no trashPath.
+                return PrivilegedUninstallItemResult(id: item.id, path: item.path, succeeded: true)
+            }
         } catch {
             return PrivilegedUninstallItemResult(
                 id: item.id,
@@ -183,6 +191,38 @@ private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstall
                 error: error.localizedDescription
             )
         }
+    }
+
+    /// Validate that `item.path` is a direct child of the invoking user's own
+    /// `~/.Trash`, the only place `deleteFromTrash` is permitted to act. The
+    /// Trash directory is resolved from the UID via `getpwuid` (not a caller-
+    /// supplied path), and the entry is removed as-is — a symlink entry is
+    /// unlinked, never followed — so this can't be tricked into deleting outside
+    /// the user's Trash.
+    private func validateTrashChild(
+        _ item: PrivilegedUninstallItem,
+        invokingUserID: UInt32?
+    ) throws -> URL {
+        guard let uid = invokingUserID, let pw = getpwuid(uid) else {
+            throw PrivilegedHelperError.rejectedPath(item.path)
+        }
+        let home = String(cString: pw.pointee.pw_dir)
+        let trashDir = URL(fileURLWithPath: home, isDirectory: true)
+            .appendingPathComponent(".Trash", isDirectory: true)
+            .standardizedFileURL
+
+        let standardized = URL(fileURLWithPath: item.path).standardizedFileURL
+        guard PrivilegedRemovabilityPolicy.canonical(standardized.path)
+            == PrivilegedRemovabilityPolicy.canonical(item.path) else {
+            throw PrivilegedHelperError.rejectedPath(item.path)
+        }
+        guard standardized.deletingLastPathComponent().standardizedFileURL.path == trashDir.path else {
+            throw PrivilegedHelperError.rejectedPath(item.path)
+        }
+        guard FileManager.default.fileExists(atPath: standardized.path) else {
+            throw PrivilegedHelperError.missingPath(item.path)
+        }
+        return standardized
     }
 
     /// Move `url` into the invoking user's Trash and hand them ownership, so the
