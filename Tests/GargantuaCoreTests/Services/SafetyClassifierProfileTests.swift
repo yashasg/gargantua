@@ -163,6 +163,30 @@ struct SafetyClassifierProfileTests {
         #expect(classified.wasOverridden)
     }
 
+    @Test("Floor: an override can never promote a privileged item to safe")
+    func privilegedItemNeverPromotedToSafe() {
+        let rule = ScanRule(
+            id: "priv_temp",
+            name: "Privileged Temporary Files",
+            paths: ["/private/var/db/powerlog/*"],
+            safety: .review,
+            confidence: 80,
+            explanation: "System-owned",
+            source: SourceAttribution(name: "macOS"),
+            category: "system_logs",
+            tags: ["system", "privileged", "review"],
+            safetyOverrides: [
+                SafetyOverride(condition: "age > 7d", safety: .safe, profiles: []),
+            ]
+        )
+        // Old enough to match the override, in a profile whose scope would apply.
+        let result = makeResult(lastAccessed: now.addingTimeInterval(-30 * 86400))
+
+        let classified = classifier.classify(result: result, rule: rule, profile: .deep, now: now)
+
+        #expect(classified.safety == .review, "privileged item must not be auto-promoted to safe")
+    }
+
     @Test("Built-in profiles never silently reclassify a review item — rules win")
     func builtInProfilesDoNotReclassify() {
         // A review rule with no rule-level overrides must stay review under every

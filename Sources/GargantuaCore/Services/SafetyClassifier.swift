@@ -52,7 +52,8 @@ public struct SafetyClassifier: Sendable {
         // Check rule-level overrides first, then profile-level
         let allOverrides = rule.safetyOverrides + profile.safetyOverrides
         if let matched = allOverrides.first(where: { matches(override: $0, profileID: profile.id, lastAccessed: result.lastAccessed, now: now) }) {
-            return applyOverride(matched, baseSafety: rule.safety, baseConfidence: rule.confidence, baseExplanation: rule.explanation)
+            let classified = applyOverride(matched, baseSafety: rule.safety, baseConfidence: rule.confidence, baseExplanation: rule.explanation)
+            return floored(classified, rule: rule)
         }
 
         // No override matched — use base classification
@@ -118,6 +119,23 @@ public struct SafetyClassifier: Sendable {
 // MARK: - Private
 
 private extension SafetyClassifier {
+
+    /// Hard floor: no override (rule, profile, or user-custom) may promote a
+    /// `privileged`-tagged (system-owned) item to `.safe`. Such items must always
+    /// be consciously reviewed before a privileged removal. Defense in depth — no
+    /// shipped rule does this today, but this makes "system items never auto-
+    /// select" a structural guarantee rather than a convention.
+    func floored(_ classified: ClassifiedResult, rule: ScanRule) -> ClassifiedResult {
+        guard classified.safety == .safe, rule.tags.contains("privileged") else {
+            return classified
+        }
+        return ClassifiedResult(
+            safety: rule.safety,
+            confidence: classified.confidence,
+            explanation: classified.explanation,
+            wasOverridden: classified.wasOverridden
+        )
+    }
 
     func matches(override: SafetyOverride, profileID: String, lastAccessed: Date?, now: Date) -> Bool {
         // Check profile scope
