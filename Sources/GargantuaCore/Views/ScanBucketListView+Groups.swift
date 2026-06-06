@@ -110,6 +110,7 @@ extension ScanBucketListView {
             isSelected: selectedIDs.contains(item.id),
             isFocused: focusedItemID == item.id,
             showExplanation: showExplanation,
+            lockReason: viewOnlyReasons[item.id],
             onToggleSelection: { toggleSelection(item.id) },
             onExplain: onExplain,
             onAddToExclusions: onAddToExclusions,
@@ -132,7 +133,8 @@ extension ScanBucketListView {
     /// checkbox affordance is "fill the box".
     /// State is recomputed from live `selectedIDs` at call time.
     func toggleGroupSelection(_ group: ScanGroup) {
-        let ids = group.selectableIDs
+        // Drop view-only items so "fill the box" never queues something locked.
+        let ids = group.selectableIDs.filter { viewOnlyReasons[$0] == nil }
         guard !ids.isEmpty else { return }
         if ids.allSatisfy(selectedIDs.contains) {
             selectedIDs.subtract(ids)
@@ -142,6 +144,8 @@ extension ScanBucketListView {
     }
 
     func toggleSelection(_ id: String) {
+        // View-only items are surfaced but not selectable.
+        guard viewOnlyReasons[id] == nil else { return }
         if selectedIDs.contains(id) {
             selectedIDs.remove(id)
         } else {

@@ -20,6 +20,10 @@ public struct ScanBucketListView: View {
     public let results: [ScanResult]
     public let scanDuration: TimeInterval
     @Binding public var selectedIDs: Set<String>
+    /// id → reason for items that are view-only (protected roots, non-allowlisted
+    /// system paths). These render locked and cannot be selected, the same way
+    /// `protected` safety items do. Empty for surfaces without removability gating.
+    public let viewOnlyReasons: [String: String]
     public let onExplain: ((ScanResult) -> Void)?
     public let onClean: (() -> Void)?
     public let onCancel: (() -> Void)?
@@ -43,6 +47,7 @@ public struct ScanBucketListView: View {
         results: [ScanResult],
         scanDuration: TimeInterval,
         selectedIDs: Binding<Set<String>>,
+        viewOnlyReasons: [String: String] = [:],
         onExplain: ((ScanResult) -> Void)? = nil,
         onClean: (() -> Void)? = nil,
         onCancel: (() -> Void)? = nil,
@@ -54,6 +59,7 @@ public struct ScanBucketListView: View {
         self.results = results
         self.scanDuration = scanDuration
         self._selectedIDs = selectedIDs
+        self.viewOnlyReasons = viewOnlyReasons
         self.onExplain = onExplain
         self.onClean = onClean
         self.onCancel = onCancel

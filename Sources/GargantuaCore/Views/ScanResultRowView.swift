@@ -9,6 +9,10 @@ struct ScanResultRowView: View {
     /// Set by `ScanBucketListView.groupSection` to dedupe identical-explanation
     /// rows in the same group: only the first occurrence shows the prose.
     let showExplanation: Bool
+    /// Non-nil when the item is view-only (protected root or non-allowlisted
+    /// system path): the row renders locked, like `protected` safety, and the
+    /// reason is shown. `protected` safety items lock regardless of this.
+    let lockReason: String?
     let onToggleSelection: () -> Void
     let onExplain: ((ScanResult) -> Void)?
     let onAddToExclusions: ((ScanResult) -> Void)?
@@ -19,6 +23,7 @@ struct ScanResultRowView: View {
         isSelected: Bool,
         isFocused: Bool,
         showExplanation: Bool = true,
+        lockReason: String? = nil,
         onToggleSelection: @escaping () -> Void,
         onExplain: ((ScanResult) -> Void)?,
         onAddToExclusions: ((ScanResult) -> Void)?,
@@ -28,15 +33,20 @@ struct ScanResultRowView: View {
         self.isSelected = isSelected
         self.isFocused = isFocused
         self.showExplanation = showExplanation
+        self.lockReason = lockReason
         self.onToggleSelection = onToggleSelection
         self.onExplain = onExplain
         self.onAddToExclusions = onAddToExclusions
         self.onViewRule = onViewRule
     }
 
+    private var isLocked: Bool {
+        item.safety == .protected_ || lockReason != nil
+    }
+
     var body: some View {
         Group {
-            if item.safety == .protected_ {
+            if isLocked {
                 protectedRow
             } else if isSelected {
                 selectableRow(isSelected: true)
@@ -88,6 +98,14 @@ struct ScanResultRowView: View {
                     .foregroundStyle(GargantuaColors.ink3)
                     .lineLimit(1)
                     .truncationMode(.middle)
+
+                if let lockReason {
+                    Text("View only · \(lockReason)")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink4)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Spacer()

@@ -250,6 +250,7 @@ public struct DeepCleanView: View {
                     get: { session.selectedResultIDs },
                     set: { session.selectedResultIDs = $0 }
                 ),
+                viewOnlyReasons: session.removability.compactMapValues { $0.viewOnlyReason },
                 onExplain: onExplain,
                 onClean: { session.showConfirmation = true },
                 onCancel: { session.clearResults() },
