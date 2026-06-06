@@ -71,6 +71,15 @@ public struct SafetyOverride: Codable, Sendable {
 }
 
 extension CleanupProfile {
+    // Built-in profiles intentionally carry no blanket `safetyOverrides`. Safety
+    // is derived deterministically from the YAML rules (see `SafetyLevel`), and a
+    // profile-level "age > Nd → safe" rule that silently reclassifies every match
+    // is exactly the black-box behavior the Trust Layer rejects. Age-based
+    // promotions that are genuinely safe belong in the rule itself, declared with
+    // an `explanation_suffix` so they stay explainable. User-authored custom
+    // profiles may still define overrides — those aren't a black box, the user set
+    // them.
+
     /// Built-in Developer profile.
     public static let developer = CleanupProfile(
         id: "developer",
@@ -80,15 +89,6 @@ extension CleanupProfile {
             "browser_cache", "system_cache", "system_logs", "temp_files", "trash",
             "app_cache", "dev_artifacts", "docker", "homebrew", "installers",
             CommandActionRuleCategory.developer,
-        ],
-        safetyOverrides: [
-            SafetyOverride(
-                condition: "age > 30d",
-                safety: .safe,
-                confidence: 95,
-                explanationSuffix: "No project activity in 30+ days. Restore with package manager.",
-                profiles: ["developer"]
-            ),
         ]
     )
 
@@ -112,15 +112,6 @@ extension CleanupProfile {
             "temp_files", "trash", "app_cache", "app_data", "dev_artifacts", "docker", "homebrew",
             "installers", "similar_images", "empty_files", "broken_symlinks", "ai_models",
             CommandActionRuleCategory.developer,
-        ],
-        safetyOverrides: [
-            SafetyOverride(
-                condition: "age > 7d",
-                safety: .safe,
-                confidence: 90,
-                explanationSuffix: "Inactive for over a week.",
-                profiles: ["deep"]
-            ),
         ]
     )
 
@@ -133,16 +124,7 @@ extension CleanupProfile {
         id: "devPurge",
         name: "Dev Purge",
         description: "Developer artifacts + Docker + Homebrew only",
-        categories: ["dev_artifacts", "docker", "homebrew", CommandActionRuleCategory.developer],
-        safetyOverrides: [
-            SafetyOverride(
-                condition: "age > 30d",
-                safety: .safe,
-                confidence: 95,
-                explanationSuffix: "No project activity in 30+ days. Restore with package manager.",
-                profiles: ["devPurge"]
-            ),
-        ]
+        categories: ["dev_artifacts", "docker", "homebrew", CommandActionRuleCategory.developer]
     )
 
     /// Built-in AI Models profile.
@@ -154,16 +136,7 @@ extension CleanupProfile {
         id: "aiModels",
         name: "AI Models",
         description: "Downloaded LLM and diffusion models from local AI tools",
-        categories: ["ai_models"],
-        safetyOverrides: [
-            SafetyOverride(
-                condition: "age > 90d",
-                safety: .review,
-                confidence: 75,
-                explanationSuffix: "No access in 90+ days. Re-downloading requires the original tool.",
-                profiles: ["aiModels"]
-            ),
-        ]
+        categories: ["ai_models"]
     )
 
     /// Built-in Advanced Commands profile.

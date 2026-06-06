@@ -61,15 +61,16 @@ struct CleanupProfileTests {
         #expect(!CleanupProfile.deep.categories.contains(CommandActionRuleCategory.advanced))
     }
 
-    @Test("Developer profile has age-based safety override")
-    func developerOverrides() {
-        let dev = CleanupProfile.developer
-        #expect(!dev.safetyOverrides.isEmpty)
-
-        let override = dev.safetyOverrides[0]
-        #expect(override.condition == "age > 30d")
-        #expect(override.safety == .safe)
-        #expect(override.profiles.contains("developer"))
+    @Test("Built-in profiles carry no blanket safety overrides — rules are the source of truth")
+    func builtInProfilesHaveNoBlanketOverrides() {
+        // A profile-level "age > Nd → safe" override silently reclassifies every
+        // matching item regardless of its rule, which is the black-box behavior
+        // the Trust Layer rejects. Safety must come from the YAML rules.
+        for profile in [
+            CleanupProfile.developer, .light, .deep, .devPurge, .aiModels, .advancedCommands,
+        ] {
+            #expect(profile.safetyOverrides.isEmpty, "\(profile.id) should not ship blanket overrides")
+        }
     }
 
     @Test("Built-in profiles are not marked as custom")
@@ -159,11 +160,21 @@ struct CleanupProfileTests {
         let encoder = JSONEncoder()
         let decoder = JSONDecoder()
 
-        let data = try encoder.encode(CleanupProfile.developer)
+        let original = CleanupProfile(
+            id: "custom-overrides",
+            name: "Custom",
+            description: "User profile with an override",
+            categories: ["dev_artifacts"],
+            safetyOverrides: [
+                SafetyOverride(condition: "age > 30d", safety: .safe, profiles: ["custom-overrides"]),
+            ],
+            isCustom: true
+        )
+        let data = try encoder.encode(original)
         let decoded = try decoder.decode(CleanupProfile.self, from: data)
 
-        #expect(decoded.id == "developer")
-        #expect(decoded.name == "Developer")
+        #expect(decoded.id == "custom-overrides")
+        #expect(decoded.name == "Custom")
         #expect(decoded.safetyOverrides.count == 1)
         #expect(decoded.safetyOverrides[0].condition == "age > 30d")
     }

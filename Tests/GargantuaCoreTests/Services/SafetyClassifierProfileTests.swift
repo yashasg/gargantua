@@ -145,11 +145,36 @@ struct SafetyClassifierProfileTests {
         let rule = makeRule(safety: .review, confidence: 85, explanation: "Test item")
         let result = makeResult(lastAccessed: now.addingTimeInterval(-31 * 86400))
 
-        // Developer profile has built-in age > 30d override
-        let classified = classifier.classify(result: result, rule: rule, profile: .developer, now: now)
+        // The mechanism still works for user-authored profiles that declare an
+        // override — that's not a black box, the user set it.
+        let custom = CleanupProfile(
+            id: "custom-overrides",
+            name: "Custom",
+            description: "User profile with an override",
+            categories: ["dev_artifacts"],
+            safetyOverrides: [
+                SafetyOverride(condition: "age > 30d", safety: .safe, profiles: ["custom-overrides"]),
+            ],
+            isCustom: true
+        )
+        let classified = classifier.classify(result: result, rule: rule, profile: custom, now: now)
 
         #expect(classified.safety == .safe)
         #expect(classified.wasOverridden)
+    }
+
+    @Test("Built-in profiles never silently reclassify a review item — rules win")
+    func builtInProfilesDoNotReclassify() {
+        // A review rule with no rule-level overrides must stay review under every
+        // built-in profile, however old the item is. Safety comes from the rule.
+        let rule = makeRule(safety: .review, confidence: 85, explanation: "Old review item")
+        let result = makeResult(lastAccessed: now.addingTimeInterval(-400 * 86400))
+
+        for profile in [CleanupProfile.developer, .light, .deep, .devPurge, .aiModels] {
+            let classified = classifier.classify(result: result, rule: rule, profile: profile, now: now)
+            #expect(classified.safety == .review, "\(profile.id) silently downgraded a review item")
+            #expect(!classified.wasOverridden)
+        }
     }
 
     // MARK: - Universal Profile Overrides

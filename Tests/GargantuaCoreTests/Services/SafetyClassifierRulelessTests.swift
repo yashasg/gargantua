@@ -47,8 +47,43 @@ struct SafetyClassifierRulelessTests {
         #expect(!classified.wasOverridden)
     }
 
-    @Test("Developer profile: 30+ day items downgrade to safe")
-    func developerAgeOverride() {
+    @Test("Custom profile override: 30+ day items downgrade to safe (ruleless overload)")
+    func customProfileAgeOverride() {
+        // Built-in profiles no longer ship blanket overrides (rules are the source
+        // of truth), so the ruleless overload is exercised with a user-authored
+        // profile that declares one.
+        let custom = CleanupProfile(
+            id: "custom-overrides",
+            name: "Custom",
+            description: "User profile with an override",
+            categories: ["dev_artifacts"],
+            safetyOverrides: [
+                SafetyOverride(
+                    condition: "age > 30d",
+                    safety: .safe,
+                    confidence: 95,
+                    profiles: ["custom-overrides"]
+                ),
+            ],
+            isCustom: true
+        )
+        let result = makeResult(
+            safety: .review,
+            confidence: 50,
+            explanation: "Unusually large file.",
+            lastAccessed: now.addingTimeInterval(-45 * 86400)
+        )
+
+        let classified = classifier.classify(result: result, profile: custom, now: now)
+
+        #expect(classified.safety == .safe)
+        #expect(classified.confidence == 95)
+        #expect(classified.explanation.contains("Unusually large file."))
+        #expect(classified.wasOverridden)
+    }
+
+    @Test("Built-in developer profile no longer downgrades a review item")
+    func builtInDeveloperDoesNotDowngrade() {
         let result = makeResult(
             safety: .review,
             confidence: 50,
@@ -58,10 +93,8 @@ struct SafetyClassifierRulelessTests {
 
         let classified = classifier.classify(result: result, profile: .developer, now: now)
 
-        #expect(classified.safety == .safe)
-        #expect(classified.confidence == 95)
-        #expect(classified.explanation.contains("Unusually large file."))
-        #expect(classified.wasOverridden)
+        #expect(classified.safety == .review)
+        #expect(!classified.wasOverridden)
     }
 
     @Test("Adapter-supplied override takes precedence over profile-level")

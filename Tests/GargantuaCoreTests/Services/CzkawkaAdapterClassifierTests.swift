@@ -87,11 +87,12 @@ struct CzkawkaAdapterClassifierTests {
 
     // MARK: - In-scope categories are reclassified
 
-    @Test("deep profile downgrades 7+ day similar_images to safe via SafetyClassifier")
-    func deepProfileDowngradesAgedSimilarImages() async throws {
-        // `.deep` includes `similar_images` in its categories AND defines a
-        // profile-level `age > 7d → safe` override. An old image should land
-        // on the override's safe classification, not the review default.
+    @Test("deep profile leaves aged similar_images at review — never auto-safe")
+    func deepProfileLeavesAgedSimilarImagesAtReview() async throws {
+        // similar_images are user photos. The deep profile used to carry a blanket
+        // `age > 7d → safe` override that silently promoted them to one-click-safe;
+        // that black-box behavior was removed. An old duplicate image must stay at
+        // the adapter's review classification — the user consciously confirms it.
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("CzkawkaClassifierTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -119,13 +120,8 @@ struct CzkawkaAdapterClassifierTests {
 
         #expect(results.count == 1)
         let first = try #require(results.first)
-        // The `lastAccessed` assertion makes this test actually prove the
-        // production path — without it, a silent `nil` would still pass the
-        // "stays at review" baseline test below.
         #expect(first.lastAccessed != nil)
-        #expect(first.safety == .safe)
-        #expect(first.confidence == 90)
-        #expect(first.explanation.contains("Inactive for over a week."))
+        #expect(first.safety == .review)
     }
 
     @Test("deep profile leaves recent similar_images at review")

@@ -109,11 +109,23 @@ struct PersistenceControllerProfilesTests {
     func profileOverridesRoundTrip() throws {
         let ctrl = try makeController()
 
-        try ctrl.saveProfile(.developer)
+        // Built-in profiles ship no blanket overrides (rules are the source of
+        // truth), so exercise persistence with a user-authored profile that does.
+        let custom = CleanupProfile(
+            id: "custom-overrides",
+            name: "Custom",
+            description: "User profile with an override",
+            categories: ["dev_artifacts"],
+            safetyOverrides: [
+                SafetyOverride(condition: "age > 30d", safety: .safe, profiles: ["custom-overrides"]),
+            ],
+            isCustom: true
+        )
+        try ctrl.saveProfile(custom)
 
-        let fetched = try ctrl.fetchProfiles().first(where: { $0.id == "developer" })
+        let fetched = try ctrl.fetchProfiles().first(where: { $0.id == "custom-overrides" })
         #expect(fetched != nil)
-        #expect(fetched!.safetyOverrides.count == CleanupProfile.developer.safetyOverrides.count)
+        #expect(fetched!.safetyOverrides.count == 1)
         #expect(fetched!.safetyOverrides[0].condition == "age > 30d")
     }
 }
