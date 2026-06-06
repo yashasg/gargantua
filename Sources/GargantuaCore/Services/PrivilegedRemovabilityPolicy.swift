@@ -1,0 +1,100 @@
+import Foundation
+
+/// The single source of truth for which paths the root-privileged helper is
+/// permitted to remove.
+///
+/// This type lives in `GargantuaCore` so it is compiled into **both** binaries
+/// that need it: the signed `GargantuaPrivilegedHelper` (which enforces it as
+/// root) and the app (which uses it at scan time to mark root-owned items that
+/// are *not* covered as view-only, instead of letting the user select them and
+/// discover the limit on a failed execute). One shared definition ⇒ the two can
+/// never drift, and no build-time codegen is required.
+///
+/// This is an **allow-list**, and is deliberately *not* user-editable or driven
+/// by the YAML rules: editing it would grant root the power to delete new paths,
+/// which is exactly the privilege escalation the helper boundary exists to
+/// prevent. (A *deny*-list — `ProtectedRootPolicy` — can safely be user-editable,
+/// because it only ever restricts.) The list is hardcoded and audited; widening
+/// it is a reviewed source change, never a runtime decision.
+public struct PrivilegedRemovabilityPolicy: Sendable {
+    public static let shared = PrivilegedRemovabilityPolicy()
+
+    /// Recursive system roots whose descendants (and the root itself) may be
+    /// removed as root. Every entry is a vetted, regenerable location drawn from
+    /// `cleanup_rules/system/privileged.yaml`. See
+    /// `docs/designs/2026-06-06-unified-removability.md` for the tiering rationale.
+    ///
+    /// Deliberately absent: `/private/var/db/diagnostics` (the live unified-
+    /// logging store `logd` writes continuously) and the blanket
+    /// `/private/var/folders` (active per-session temp). Those stay view-only.
+    public static let subtreeRoots: [String] = [
+        "/Library/Caches",
+        "/Library/Logs/Adobe",
+        "/Library/Logs/CreativeCloud",
+        "/Library/Logs/DiagnosticReports",
+        "/Library/Updates",
+        "/Library/Apple/usr/share/rosetta/rosetta_update_bundle",
+        "/macOS Install Data",
+        "/private/tmp",
+        "/private/var/tmp",
+        "/private/var/log",
+        "/private/var/db/powerlog",
+        "/private/var/db/DiagnosticPipeline",
+        "/private/var/db/reportmemoryexception/MemoryLimitViolations",
+    ]
+
+    /// Files matching a suffix under a root that is itself too broad to allow
+    /// wholesale. `/private/var/folders` holds active per-session caches for
+    /// running processes, so only the specific generated `*.code_sign_clone`
+    /// artifacts may be removed — never the folder tree.
+    public static let suffixUnderRoot: [(root: String, suffix: String)] = [
+        ("/private/var/folders", ".code_sign_clone"),
+    ]
+
+    public init() {}
+
+    /// Whether the privileged helper may remove `path`.
+    ///
+    /// `path` is expected to be already standardized and symlink-resolved by the
+    /// caller (the helper does this in `validate(_:)` before asking). `isDirectory`
+    /// distinguishes the app-bundle and launch-daemon-plist rules.
+    public func allows(path: String, isDirectory: Bool) -> Bool {
+        // Uninstaller scope (pre-existing behavior).
+        if path.hasPrefix("/Applications/"), path.hasSuffix(".app"), isDirectory,
+           isDirectChild(path, of: "/Applications") {
+            return true
+        }
+        if path.hasPrefix("/Library/LaunchDaemons/"), path.hasSuffix(".plist"), !isDirectory,
+           isDirectChild(path, of: "/Library/LaunchDaemons") {
+            return true
+        }
+        if path.hasPrefix("/Library/PrivilegedHelperTools/"),
+           isDirectChild(path, of: "/Library/PrivilegedHelperTools") {
+            return true
+        }
+
+        // Tier-1 system roots (recursive).
+        if Self.subtreeRoots.contains(where: { isInSubtree(path, root: $0) }) {
+            return true
+        }
+
+        // Narrow suffix-in-root carve-outs.
+        if Self.suffixUnderRoot.contains(where: {
+            path.hasSuffix($0.suffix) && isInSubtree(path, root: $0.root)
+        }) {
+            return true
+        }
+
+        return false
+    }
+
+    private func isDirectChild(_ path: String, of parent: String) -> Bool {
+        URL(fileURLWithPath: path).deletingLastPathComponent().path == parent
+    }
+
+    /// True when `path` is `root` itself or lives anywhere beneath it. Guards
+    /// against the `/foo` vs `/foobar` prefix trap by requiring a `/` boundary.
+    private func isInSubtree(_ path: String, root: String) -> Bool {
+        path == root || path.hasPrefix(root + "/")
+    }
+}

@@ -169,7 +169,6 @@ rules:
   - id: system_diagnostic_databases
     name: System Diagnostic Databases
     paths:
-      - "/private/var/db/diagnostics/**/*"
       - "/private/var/db/DiagnosticPipeline/**/*"
       - "/private/var/db/powerlog/**/*"
       - "/private/var/db/reportmemoryexception/MemoryLimitViolations/**/*"
@@ -177,7 +176,7 @@ rules:
       - "mtime > 30d"
     safety: review
     confidence: 78
-    explanation: "System diagnostic, power, and memory exception logs. Review and route through privileged cleanup policy."
+    explanation: "Power and memory-exception diagnostic databases. Stale and regenerated; removed through the privileged helper after review."
     source:
       name: macOS diagnostics
       verify_signature: true
@@ -190,6 +189,33 @@ rules:
       - powerlog
       - privileged
       - review
+
+  # Split out from system_diagnostic_databases: /private/var/db/diagnostics is
+  # the LIVE unified-logging store (logd writes it continuously; `log show` and
+  # Console read from it). It is intentionally NOT in the privileged helper's
+  # allowlist, so the scan reconciles it to view-only — surfaced for visibility,
+  # never removed. See docs/designs/2026-06-06-unified-removability.md.
+  - id: system_log_history
+    name: System Log History
+    paths:
+      - "/private/var/db/diagnostics/**/*"
+    match_filters:
+      - "mtime > 30d"
+    safety: review
+    confidence: 70
+    explanation: "The live macOS unified logging store — log show and Console read from here. Removing it erases your Mac's system log history, so Gargantua surfaces the space but does not remove it."
+    source:
+      name: macOS diagnostics
+      verify_signature: true
+    regenerates: true
+    category: system_logs
+    tags:
+      - system
+      - logs
+      - diagnostics
+      - privileged
+      - review
+      - view_only
 
   - id: rosetta_system_cache
     name: Rosetta System Cache

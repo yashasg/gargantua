@@ -208,28 +208,9 @@ private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstall
     }
 
     private func isAllowed(_ url: URL, isDirectory: Bool) -> Bool {
-        let path = url.path
-        if path.hasPrefix("/Applications/"),
-           path.hasSuffix(".app"),
-           isDirectory {
-            return isDirectChild(path, of: "/Applications")
-        }
-
-        if path.hasPrefix("/Library/LaunchDaemons/"),
-           path.hasSuffix(".plist"),
-           !isDirectory {
-            return isDirectChild(path, of: "/Library/LaunchDaemons")
-        }
-
-        if path.hasPrefix("/Library/PrivilegedHelperTools/") {
-            return isDirectChild(path, of: "/Library/PrivilegedHelperTools")
-        }
-
-        return false
-    }
-
-    private func isDirectChild(_ path: String, of parent: String) -> Bool {
-        URL(fileURLWithPath: path).deletingLastPathComponent().path == parent
+        // Single source of truth, shared with the app via GargantuaCore so the
+        // scan-time view-only marking and the root-side enforcement can't drift.
+        PrivilegedRemovabilityPolicy.shared.allows(path: url.path, isDirectory: isDirectory)
     }
 }
 

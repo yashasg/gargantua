@@ -1,0 +1,87 @@
+import Foundation
+import Testing
+@testable import GargantuaCore
+
+@Suite("PrivilegedRemovabilityPolicy")
+struct PrivilegedRemovabilityPolicyTests {
+    let policy = PrivilegedRemovabilityPolicy.shared
+
+    // MARK: - Uninstaller scope (pre-existing behavior preserved)
+
+    @Test("App bundles, launch daemon plists, and helper tools stay allowed")
+    func uninstallerScopePreserved() {
+        #expect(policy.allows(path: "/Applications/Foo.app", isDirectory: true))
+        #expect(policy.allows(path: "/Library/LaunchDaemons/com.x.plist", isDirectory: false))
+        #expect(policy.allows(path: "/Library/PrivilegedHelperTools/com.x", isDirectory: false))
+        // Wrong shape is rejected.
+        #expect(!policy.allows(path: "/Applications/Foo.app", isDirectory: false))
+        #expect(!policy.allows(path: "/Applications/Sub/Foo.app", isDirectory: true))
+        #expect(!policy.allows(path: "/Library/LaunchDaemons/com.x.txt", isDirectory: false))
+    }
+
+    // MARK: - Tier-1 system roots are removable
+
+    @Test("Tier-1 system roots and their descendants are allowed")
+    func tier1RootsAllowed() {
+        let tier1Samples = [
+            "/private/var/db/powerlog/Library/foo.PLSQL",
+            "/private/var/db/DiagnosticPipeline/bar",
+            "/private/var/db/reportmemoryexception/MemoryLimitViolations/x.log",
+            "/Library/Caches/com.example/blob",
+            "/Library/Logs/DiagnosticReports/crash.ips",
+            "/Library/Logs/Adobe/x.log",
+            "/Library/Updates/031-1234/payload",
+            "/Library/Apple/usr/share/rosetta/rosetta_update_bundle/x",
+            "/macOS Install Data/x",
+            "/private/tmp/x",
+            "/private/var/tmp/x",
+            "/private/var/log/powermanagement/2026.05.24.asl",
+        ]
+        for path in tier1Samples {
+            #expect(policy.allows(path: path, isDirectory: false), "expected allowed: \(path)")
+        }
+        // The root itself is allowed, not only descendants.
+        #expect(policy.allows(path: "/private/var/db/powerlog", isDirectory: true))
+    }
+
+    @Test("code_sign_clone files under var/folders are allowed, but nothing else there")
+    func varFoldersSuffixCarveOut() {
+        #expect(policy.allows(
+            path: "/private/var/folders/ab/cd/X/thing.code_sign_clone",
+            isDirectory: false
+        ))
+        // The active per-session temp tree itself is never wholesale-removable.
+        #expect(!policy.allows(path: "/private/var/folders/ab/cd/C/somecache", isDirectory: false))
+        #expect(!policy.allows(path: "/private/var/folders/ab/cd", isDirectory: true))
+    }
+
+    // MARK: - Tier-2 holdbacks must NOT be removable
+
+    @Test("The live diagnostics store is held back — never allowed")
+    func liveDiagnosticsStoreHeldBack() {
+        // /private/var/db/diagnostics is the live unified-logging store (logd
+        // writes it continuously). It must never be allowlisted.
+        #expect(!policy.allows(path: "/private/var/db/diagnostics", isDirectory: true))
+        #expect(!policy.allows(path: "/private/var/db/diagnostics/logd.1.log", isDirectory: false))
+        #expect(!policy.allows(path: "/private/var/db/diagnostics/Persist/x.tracev3", isDirectory: false))
+    }
+
+    // MARK: - Everything else is rejected
+
+    @Test("Arbitrary system and user paths are rejected")
+    func arbitraryPathsRejected() {
+        for path in [
+            "/System/Library/Caches/x",
+            "/usr/bin/x",
+            "/etc/hosts",
+            "/Users/someone/Documents/x",
+            "/private/var/db/x",
+            "/Library/x",
+            "/",
+        ] {
+            #expect(!policy.allows(path: path, isDirectory: false), "expected rejected: \(path)")
+        }
+        // Prefix-trap guard: /Library/CachesEvil must not match /Library/Caches.
+        #expect(!policy.allows(path: "/Library/CachesEvil/x", isDirectory: false))
+    }
+}
