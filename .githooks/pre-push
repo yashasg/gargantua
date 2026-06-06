@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Blocks pushes that would fail CI's "SwiftLint & SwiftFormat" job.
+# Mirrors .github/workflows/ci.yml exactly: whole-project swiftlint + swiftformat.
+# Bypass (NOT recommended): git push --no-verify
+
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+missing=0
+for tool in swiftlint swiftformat; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "pre-push: $tool not found — install it (brew install $tool)." >&2
+    missing=1
+  fi
+done
+if [ "$missing" -eq 1 ]; then
+  echo "pre-push: install the missing tool(s), or bypass with: git push --no-verify" >&2
+  exit 1
+fi
+
+fail=0
+
+echo "pre-push: running SwiftLint…" >&2
+# Non-strict, matching CI: fails only on error-level violations.
+if ! swiftlint lint --quiet; then
+  echo "pre-push: SwiftLint reported error-level violations (above). CI would fail." >&2
+  fail=1
+fi
+
+echo "pre-push: running SwiftFormat --lint…" >&2
+if ! swiftformat --lint . ; then
+  echo "pre-push: SwiftFormat found formatting issues. Fix with: swiftformat <file>  (or: swiftformat .)" >&2
+  fail=1
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo "" >&2
+  echo "pre-push: blocked to keep CI green. Fix the issues above, or bypass with: git push --no-verify" >&2
+  exit 1
+fi
+
+echo "pre-push: lint OK." >&2
+exit 0
