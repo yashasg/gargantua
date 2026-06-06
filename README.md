@@ -316,6 +316,10 @@ Gargantua's source is AGPL-3.0. `swift build` from a clean clone produces a **fu
 
 Official notarized releases (the DMG on the GitHub Release, the Homebrew cask, the Polar.sh storefront) build with the `GARGANTUA_LICENSING=1` environment variable set. That flag activates a 14-day trial clock and the license gate that fronts destructive actions. After the trial, scans still run; Deep Clean / Uninstaller / Quarantine execute paths gate behind a license key. Licenses are sold through [Polar.sh](https://polar.sh) and validated against their public customer-portal API; see `docs/licensing/`.
 
+#### Limitation: removing system-owned files requires a signed build
+
+A `swift build` clone can scan everything and remove any file **you own** (user caches, your Trash, dev artifacts). It cannot remove files owned by `root` or another user. Those go through a privileged helper registered with `SMAppService`, and the helper only accepts XPC connections whose code-signing requirement pins to the official bundle ID and Developer ID team (`Sources/GargantuaCore/Services/XPCPrivilegedUninstallHelper.swift`). An ad-hoc `swift build` binary isn't a signed `.app` bundle and can't register the daemon at all, so on a source build those items fail with an "owned by the system" notice and a pointer to the signed release — by design; an unsigned binary shouldn't be able to spin up a root daemon. A fork can restore the capability by repointing `PrivilegedHelperConfiguration` (bundle ID, `teamID`, and the requirement's leaf OU) to its own identity and signing with its own Developer ID cert.
+
 If you maintain or contribute to Gargantua and want to test the licensed code path locally:
 
 ```bash

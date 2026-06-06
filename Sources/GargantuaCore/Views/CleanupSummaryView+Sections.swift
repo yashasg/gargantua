@@ -137,7 +137,20 @@ extension CleanupSummaryView {
         let automationCount = result.failedItems.filter {
             CleanupFailureClassifier.kind(of: $0.error) == .automation
         }.count
-        return automationCount * 2 >= permissionFailureCount ? .automation : .ownership
+        if automationCount * 2 >= permissionFailureCount {
+            return .automation
+        }
+
+        // Ownership failure: distinguish a signed build whose helper just needs
+        // approval from a build that has no embedded helper at all (an AGPL
+        // source build, or a fork signed by another team). `.notFound` means the
+        // launch-daemon plist isn't in the bundle — escalation can never work
+        // here, so point the user at the signed release instead of an approval
+        // toggle that doesn't exist.
+        if SMAppServicePrivilegedHelperInstaller().status() == .notFound {
+            return .systemUnavailable
+        }
+        return .ownership
     }
 
     var failureSection: some View {
@@ -343,14 +356,20 @@ enum PermissionFailureGuidance {
     case fullDiskAccess
     /// Finder Automation (Apple Events) was denied.
     case automation
-    /// Items are owned by macOS or another user; need the privileged helper.
+    /// Items are owned by macOS or another user; the privileged helper is
+    /// present but needs approval.
     case ownership
+    /// Items are owned by the system but this build ships no privileged helper
+    /// (an AGPL source build, or a fork signed by another team), so elevated
+    /// removal can never work here.
+    case systemUnavailable
 
     var title: String {
         switch self {
         case .fullDiskAccess: "These items require Full Disk Access"
         case .automation: "These items need Automation permission"
         case .ownership: "These items are owned by the system"
+        case .systemUnavailable: "This build can't remove system-owned items"
         }
     }
 
@@ -364,6 +383,10 @@ enum PermissionFailureGuidance {
         case .ownership:
             "Full Disk Access can't delete files owned by macOS or another user. Approve Gargantua's privileged "
                 + "helper under Login Items & Extensions so it can remove them, then run the clean again."
+        case .systemUnavailable:
+            "Files owned by macOS or another user need Gargantua's privileged helper, which only the signed "
+                + "release ships. Install it with Homebrew (brew install --cask gargantua), or build from source "
+                + "with your own Developer ID. Files you own were still cleaned."
         }
     }
 
@@ -372,10 +395,18 @@ enum PermissionFailureGuidance {
         case .fullDiskAccess: "Open Full Disk Access Settings"
         case .automation: "Open Automation Settings"
         case .ownership: "Open Login Items & Extensions"
+        case .systemUnavailable: "Get the Signed Release"
         }
     }
 
-    var settingsURL: URL {
+    var buttonIcon: String {
+        switch self {
+        case .fullDiskAccess, .automation, .ownership: "gear"
+        case .systemUnavailable: "arrow.down.circle"
+        }
+    }
+
+    var actionURL: URL {
         switch self {
         case .fullDiskAccess:
             URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
@@ -383,6 +414,8 @@ enum PermissionFailureGuidance {
             URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!
         case .ownership:
             URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")!
+        case .systemUnavailable:
+            URL(string: "https://github.com/inceptyon-labs/gargantua/releases/latest")!
         }
     }
 }
@@ -410,10 +443,10 @@ struct PermissionFailurePrompt: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
-                openURL(guidance.settingsURL)
+                openURL(guidance.actionURL)
             } label: {
                 HStack(spacing: GargantuaSpacing.space1) {
-                    Image(systemName: "gear")
+                    Image(systemName: guidance.buttonIcon)
                         .font(.system(size: 11))
                     Text(guidance.buttonLabel)
                         .font(GargantuaFonts.caption)

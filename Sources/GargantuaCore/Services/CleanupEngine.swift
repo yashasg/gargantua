@@ -180,11 +180,15 @@ public final class CleanupEngine: Sendable {
         var merged = results
         for (index, original) in escalatable {
             guard let outcome = elevatedByID[original.item.id] else { continue }
+            // On failure keep the original permission/ownership error rather than
+            // the helper's opaque XPC/registration message: it is the true cause,
+            // it stays meaningful to the user, and it keeps the summary's failure
+            // classifier stable so the right remediation prompt shows.
             merged[index] = CleanupItemResult(
                 item: original.item,
                 succeeded: outcome.succeeded,
                 trashURL: outcome.trashURL,
-                error: outcome.succeeded ? nil : outcome.error
+                error: outcome.succeeded ? nil : original.error
             )
             if outcome.succeeded {
                 observer?.didEmit(ScanProgressEvent(

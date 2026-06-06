@@ -67,12 +67,12 @@ extension CleanupResultTests {
         #expect(result.itemResults.first?.trashURL != nil)
     }
 
-    @Test("Escalation that also fails leaves the helper's error on the item")
+    @Test("Escalation that also fails keeps the original ownership error, not the helper's XPC noise")
     @MainActor
-    func escalationFailurePreservesError() async {
+    func escalationFailurePreservesOriginalError() async {
         let item = makeItem(id: "root-owned", path: "/tmp/gargantua-root-owned", size: 4096)
         let mover = RecordingTrashMover(outcome: .failure("Operation not permitted"))
-        let helper = StubPrivilegedHelper(mode: .failAll("Privileged helper requires approval"))
+        let helper = StubPrivilegedHelper(mode: .failAll("SMAppServiceErrorDomain error 1"))
         let engine = CleanupEngine(
             homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser,
             trashMover: mover,
@@ -83,7 +83,9 @@ extension CleanupResultTests {
 
         #expect(helper.received.count == 1)
         #expect(result.failedItems.count == 1)
-        #expect(result.itemResults.first?.error == "Privileged helper requires approval")
+        // The original EPERM message survives so the summary classifier still
+        // routes to an ownership remediation prompt.
+        #expect(result.itemResults.first?.error == "Operation not permitted")
     }
 
     @Test("Non-permission failures are not escalated")
