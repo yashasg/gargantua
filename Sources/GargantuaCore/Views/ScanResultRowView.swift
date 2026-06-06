@@ -13,6 +13,10 @@ struct ScanResultRowView: View {
     /// system path): the row renders locked, like `protected` safety, and the
     /// reason is shown. `protected` safety items lock regardless of this.
     let lockReason: String?
+    /// Non-nil when a running app holds this item open. The row renders locked
+    /// with a "Quit <app>" affordance; quitting unblocks and selects it.
+    let blockedApp: BlockedApp?
+    let onQuitBlockingApp: (() -> Void)?
     let onToggleSelection: () -> Void
     let onExplain: ((ScanResult) -> Void)?
     let onAddToExclusions: ((ScanResult) -> Void)?
@@ -24,6 +28,8 @@ struct ScanResultRowView: View {
         isFocused: Bool,
         showExplanation: Bool = true,
         lockReason: String? = nil,
+        blockedApp: BlockedApp? = nil,
+        onQuitBlockingApp: (() -> Void)? = nil,
         onToggleSelection: @escaping () -> Void,
         onExplain: ((ScanResult) -> Void)?,
         onAddToExclusions: ((ScanResult) -> Void)?,
@@ -34,6 +40,8 @@ struct ScanResultRowView: View {
         self.isFocused = isFocused
         self.showExplanation = showExplanation
         self.lockReason = lockReason
+        self.blockedApp = blockedApp
+        self.onQuitBlockingApp = onQuitBlockingApp
         self.onToggleSelection = onToggleSelection
         self.onExplain = onExplain
         self.onAddToExclusions = onAddToExclusions
@@ -41,7 +49,7 @@ struct ScanResultRowView: View {
     }
 
     private var isLocked: Bool {
-        item.safety == .protected_ || lockReason != nil
+        item.safety == .protected_ || lockReason != nil || blockedApp != nil
     }
 
     var body: some View {
@@ -99,7 +107,22 @@ struct ScanResultRowView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
 
-                if let lockReason {
+                if let blockedApp {
+                    HStack(spacing: GargantuaSpacing.space2) {
+                        Text("\(blockedApp.name) is running")
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink4)
+                        if let onQuitBlockingApp {
+                            Button(action: onQuitBlockingApp) {
+                                Text("Quit \(blockedApp.name)")
+                                    .font(GargantuaFonts.caption)
+                                    .foregroundStyle(GargantuaColors.accent)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Quit \(blockedApp.name) and include this item in the cleanup")
+                        }
+                    }
+                } else if let lockReason {
                     Text("View only · \(lockReason)")
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink4)

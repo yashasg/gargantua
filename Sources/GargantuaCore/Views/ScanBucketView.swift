@@ -24,6 +24,11 @@ public struct ScanBucketListView: View {
     /// system paths). These render locked and cannot be selected, the same way
     /// `protected` safety items do. Empty for surfaces without removability gating.
     public let viewOnlyReasons: [String: String]
+    /// id → the running app blocking that item (a browser holding its cache, …).
+    /// These render locked with a "Quit <app>" affordance; quitting unblocks them.
+    public let blockedApps: [String: BlockedApp]
+    /// Invoked with a result id when the user taps "Quit <app>".
+    public let onQuitBlockingApp: ((String) -> Void)?
     public let onExplain: ((ScanResult) -> Void)?
     public let onClean: (() -> Void)?
     public let onCancel: (() -> Void)?
@@ -48,6 +53,8 @@ public struct ScanBucketListView: View {
         scanDuration: TimeInterval,
         selectedIDs: Binding<Set<String>>,
         viewOnlyReasons: [String: String] = [:],
+        blockedApps: [String: BlockedApp] = [:],
+        onQuitBlockingApp: ((String) -> Void)? = nil,
         onExplain: ((ScanResult) -> Void)? = nil,
         onClean: (() -> Void)? = nil,
         onCancel: (() -> Void)? = nil,
@@ -60,6 +67,8 @@ public struct ScanBucketListView: View {
         self.scanDuration = scanDuration
         self._selectedIDs = selectedIDs
         self.viewOnlyReasons = viewOnlyReasons
+        self.blockedApps = blockedApps
+        self.onQuitBlockingApp = onQuitBlockingApp
         self.onExplain = onExplain
         self.onClean = onClean
         self.onCancel = onCancel

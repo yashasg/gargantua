@@ -232,8 +232,8 @@ struct NativeScanAdapterTests {
         #expect(results.map(\.path) == [largeModel.path])
     }
 
-    @Test("skip_if_process_running suppresses guarded cleanup rules")
-    func processGuardSkipsRule() async throws {
+    @Test("skip_if_process_running surfaces items locked-by-app instead of hiding them")
+    func processGuardSurfacesBlockedItems() async throws {
         let fixture = try Self.makeFixture()
         let firefoxCache = try fixture.makeFile("Firefox/Profile/cache2/entry", byteCount: 64)
             .deletingLastPathComponent()
@@ -262,8 +262,13 @@ struct NativeScanAdapterTests {
             processChecker: StubProcessChecker(running: [])
         ).scan()
 
-        #expect(runningResults.isEmpty)
+        // Running: the item is still surfaced, now tagged with the blocking app
+        // so the UI can offer to quit it — not hidden.
+        #expect(runningResults.map(\.path) == [firefoxCache.path])
+        #expect(runningResults.first?.blockedByApp?.bundleID == "org.mozilla.firefox")
+        // Stopped: surfaced normally, no block.
         #expect(stoppedResults.map(\.path) == [firefoxCache.path])
+        #expect(stoppedResults.first?.blockedByApp == nil)
     }
 
     @Test("presence and content guards skip protected app-specific caches")

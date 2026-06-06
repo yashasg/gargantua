@@ -251,6 +251,14 @@ public struct DeepCleanView: View {
                     set: { session.selectedResultIDs = $0 }
                 ),
                 viewOnlyReasons: session.removability.compactMapValues { $0.viewOnlyReason },
+                blockedApps: Dictionary(
+                    uniqueKeysWithValues: (session.scanResults ?? []).compactMap { result in
+                        session.blockedApp(for: result.id).map { (result.id, $0) }
+                    }
+                ),
+                onQuitBlockingApp: { id in
+                    Task { _ = await session.quitBlockingApp(for: id) }
+                },
                 onExplain: onExplain,
                 onClean: { session.showConfirmation = true },
                 onCancel: { session.clearResults() },

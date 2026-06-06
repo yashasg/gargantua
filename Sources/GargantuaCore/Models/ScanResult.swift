@@ -41,6 +41,11 @@ public struct ScanResult: Codable, Sendable, Identifiable {
     /// Command to regenerate, if applicable (e.g., "npm install").
     public let regenerateCommand: String?
 
+    /// Set when a running app holds this item open (e.g. a browser's cache while
+    /// the browser runs). The item is surfaced but locked; quitting the app
+    /// unblocks it. `nil` when nothing blocks removal.
+    public var blockedByApp: BlockedApp?
+
     public init(
         id: String,
         name: String,
@@ -54,7 +59,8 @@ public struct ScanResult: Codable, Sendable, Identifiable {
         category: String,
         tags: [String] = [],
         regenerates: Bool = false,
-        regenerateCommand: String? = nil
+        regenerateCommand: String? = nil,
+        blockedByApp: BlockedApp? = nil
     ) {
         self.id = id
         self.name = name
@@ -69,6 +75,20 @@ public struct ScanResult: Codable, Sendable, Identifiable {
         self.tags = tags
         self.regenerates = regenerates
         self.regenerateCommand = regenerateCommand
+        self.blockedByApp = blockedByApp
+    }
+}
+
+/// The running app that currently blocks an item from being removed.
+public struct BlockedApp: Codable, Sendable, Equatable {
+    /// Bundle identifier to terminate (e.g. "com.brave.Browser").
+    public let bundleID: String
+    /// Friendly name for the UI (e.g. "Brave Browser").
+    public let name: String
+
+    public init(bundleID: String, name: String) {
+        self.bundleID = bundleID
+        self.name = name
     }
 }
 

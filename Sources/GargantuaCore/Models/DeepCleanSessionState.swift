@@ -30,6 +30,9 @@ public final class DeepCleanSessionState {
     /// surfaced but never selectable or executed. Keyed by `ScanResult.id`;
     /// a missing entry means `.removable`.
     public var removability: [String: Removability] = [:]
+    /// Items whose blocking app the user quit this session — they unlock in place
+    /// (no re-scan) and are auto-selected so they're included on the next clean.
+    public var unblockedResultIDs: Set<String> = []
     public var isScanning = false
     public var showConfirmation = false
     public var isCleaning = false
@@ -44,9 +47,14 @@ public final class DeepCleanSessionState {
     /// during scan + cleaning phases. Persists across navigation alongside
     /// other session state.
     public let pathStream: PathStreamViewModel
+    private let appTerminator: any RunningApplicationTerminating
 
-    public init(pathStream: PathStreamViewModel = PathStreamViewModel()) {
+    public init(
+        pathStream: PathStreamViewModel = PathStreamViewModel(),
+        appTerminator: any RunningApplicationTerminating = WorkspaceRunningApplicationTerminator()
+    ) {
         self.pathStream = pathStream
+        self.appTerminator = appTerminator
     }
 
     public func clearResults() {
@@ -57,6 +65,7 @@ public final class DeepCleanSessionState {
         scanResults = nil
         selectedResultIDs = []
         removability = [:]
+        unblockedResultIDs = []
         cleanupResult = nil
         showConfirmation = false
         activeCleanupMethod = .trash
@@ -78,6 +87,7 @@ public final class DeepCleanSessionState {
         scanResults = nil
         selectedResultIDs = []
         removability = [:]
+        unblockedResultIDs = []
         cleanupResult = nil
         showConfirmation = false
         activeCleanupMethod = .trash
@@ -93,6 +103,7 @@ public final class DeepCleanSessionState {
         scanResults = nil
         selectedResultIDs = []
         removability = [:]
+        unblockedResultIDs = []
         cleanupResult = nil
         showConfirmation = false
         pathStream.clear()
@@ -106,9 +117,14 @@ public final class DeepCleanSessionState {
         // only removable, rule-`safe` items pre-select.
         let map = RemovabilityReconciler().map(for: results)
         removability = map
+        unblockedResultIDs = []
         selectedResultIDs = Set(
             results
-                .filter { $0.safety == .safe && (map[$0.id]?.isRemovable ?? true) }
+                .filter {
+                    $0.safety == .safe
+                        && (map[$0.id]?.isRemovable ?? true)
+                        && $0.blockedByApp == nil
+                }
                 .map(\.id)
         )
         scanResults = results
@@ -117,10 +133,38 @@ public final class DeepCleanSessionState {
     }
 
     /// Whether the user may select this result for cleanup. View-only items
-    /// (protected roots, protected safety, non-allowlisted system paths) cannot
-    /// be selected — they are surfaced for visibility only.
+    /// (protected roots, protected safety, non-allowlisted system paths) and
+    /// items blocked by a running app cannot be selected.
     public func isSelectable(_ id: String) -> Bool {
-        removability[id]?.isRemovable ?? true
+        guard blockedApp(for: id) == nil else { return false }
+        return removability[id]?.isRemovable ?? true
+    }
+
+    /// The app currently blocking this item, unless its app was already quit
+    /// this session.
+    public func blockedApp(for id: String) -> BlockedApp? {
+        guard !unblockedResultIDs.contains(id) else { return nil }
+        return scanResults?.first { $0.id == id }?.blockedByApp
+    }
+
+    /// Quit the app blocking `id`. On success, unlock and select every item that
+    /// app was holding (not just this one), in place — no re-scan — so they're
+    /// included when the user proceeds to clean. Returns whether the app exited.
+    public func quitBlockingApp(for id: String) async -> Bool {
+        guard let app = blockedApp(for: id) else { return true }
+        let exited = await appTerminator.terminateRunningApplications(
+            bundleIdentifier: app.bundleID,
+            timeout: 10
+        )
+        guard exited else { return false }
+        let affected = (scanResults ?? [])
+            .filter { $0.blockedByApp?.bundleID == app.bundleID }
+            .map(\.id)
+        unblockedResultIDs.formUnion(affected)
+        for affectedID in affected where isSelectable(affectedID) {
+            selectedResultIDs.insert(affectedID)
+        }
+        return true
     }
 
     /// The reason a result is view-only, if it is. `nil` when removable.
@@ -184,6 +228,7 @@ public final class DeepCleanSessionState {
             scanResults = nil
             selectedResultIDs = []
             removability = [:]
+            unblockedResultIDs = []
             pathStream.clear()
             phase = .idle
         }

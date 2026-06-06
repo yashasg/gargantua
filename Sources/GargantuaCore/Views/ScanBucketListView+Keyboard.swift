@@ -18,13 +18,13 @@ extension ScanBucketListView {
     func toggleFocusedSelection() {
         guard let id = focusedItemID else { return }
         let item = displayedResults.first { $0.id == id }
-        guard item?.safety != .protected_, viewOnlyReasons[id] == nil else { return }
+        guard item?.safety != .protected_, viewOnlyReasons[id] == nil, blockedApps[id] == nil else { return }
         toggleSelection(id)
     }
 
     func selectAllSafe() {
         let safeIDs = displayedResults
-            .filter { $0.safety == .safe && viewOnlyReasons[$0.id] == nil }
+            .filter { $0.safety == .safe && viewOnlyReasons[$0.id] == nil && blockedApps[$0.id] == nil }
             .map(\.id)
         selectedIDs = Set(safeIDs)
     }

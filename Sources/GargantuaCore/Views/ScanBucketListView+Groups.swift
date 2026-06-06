@@ -111,6 +111,8 @@ extension ScanBucketListView {
             isFocused: focusedItemID == item.id,
             showExplanation: showExplanation,
             lockReason: viewOnlyReasons[item.id],
+            blockedApp: blockedApps[item.id],
+            onQuitBlockingApp: onQuitBlockingApp.map { callback in { callback(item.id) } },
             onToggleSelection: { toggleSelection(item.id) },
             onExplain: onExplain,
             onAddToExclusions: onAddToExclusions,
@@ -133,8 +135,9 @@ extension ScanBucketListView {
     /// checkbox affordance is "fill the box".
     /// State is recomputed from live `selectedIDs` at call time.
     func toggleGroupSelection(_ group: ScanGroup) {
-        // Drop view-only items so "fill the box" never queues something locked.
-        let ids = group.selectableIDs.filter { viewOnlyReasons[$0] == nil }
+        // Drop view-only and app-blocked items so "fill the box" never queues
+        // something locked.
+        let ids = group.selectableIDs.filter { viewOnlyReasons[$0] == nil && blockedApps[$0] == nil }
         guard !ids.isEmpty else { return }
         if ids.allSatisfy(selectedIDs.contains) {
             selectedIDs.subtract(ids)
@@ -144,8 +147,8 @@ extension ScanBucketListView {
     }
 
     func toggleSelection(_ id: String) {
-        // View-only items are surfaced but not selectable.
-        guard viewOnlyReasons[id] == nil else { return }
+        // View-only and app-blocked items are surfaced but not selectable.
+        guard viewOnlyReasons[id] == nil, blockedApps[id] == nil else { return }
         if selectedIDs.contains(id) {
             selectedIDs.remove(id)
         } else {

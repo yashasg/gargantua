@@ -23,9 +23,13 @@ extension NativeScanAdapter {
         context: EvaluationContext,
         onSizing: @Sendable (String) -> Void = { _ in }
     ) -> RuleEvaluation {
-        if NativeRuleGuardEvaluator.shouldSkipRule(rule: rule, processChecker: context.processChecker) {
-            return RuleEvaluation(results: [], warnings: [])
-        }
+        // A running owner app (browser, Xcode, …) no longer hides this rule's
+        // items — they are surfaced locked and tagged so the UI can offer to quit
+        // the app and unblock them in place.
+        let blockedByApp = NativeRuleGuardEvaluator.blockingApp(
+            rule: rule,
+            processChecker: context.processChecker
+        )
 
         let fileManager = FileManager.default
         var out: [ScanResult] = []
@@ -99,6 +103,9 @@ extension NativeScanAdapter {
             }
         }
 
+        if let blockedByApp {
+            for index in out.indices { out[index].blockedByApp = blockedByApp }
+        }
         return RuleEvaluation(results: out, warnings: warnings)
     }
 
