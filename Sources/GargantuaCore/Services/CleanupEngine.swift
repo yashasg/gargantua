@@ -67,6 +67,10 @@ public final class CleanupEngine: Sendable {
     /// retried through the root-privileged helper. Left `nil` in headless
     /// contexts (the MCP server) and tests so they never silently escalate.
     private let privilegedHelper: (any PrivilegedUninstallHelping)?
+    /// Existence probe used to detect items that vanished between scan and clean
+    /// (e.g. a browser that wiped its cache on quit). Injectable so tests that
+    /// exercise the trash mover with synthetic paths aren't short-circuited.
+    private let fileExists: @Sendable (String) -> Bool
 
     /// - Parameter privilegedHelper: pass `XPCPrivilegedUninstallHelper()` from
     ///   interactive flows to recover root-owned items that POSIX `EPERM`
@@ -77,21 +81,26 @@ public final class CleanupEngine: Sendable {
         self.protectedRootPolicy = .loadDefault()
         self.commandActionRunner = CommandActionCleanupRouter.production()
         self.privilegedHelper = privilegedHelper
+        self.fileExists = { FileManager.default.fileExists(atPath: $0) }
     }
 
-    /// Test-only initializer. Use the default `init()` in app code.
+    /// Test-only initializer. Use the default `init()` in app code. `fileExists`
+    /// defaults to "everything exists" so mover/escalation tests are unaffected;
+    /// the already-gone path is exercised by passing `{ _ in false }`.
     internal init(
         homeDirectoryForTesting: URL,
         trashMover: any TrashMoving = FinderFirstTrashMover(),
         protectedRootPolicy: ProtectedRootPolicy = .loadDefault(),
         commandActionRunner: CommandActionCleanupRouter = .disabled,
-        privilegedHelper: (any PrivilegedUninstallHelping)? = nil
+        privilegedHelper: (any PrivilegedUninstallHelping)? = nil,
+        fileExists: @escaping @Sendable (String) -> Bool = { _ in true }
     ) {
         self.homeDirectory = homeDirectoryForTesting
         self.trashMover = trashMover
         self.protectedRootPolicy = protectedRootPolicy
         self.commandActionRunner = commandActionRunner
         self.privilegedHelper = privilegedHelper
+        self.fileExists = fileExists
     }
 
     /// Remove the given scan results with the selected cleanup method.
@@ -223,6 +232,14 @@ public final class CleanupEngine: Sendable {
             return commandActionRunner.run(item: item, confirmationMethod: confirmationTier(for: [item]))
         }
 
+        // Already gone. Apps like browsers wipe and recreate their cache on quit,
+        // and a path can vanish between scan and clean, so the directory the scan
+        // recorded may no longer exist. The user wanted it gone and it is — count
+        // it as removed instead of reporting a confusing "couldn't be removed".
+        if !fileExists(url.path) {
+            return CleanupItemResult(item: item, succeeded: true)
+        }
+
         if let protectedRoot = protectedRootPolicy.protectionReason(for: url, homeDirectory: homeDirectory) {
             return CleanupItemResult(
                 item: item,
@@ -278,6 +295,10 @@ public final class CleanupEngine: Sendable {
                 let trashURL = try await trashMover.moveToTrash(url)
                 return CleanupItemResult(item: item, succeeded: true, trashURL: trashURL)
             } catch {
+                // Vanished mid-attempt (e.g. the app cleared it) — goal met.
+                if !fileExists(url.path) {
+                    return CleanupItemResult(item: item, succeeded: true)
+                }
                 lastError = error.localizedDescription
                 if attempt < Self.maxRemovalAttempts, isTransientRemovalFailure(lastError) {
                     try? await Task.sleep(nanoseconds: Self.transientRetryDelay)
@@ -304,6 +325,9 @@ public final class CleanupEngine: Sendable {
                 }.value
                 return CleanupItemResult(item: item, succeeded: true)
             } catch {
+                if !fileExists(pathToRemove.path) {
+                    return CleanupItemResult(item: item, succeeded: true)
+                }
                 lastError = error.localizedDescription
                 if attempt < Self.maxRemovalAttempts, isTransientRemovalFailure(lastError) {
                     try? await Task.sleep(nanoseconds: Self.transientRetryDelay)

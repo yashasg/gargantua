@@ -172,6 +172,20 @@ extension CleanupResultTests {
         #expect(decoded.operation == .deleteFromTrash)
     }
 
+    @Test("An item whose path is already gone counts as removed, not failed")
+    @MainActor
+    func alreadyGoneCountsAsRemoved() async {
+        let item = makeItem(id: "gone", path: "/tmp/gargantua-nonexistent-\(UUID().uuidString)", size: 100)
+        let engine = CleanupEngine(
+            homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser,
+            fileExists: { _ in false }
+        )
+
+        let result = await engine.clean([item], method: .trash)
+
+        #expect(result.allSucceeded)
+    }
+
     @Test("A transient trash failure is retried and can succeed (e.g. a just-quit app releasing its cache)")
     @MainActor
     func transientFailureRetriesToSuccess() async {
