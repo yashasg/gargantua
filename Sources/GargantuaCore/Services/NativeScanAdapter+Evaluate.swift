@@ -157,6 +157,13 @@ extension NativeScanAdapter {
         let lastAccessed = values?.contentAccessDate ?? values?.contentModificationDate
         let modifiedAt = values?.contentModificationDate
 
+        // Never target a mount point. Broad temp rules like /private/tmp/* would
+        // otherwise match mounted read-only disk images (e.g. Xcode's mounted DDIs
+        // at /private/tmp/dmg.XXXXXX), which can't be deleted and aren't junk.
+        if isDirectory, Self.isMountPoint(path) {
+            return nil
+        }
+
         guard NativeRuleGuardEvaluator.matchesRuleFilters(
             rule: rule,
             lastAccessed: lastAccessed,
@@ -216,6 +223,18 @@ extension NativeScanAdapter {
     private static func expandTilde(_ path: String) -> String {
         guard path.hasPrefix("~") else { return path }
         return (path as NSString).expandingTildeInPath
+    }
+
+    /// A directory is a mount point when it sits on a different device than its
+    /// parent — true for mounted disk images, network shares, and external
+    /// volumes. Comparing `st_dev` catches them all without parsing mount tables.
+    static func isMountPoint(_ path: String) -> Bool {
+        let parent = (path as NSString).deletingLastPathComponent
+        guard !parent.isEmpty, parent != path else { return false }
+        var here = stat()
+        var above = stat()
+        guard stat(path, &here) == 0, stat(parent, &above) == 0 else { return false }
+        return here.st_dev != above.st_dev
     }
 
     /// Pick a human-readable display name for a result.
