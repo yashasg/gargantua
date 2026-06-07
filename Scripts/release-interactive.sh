@@ -179,33 +179,30 @@ if [ -n "$(git status --porcelain)" ]; then
     fi
 fi
 
-# ----- Bump CHANGELOG -------------------------------------------------------
+# ----- Bump CHANGELOG (generated from Conventional Commits via git-cliff) ----
+#
+# git-cliff renders the new version's notes from the Conventional Commit
+# subjects since the last tag (see cliff.toml for type→section mapping) and
+# prepends them, leaving older hand-written sections untouched. Preview pending
+# notes any time with `git cliff --unreleased`.
 
 CHANGELOG="$REPO_ROOT/CHANGELOG.md"
-TODAY="$(date +%Y-%m-%d)"
 
-if [ ! -f "$CHANGELOG" ]; then
-    warn "CHANGELOG.md not found; skipping changelog bump"
-elif grep -q "^## \[${NEW_VERSION}\]" "$CHANGELOG"; then
+if ! command -v git-cliff >/dev/null 2>&1; then
+    die "git-cliff not found. Install with 'brew install git-cliff' (config in cliff.toml)."
+fi
+
+if grep -q "^## \[${NEW_VERSION}\]" "$CHANGELOG" 2>/dev/null; then
     log "CHANGELOG already has a [${NEW_VERSION}] section; leaving it as-is"
 else
-    log "rewriting CHANGELOG: [Unreleased] → [${NEW_VERSION}] - ${TODAY}"
-    # macOS sed -i requires an empty backup arg.
-    # The substitution turns:
-    #   ## [Unreleased]
-    # into:
-    #   ## [Unreleased]
-    #
-    #   ## [X.Y.Z] - YYYY-MM-DD
-    # so the previously-unreleased content sits under the new versioned heading
-    # and a fresh empty [Unreleased] block is at the top, matching keepachangelog.
-    sed -i '' "s/^## \[Unreleased\]/## [Unreleased]\\
-\\
-## [${NEW_VERSION}] - ${TODAY}/" "$CHANGELOG"
+    log "generating CHANGELOG for ${NEW_VERSION} from commits since v${CURRENT_VERSION}"
+    git cliff --tag "$TAG_NAME" --unreleased --prepend "$CHANGELOG"
 
     if [ -n "$(git status --porcelain CHANGELOG.md)" ]; then
         git add CHANGELOG.md
         git commit -m "docs: update CHANGELOG for ${NEW_VERSION}"
+    else
+        warn "no user-facing commits since v${CURRENT_VERSION}; CHANGELOG unchanged"
     fi
 fi
 
