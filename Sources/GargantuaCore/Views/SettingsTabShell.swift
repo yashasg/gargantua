@@ -4,7 +4,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     case ai = "AI"
     case automation = "General"
     case network = "Network"
-    case storage = "Storage"
+    case storage = "Scope"
     case license = "License"
     case about = "About"
 
@@ -15,7 +15,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .ai: "sparkles"
         case .automation: "gearshape"
         case .network: "dot.radiowaves.left.and.right"
-        case .storage: "externaldrive"
+        case .storage: "scope"
         case .license: "key.fill"
         case .about: "info.circle"
         }
