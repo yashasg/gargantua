@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.inceptyonlabs.gargantua.scheduler</string>
+    <string>com.inceptyon.gargantua.scheduler</string>
     <key>BundleProgram</key>
     <string>Contents/MacOS/GargantuaScheduler</string>
     <key>StartInterval</key>

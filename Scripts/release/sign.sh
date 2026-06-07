@@ -98,7 +98,7 @@ while IFS= read -r -d '' CODE_ASSET; do
     esac
     log "  $CODE_ASSET"
     if [ "$(basename "$CODE_ASSET")" = "GargantuaScheduler" ]; then
-        _sign --sign "$SIGNING_IDENTITY" --identifier "com.inceptyonlabs.gargantua.scheduler" "$CODE_ASSET"
+        _sign --sign "$SIGNING_IDENTITY" --identifier "com.inceptyon.gargantua.scheduler" "$CODE_ASSET"
     else
         _sign --sign "$SIGNING_IDENTITY" "$CODE_ASSET"
     fi

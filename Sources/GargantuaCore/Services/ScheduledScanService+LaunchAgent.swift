@@ -6,7 +6,11 @@ import Foundation
 /// Static launch-agent identifiers and timing constants for scheduled scans.
 public enum ScheduledScanLaunchAgentConfiguration {
     /// Bundle service label for the scheduler launch agent.
-    public static let label = "com.inceptyonlabs.gargantua.scheduler"
+    ///
+    /// Must stay within the app's bundle-identifier domain (`com.inceptyon.gargantua.*`).
+    /// `SMAppService` returns `.notFound` for an agent whose label sits outside the
+    /// registering app's bundle-ID namespace, even when the plist is present and sealed.
+    public static let label = "com.inceptyon.gargantua.scheduler"
     /// Launch-agent plist file name embedded in the app bundle.
     public static let plistName = "\(label).plist"
     /// Relative app-bundle executable path for the scheduler.

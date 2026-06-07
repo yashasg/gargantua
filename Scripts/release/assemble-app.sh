@@ -109,8 +109,8 @@ fi
 run ditto "$SPARKLE_FRAMEWORK_SRC" "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
 
 # ----- Scheduled scan LaunchAgent ------------------------------------------
-SCHEDULER_PLIST_SRC="$APPSHELL_DIR/LaunchAgents/com.inceptyonlabs.gargantua.scheduler.plist.in"
-SCHEDULER_PLIST_DST="$APP_BUNDLE/Contents/Library/LaunchAgents/com.inceptyonlabs.gargantua.scheduler.plist"
+SCHEDULER_PLIST_SRC="$APPSHELL_DIR/LaunchAgents/com.inceptyon.gargantua.scheduler.plist.in"
+SCHEDULER_PLIST_DST="$APP_BUNDLE/Contents/Library/LaunchAgents/com.inceptyon.gargantua.scheduler.plist"
 [ -f "$SCHEDULER_PLIST_SRC" ] || die "missing scheduler launch agent plist template at $SCHEDULER_PLIST_SRC"
 
 if [ "${DRY_RUN:-0}" != "1" ]; then
