@@ -294,7 +294,7 @@ Requirements:
 - macOS 14 (Sonoma) or newer; **macOS 15 + the latest stable Xcode is required** to resolve the `mlx-swift-lm` dependency, which declares `swift-tools-version: 6.1`.
 - Apple Silicon is the only supported architecture for development and release builds.
 - Xcode Command Line Tools (`xcode-select --install`): provides `codesign`, `notarytool`, `stapler`, `iconutil`, `swift`.
-- The Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`): `mlx-swift`'s `BuildMetallibPlugin` shells out to `xcrun metal` to compile shaders.
+- The Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`): **required to build at all, not just for local AI.** `mlx-swift`'s `BuildMetallibPlugin` runs as a SwiftPM *prebuild command* and shells out to `xcrun metal` to compile the GPU shaders into `mlx.metallib`. On recent Xcode the Metal Toolchain is a separate download; if it's missing, `xcrun metal` is unavailable and the prebuild command fails, which fails the whole `swift build`. (The MLX *model weights* are a separate, on-demand download at runtime — those are never bundled.)
 
 Clone and build:
 
