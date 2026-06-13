@@ -107,6 +107,24 @@ Rules live under `Sources/GargantuaCore/Resources/cleanup_rules/`, `Sources/Garg
 
 Trust Layer parity is *evidence-shape* parity, not Mole-shell line parity. Every shape is explainable, bounded, reversible, and audited. Deferred Mole behaviors (`nix-collect-garbage`, `npm cache clean`, version-retention loops, receipt-driven deletion) are tracked in [`docs/mole-rule-parity-audit.md`](docs/mole-rule-parity-audit.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
+### Your own rules
+
+You can write your own rules without forking. Open **Rules → Custom Rules** (or drop files directly into `~/Library/Application Support/Gargantua/rules/{cleanup,uninstall,command}/`) and add YAML using the same schema as the bundled set. They load alongside the bundled rules on every scan and **survive app updates** — the bundled snapshot is replaced on update, but this folder is not.
+
+User rules run with reduced privilege so an unreviewed rule can't widen the blast radius:
+
+- Safety is **floored to `review`** — a user rule can surface a candidate, but never classify one as one-click `safe`.
+- Profile-scoped safety overrides are dropped.
+- Command rules always run as `review` and are rejected if they touch a protected root.
+- A user rule whose id collides with a bundled rule is ignored; the bundled rule wins.
+
+Rules you intend to share should still go through a PR to [`gargantua-rules`](https://github.com/inceptyon-labs/gargantua-rules), where review earns them full bundled-rule trust.
+
+A few things to know about local rules:
+
+- A custom **cleanup** rule only runs when the active profile includes its `category`. Reuse an existing category, or pick a profile that scans it.
+- **Command** rules run the literal `tool` + `arguments` you write under your own user account. The protected-root check covers declared `affected_roots`, not arbitrary argument content, and the file is re-read (and re-clamped to `review`) at execution time — so only add command rules you'd run by hand. This is why command rules are never `safe`: you confirm the exact command before it runs.
+
 A bundled **protected-roots policy** (`Sources/GargantuaCore/Resources/safety_policy/protected_roots.yaml`) hard-blocks cleanup at filesystem roots regardless of rule classification. It covers `/`, `/Applications`, `/Library`, `/System`, `/Users`, `~`, `~/Library`, `/private`, `/var`, `/var/folders/*/*/{C,T,X}`, and equivalents under `/System/Volumes/Data`. Users can add their own protected roots in Settings → Storage; bundled entries cannot be removed.
 
 ## Configuration

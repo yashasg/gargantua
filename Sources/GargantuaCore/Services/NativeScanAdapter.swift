@@ -60,12 +60,32 @@ public struct NativeScanAdapter: ScanAdapter {
         guard let dir = RuleDirectoryResolver.resolve() else {
             throw ScanAdapterError.rulesDirectoryNotFound
         }
-        let load = try RuleLoader().loadRules(from: dir)
+        let loader = RuleLoader()
+        let load = try loader.loadRules(from: dir)
         for err in load.errors {
             logger.warning("Rule parse error: \(err.localizedDescription, privacy: .public)")
         }
+
+        var rules = load.rules
+        let userLoad = (try? loader.loadRules(from: UserRuleDirectory.directory(for: .cleanup)))
+            ?? RuleLoadResult(rules: [], errors: [], filesLoaded: 0)
+        for err in userLoad.errors {
+            logger.warning("User rule parse error: \(err.localizedDescription, privacy: .public)")
+        }
+        if !userLoad.rules.isEmpty {
+            let merged = UserRuleSanitizer.merge(
+                bundled: rules,
+                user: userLoad.rules,
+                sanitizing: UserRuleSanitizer.sanitize
+            )
+            rules = merged.rules
+            for id in merged.droppedIDs {
+                logger.warning("User cleanup rule '\(id, privacy: .public)' ignored — id collides with a bundled rule.")
+            }
+        }
+
         return NativeScanAdapter(
-            rules: load.rules,
+            rules: rules,
             profile: profile,
             scanRoots: scanRoots ?? PathExpander.defaultScanRoots()
         )

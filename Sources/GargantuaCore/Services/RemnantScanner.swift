@@ -46,13 +46,32 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
             throw RemnantScannerError.rulesDirectoryNotFound
         }
 
-        let load = try RemnantRuleLoader().loadRules(from: url)
+        let loader = RemnantRuleLoader()
+        let load = try loader.loadRules(from: url)
         for error in load.errors {
             logger.warning("Remnant rule parse error: \(error.localizedDescription, privacy: .public)")
         }
 
+        var rules = load.rules
+        let userLoad = (try? loader.loadRules(from: UserRuleDirectory.directory(for: .uninstall)))
+            ?? RemnantRuleLoadResult(rules: [], errors: [], filesLoaded: 0)
+        for error in userLoad.errors {
+            logger.warning("User remnant rule parse error: \(error.localizedDescription, privacy: .public)")
+        }
+        if !userLoad.rules.isEmpty {
+            let merged = UserRuleSanitizer.merge(
+                bundled: rules,
+                user: userLoad.rules,
+                sanitizing: UserRuleSanitizer.sanitize
+            )
+            rules = merged.rules
+            for id in merged.droppedIDs {
+                logger.warning("User uninstall rule '\(id, privacy: .public)' ignored — id collides with a bundled rule.")
+            }
+        }
+
         return RemnantScanner(
-            rules: load.rules,
+            rules: rules,
             scanRoots: scanRoots ?? PathExpander.defaultScanRoots(),
             spotlightRulesReader: CFPreferencesSpotlightRulesStore(),
             observer: observer

@@ -126,11 +126,18 @@ private extension SafetyClassifier {
     /// shipped rule does this today, but this makes "system items never auto-
     /// select" a structural guarantee rather than a convention.
     func floored(_ classified: ClassifiedResult, rule: ScanRule) -> ClassifiedResult {
-        guard classified.safety == .safe, rule.tags.contains("privileged") else {
-            return classified
-        }
+        guard classified.safety == .safe else { return classified }
+
+        // Privileged rules never resolve to one-click `safe`. User-authored
+        // rules carry the same hard floor: even if a profile-scoped override
+        // matched and promoted the item, an unreviewed rule can never reach
+        // `safe` — it caps at `review` (its sanitized base).
+        let isPrivileged = rule.tags.contains("privileged")
+        let isUserAuthored = rule.tags.contains(UserRuleSanitizer.originTag)
+        guard isPrivileged || isUserAuthored else { return classified }
+
         return ClassifiedResult(
-            safety: rule.safety,
+            safety: isUserAuthored ? UserRuleSanitizer.floor(rule.safety) : rule.safety,
             confidence: classified.confidence,
             explanation: classified.explanation,
             wasOverridden: classified.wasOverridden

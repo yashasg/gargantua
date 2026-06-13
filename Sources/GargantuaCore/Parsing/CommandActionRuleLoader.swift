@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Loads command-action rules from a directory of YAML rule files.
 ///
@@ -49,6 +50,35 @@ public struct CommandActionRuleLoader: Sendable {
         }
 
         return CommandActionRuleLoadResult(rules: allRules, errors: errors, filesLoaded: filesLoaded)
+    }
+
+    /// Load user-authored command rules from the user rules directory, sanitize
+    /// them, and merge into the bundled set (bundled wins on id collision).
+    ///
+    /// User command rules pass through the same protected-root / advanced-category
+    /// validation as bundled rules at load, and `UserRuleSanitizer` then floors
+    /// their declared safety to `review`.
+    public static func mergingUserRules(into bundled: [CommandActionRule]) -> [CommandActionRule] {
+        let logger = Logger(subsystem: "com.inceptyon.gargantua", category: "UserRules")
+        let dir = UserRuleDirectory.directory(for: .command)
+        guard let userLoad = try? CommandActionRuleLoader().loadRules(from: dir),
+              !userLoad.rules.isEmpty || !userLoad.errors.isEmpty else {
+            return bundled
+        }
+        for err in userLoad.errors {
+            logger.warning("User command rule parse error: \(err.localizedDescription, privacy: .public)")
+        }
+        guard !userLoad.rules.isEmpty else { return bundled }
+
+        let merged = UserRuleSanitizer.merge(
+            bundled: bundled,
+            user: userLoad.rules,
+            sanitizing: UserRuleSanitizer.sanitize
+        )
+        for id in merged.droppedIDs {
+            logger.warning("User command rule '\(id, privacy: .public)' ignored — id collides with a bundled rule.")
+        }
+        return merged.rules
     }
 
     private func validate(_ rules: [CommandActionRule], filePath: String) -> [CommandActionRuleParseError] {

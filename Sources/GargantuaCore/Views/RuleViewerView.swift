@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 private let communityRulesRepositoryURL = URL(string: "https://github.com/inceptyon-labs/gargantua-rules")!
@@ -17,6 +18,8 @@ public struct RuleViewerView: View {
     @State var selectedCategory: String?
     @State var selectedRuleID: String?
     @State private var isLoading = true
+    @State private var userRuleErrors: [String] = []
+    @State private var customRuleCount = 0
 
     public init(
         persistence: PersistenceController,
@@ -67,6 +70,20 @@ public struct RuleViewerView: View {
 
                 Spacer()
 
+                Button {
+                    revealCustomRulesFolder()
+                } label: {
+                    Label("Custom Rules", systemImage: "folder.badge.plus")
+                        .font(GargantuaFonts.label)
+                        .foregroundStyle(GargantuaColors.ink2)
+                        .padding(.horizontal, GargantuaSpacing.space3)
+                        .padding(.vertical, GargantuaSpacing.space2)
+                        .background(GargantuaColors.ink.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                }
+                .buttonStyle(.plain)
+                .help("Open your user rules folder. Rules you add here load alongside the bundled set and survive updates.")
+
                 Link(destination: communityRulesRepositoryURL) {
                     Label("Contribute Rules", systemImage: "arrow.up.right.square")
                         .font(GargantuaFonts.label)
@@ -85,6 +102,10 @@ public struct RuleViewerView: View {
             }
 
             rulesCurrencyLine
+
+            if customRuleCount > 0 || !userRuleErrors.isEmpty {
+                customRulesStatusLine
+            }
         }
         .padding(.horizontal, GargantuaSpacing.space6)
         .padding(.top, GargantuaSpacing.space6)
@@ -114,6 +135,39 @@ public struct RuleViewerView: View {
                 .help("Check for a Gargantua update, which includes the latest reviewed rules")
             }
         }
+    }
+
+    /// Status line for user-authored rules: how many loaded, plus any parse
+    /// errors so a malformed custom rule isn't silently swallowed.
+    private var customRulesStatusLine: some View {
+        HStack(spacing: GargantuaSpacing.space2) {
+            if userRuleErrors.isEmpty {
+                Image(systemName: "person.crop.circle.badge.checkmark")
+                    .font(.system(size: 11))
+                    .foregroundStyle(GargantuaColors.accent)
+                Text("\(customRuleCount) custom rule\(customRuleCount == 1 ? "" : "s") loaded (clamped to review).")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+            } else {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(GargantuaColors.review)
+                Text(userRuleErrors.first ?? "A custom rule failed to parse.")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.review)
+                    .help(userRuleErrors.joined(separator: "\n"))
+                if userRuleErrors.count > 1 {
+                    Text("(+\(userRuleErrors.count - 1) more)")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                }
+            }
+        }
+    }
+
+    private func revealCustomRulesFolder() {
+        let root = UserRuleDirectory.ensureScaffold()
+        NSWorkspace.shared.open(root)
     }
 
     func safetyColor(_ level: SafetyLevel) -> Color {
@@ -146,10 +200,37 @@ public struct RuleViewerView: View {
                 return "system"
             }
 
-            categories = ["browser", "apps", "developer", "system"].compactMap { name in
+            var built: [RuleCategory] = ["browser", "apps", "developer", "system"].compactMap { name in
                 guard let rules = grouped[name], !rules.isEmpty else { return nil }
                 return RuleCategory(name: name, rules: rules.sorted { $0.name < $1.name })
             }
+
+            // User-authored cleanup rules — sanitized and shown as a distinct
+            // category so they're visually separate from the reviewed bundle.
+            let userLoad = (try? loader.loadRules(from: UserRuleDirectory.directory(for: .cleanup)))
+                ?? RuleLoadResult(rules: [], errors: [], filesLoaded: 0)
+            userRuleErrors = userLoad.errors.map(\.localizedDescription)
+            if !userLoad.rules.isEmpty {
+                let merged = UserRuleSanitizer.merge(
+                    bundled: result.rules,
+                    user: userLoad.rules,
+                    sanitizing: UserRuleSanitizer.sanitize
+                )
+                let customRules = Array(merged.rules.suffix(merged.rules.count - result.rules.count))
+                customRuleCount = customRules.count
+                if !customRules.isEmpty {
+                    built.append(RuleCategory(name: "custom", rules: customRules.sorted { $0.name < $1.name }))
+                }
+                if !merged.droppedIDs.isEmpty {
+                    userRuleErrors.append(
+                        "\(merged.droppedIDs.count) custom rule(s) ignored — id collides with a bundled rule."
+                    )
+                }
+            } else {
+                customRuleCount = 0
+            }
+
+            categories = built
 
             if selectedCategory == nil {
                 selectedCategory = categories.first?.name

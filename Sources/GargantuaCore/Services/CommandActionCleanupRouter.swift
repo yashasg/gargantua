@@ -48,7 +48,7 @@ public struct CommandActionCleanupRouter: Sendable {
               let result = try? CommandActionRuleLoader().loadRules(from: dir) else {
             return .disabled
         }
-        return CommandActionCleanupRouter(rules: result.rules)
+        return CommandActionCleanupRouter(rules: CommandActionRuleLoader.mergingUserRules(into: result.rules))
     }
 
     /// Run the command rule referenced by `item.id`. Returns a synthetic

@@ -77,7 +77,7 @@ public struct CommandActionScanAdapter: ScanAdapter {
             )
         }
         return CommandActionScanAdapter(
-            rules: result.rules,
+            rules: CommandActionRuleLoader.mergingUserRules(into: result.rules),
             executor: executor,
             resolver: resolver,
             categories: categories
