@@ -130,19 +130,26 @@ struct CodexAgentSettingsSection: View {
     }
 
     private var scheduledAuditToggle: some View {
-        Toggle(isOn: Binding(
-            get: { configuration.runAfterScheduledScans },
-            set: {
-                configuration.runAfterScheduledScans = $0
-                saveConfiguration()
-            }
-        )) {
+        HStack(spacing: GargantuaSpacing.space3) {
+            SettingsRowIcon(systemName: "calendar.badge.clock", size: 16)
+
             SettingsRowText(
                 title: "Run scheduled audits",
                 detail: "Completed scheduled scans can start a one-shot read-only Codex maintenance report. Bills your Codex account."
             )
+
+            Spacer(minLength: GargantuaSpacing.space3)
+
+            Toggle("Run scheduled audits", isOn: Binding(
+                get: { configuration.runAfterScheduledScans },
+                set: {
+                    configuration.runAfterScheduledScans = $0
+                    saveConfiguration()
+                }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
         }
-        .toggleStyle(.switch)
     }
 
     // MARK: - Actions

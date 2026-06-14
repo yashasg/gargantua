@@ -2,12 +2,12 @@ import SwiftUI
 
 extension CodexAgentSettingsSection {
     var modelPickerRow: some View {
-        HStack {
-            Text("Model")
-                .font(GargantuaFonts.label)
-                .foregroundStyle(GargantuaColors.ink)
+        HStack(spacing: GargantuaSpacing.space3) {
+            SettingsRowIcon(systemName: "cpu", size: 16)
 
-            Spacer()
+            SettingsRowText(title: "Model", detail: "Optional. Leave on Default to let codex choose.")
+
+            Spacer(minLength: GargantuaSpacing.space3)
 
             Picker("Model", selection: Binding(
                 get: { configuration.selectedModel },
@@ -21,7 +21,7 @@ extension CodexAgentSettingsSection {
                 }
             }
             .labelsHidden()
-            .frame(maxWidth: 280)
+            .frame(maxWidth: 240)
         }
     }
 

@@ -211,44 +211,54 @@ extension CloudAISettingsSection {
     // MARK: - Consent + cap + usage
 
     var consentToggle: some View {
-        Toggle(isOn: Binding(
-            get: { configuration.allowsFileContents },
-            set: {
-                configuration.allowsFileContents = $0
-                saveConfiguration()
-            }
-        )) {
+        HStack(spacing: GargantuaSpacing.space3) {
+            SettingsRowIcon(systemName: "doc.text.magnifyingglass", size: 16)
+
             SettingsRowText(
                 title: "Allow file-content previews",
                 detail: "When on, Gargantua may include short snippets of file contents in cloud requests."
             )
+
+            Spacer(minLength: GargantuaSpacing.space3)
+
+            Toggle("Allow file-content previews", isOn: Binding(
+                get: { configuration.allowsFileContents },
+                set: {
+                    configuration.allowsFileContents = $0
+                    saveConfiguration()
+                }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
         }
-        .toggleStyle(.switch)
     }
 
     var monthlyCapStepper: some View {
-        Stepper(
-            value: Binding(
-                get: { configuration.monthlySpendCapCents },
-                set: {
-                    configuration.monthlySpendCapCents = max(0, $0)
-                    saveConfiguration()
-                }
-            ),
-            in: 0 ... 100_000,
-            step: 100
-        ) {
-            HStack {
-                SettingsRowText(title: "Monthly cap", detail: nil)
+        HStack(spacing: GargantuaSpacing.space3) {
+            SettingsRowIcon(systemName: "dollarsign.circle", size: 16)
 
-                Spacer()
+            SettingsRowText(title: "Monthly cap", detail: "Hard ceiling on cloud spend per calendar month.")
 
-                Text(formatCents(configuration.monthlySpendCapCents))
-                    .font(GargantuaFonts.monoData)
-                    .foregroundStyle(GargantuaColors.ink2)
-            }
+            Spacer(minLength: GargantuaSpacing.space3)
+
+            Text(formatCents(configuration.monthlySpendCapCents))
+                .font(GargantuaFonts.monoData)
+                .foregroundStyle(GargantuaColors.ink2)
+
+            Stepper(
+                "Monthly cap",
+                value: Binding(
+                    get: { configuration.monthlySpendCapCents },
+                    set: {
+                        configuration.monthlySpendCapCents = max(0, $0)
+                        saveConfiguration()
+                    }
+                ),
+                in: 0 ... 100_000,
+                step: 100
+            )
+            .labelsHidden()
         }
-        .help("Hard ceiling on cloud spend per calendar month")
     }
 
     var usageRows: some View {

@@ -137,28 +137,30 @@ struct ClaudeCodeAgentSettingsSection: View {
     }
 
     private var maxTurnsStepper: some View {
-        Stepper(
-            value: Binding(
-                get: { configuration.maxTurns },
-                set: {
-                    configuration.maxTurns = $0
-                    saveConfiguration()
-                }
-            ),
-            in: 1 ... 20,
-            step: 1
-        ) {
-            HStack {
-                Text("Max turns")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
+        HStack(spacing: GargantuaSpacing.space3) {
+            SettingsRowIcon(systemName: "arrow.2.squarepath", size: 16)
 
-                Spacer()
+            SettingsRowText(title: "Max turns", detail: "Most reasoning turns the agent takes per run.")
 
-                Text("\(configuration.maxTurns)")
-                    .font(GargantuaFonts.monoData)
-                    .foregroundStyle(GargantuaColors.ink2)
-            }
+            Spacer(minLength: GargantuaSpacing.space3)
+
+            Text("\(configuration.maxTurns)")
+                .font(GargantuaFonts.monoData)
+                .foregroundStyle(GargantuaColors.ink2)
+
+            Stepper(
+                "Max turns",
+                value: Binding(
+                    get: { configuration.maxTurns },
+                    set: {
+                        configuration.maxTurns = $0
+                        saveConfiguration()
+                    }
+                ),
+                in: 1 ... 20,
+                step: 1
+            )
+            .labelsHidden()
         }
         .help("Maximum agent reasoning turns per session")
     }
@@ -172,19 +174,26 @@ struct ClaudeCodeAgentSettingsSection: View {
     // older stored JSON but is no longer read by the runner.
 
     private var scheduledAuditToggle: some View {
-        Toggle(isOn: Binding(
-            get: { configuration.runAfterScheduledScans },
-            set: {
-                configuration.runAfterScheduledScans = $0
-                saveConfiguration()
-            }
-        )) {
+        HStack(spacing: GargantuaSpacing.space3) {
+            SettingsRowIcon(systemName: "calendar.badge.clock", size: 16)
+
             SettingsRowText(
                 title: "Run scheduled audits",
                 detail: "Completed scheduled scans can start a read-only Claude Code maintenance report."
             )
+
+            Spacer(minLength: GargantuaSpacing.space3)
+
+            Toggle("Run scheduled audits", isOn: Binding(
+                get: { configuration.runAfterScheduledScans },
+                set: {
+                    configuration.runAfterScheduledScans = $0
+                    saveConfiguration()
+                }
+            ))
+            .labelsHidden()
+            .toggleStyle(.switch)
         }
-        .toggleStyle(.switch)
     }
 
     private func saveCLIPath() {

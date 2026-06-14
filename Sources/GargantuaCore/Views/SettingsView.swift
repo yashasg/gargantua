@@ -144,16 +144,19 @@ public struct SettingsView: View {
         switch selectedTab {
         case .ai:
             aiSectionHeader(
-                "Your AI engines",
-                detail: "Set these up once. Template is always on and free; the rest are optional. Assign them to jobs below."
+                step: 1,
+                "Set up your AI engines",
+                detail: "Set these up once. Template is always on and free; the rest are optional."
             )
             modelSection
             CloudAISettingsSection()
             ClaudeCodeAgentSettingsSection()
             CodexAgentSettingsSection()
             aiSectionHeader(
-                "What uses which engine",
-                detail: "Pick the engine for each job. Greyed-out engines can’t do that job — hover to see why."
+                step: 2,
+                "Assign engines to jobs",
+                detail: "Pick the engine for each job — nothing runs on a job until you assign it. "
+                    + "Greyed-out engines can’t do that job; hover to see why."
             )
             AIEngineAssignmentSection()
         case .automation:

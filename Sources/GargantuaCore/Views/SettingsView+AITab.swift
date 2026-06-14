@@ -4,19 +4,29 @@ extension SettingsView {
 
     // MARK: - AI Tab Section Header
 
-    /// Top-level header for the two AI-tab sections ("Your AI engines" and
-    /// "What uses which engine"). Rendered at Heading tier so it sits ABOVE the
-    /// Title-tier cards it groups, rather than reading as a sub-label.
-    func aiSectionHeader(_ title: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-            Text(title)
-                .font(GargantuaFonts.sectionHeading)
-                .foregroundStyle(GargantuaColors.ink)
+    /// Top-level header for the two AI-tab sections. A numbered badge frames
+    /// them as an explicit two-step flow ("1 set up engines → 2 assign jobs")
+    /// so the assignment step can't be missed. Rendered at Heading tier so it
+    /// sits ABOVE the Title-tier cards it groups, rather than reading as a
+    /// sub-label.
+    func aiSectionHeader(step: Int, _ title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
+            Text("\(step)")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(GargantuaColors.accent))
 
-            Text(detail)
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+                Text(title)
+                    .font(GargantuaFonts.sectionHeading)
+                    .foregroundStyle(GargantuaColors.ink)
+
+                Text(detail)
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, GargantuaSpacing.space4)

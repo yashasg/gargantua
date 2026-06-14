@@ -2,41 +2,34 @@ import SwiftUI
 
 extension ClaudeCodeAgentSettingsSection {
     var modelPickerRow: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
-            HStack {
-                Text("Model")
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
+        HStack(spacing: GargantuaSpacing.space3) {
+            SettingsRowIcon(systemName: "cpu", size: 16)
 
-                Spacer()
+            SettingsRowText(title: "Model", detail: modelStatusLine)
 
-                Picker("Model", selection: Binding(
-                    get: { configuration.selectedModel },
-                    set: {
-                        configuration.selectedModel = $0
-                        saveConfiguration()
-                    }
-                )) {
-                    ForEach(modelOptions) { option in
-                        Text(option.label).tag(option.id)
-                    }
+            Spacer(minLength: GargantuaSpacing.space3)
+
+            Picker("Model", selection: Binding(
+                get: { configuration.selectedModel },
+                set: {
+                    configuration.selectedModel = $0
+                    saveConfiguration()
                 }
-                .labelsHidden()
-                .frame(maxWidth: 280)
-
-                GargantuaIconButton(
-                    icon: isRefreshingModels ? "arrow.triangle.2.circlepath" : "arrow.clockwise",
-                    help: "Refresh from Anthropic /v1/models",
-                    color: GargantuaColors.accent,
-                    isDisabled: isRefreshingModels,
-                    action: { Task { await loadModels(forceRefresh: true) } }
-                )
+            )) {
+                ForEach(modelOptions) { option in
+                    Text(option.label).tag(option.id)
+                }
             }
+            .labelsHidden()
+            .frame(maxWidth: 240)
 
-            Text(modelStatusLine)
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink3)
-                .fixedSize(horizontal: false, vertical: true)
+            GargantuaIconButton(
+                icon: isRefreshingModels ? "arrow.triangle.2.circlepath" : "arrow.clockwise",
+                help: "Refresh from Anthropic /v1/models",
+                color: GargantuaColors.accent,
+                isDisabled: isRefreshingModels,
+                action: { Task { await loadModels(forceRefresh: true) } }
+            )
         }
     }
 
