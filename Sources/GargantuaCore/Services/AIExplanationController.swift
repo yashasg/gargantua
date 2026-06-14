@@ -63,6 +63,10 @@ public final class AIExplanationController: ObservableObject {
     private let deeperExplain: DeeperExplainHandler?
     private let deeperAvailable: @MainActor () -> Bool
     private var activeTask: Task<Void, Never>?
+    /// Whether the in-flight / last request was a deeper escalation, so
+    /// `retry()` re-runs the deeper provider instead of falling back to the
+    /// inline local engine.
+    private var lastRequestWasDeeper = false
 
     public init(
         service: any AIServiceProtocol,
@@ -99,6 +103,7 @@ public final class AIExplanationController: ObservableObject {
     /// in quick succession).
     public func explain(_ result: ScanResult) {
         activeTask?.cancel()
+        lastRequestWasDeeper = false
         presentation = .loading(result)
         let rule = Self.derivedRule(from: result)
         let service = self.service
@@ -128,6 +133,7 @@ public final class AIExplanationController: ObservableObject {
     public func explainDeeper(_ result: ScanResult) {
         guard let deeperExplain else { return }
         activeTask?.cancel()
+        lastRequestWasDeeper = true
         presentation = .loading(result)
         let rule = Self.derivedRule(from: result)
         activeTask = Task { [weak self] in
@@ -141,6 +147,11 @@ public final class AIExplanationController: ObservableObject {
             } catch is CancellationError {
                 return
             } catch {
+                // A cancelled deeper request surfaces as a provider error
+                // (the runner terminates the subprocess, which maps to a CLI
+                // failure rather than CancellationError). Don't let that stale
+                // failure overwrite the request that superseded it.
+                guard !Task.isCancelled else { return }
                 guard let self else { return }
                 if self.presentation?.result.id == result.id {
                     self.presentation = .failed(result, message: error.localizedDescription)
@@ -149,10 +160,16 @@ public final class AIExplanationController: ObservableObject {
         }
     }
 
-    /// Re-run the last failed request.
+    /// Re-run the last failed request through whichever path produced it —
+    /// deeper provider if the failure came from "Explain deeper", otherwise
+    /// the inline local engine.
     public func retry() {
         guard case .failed(let result, _) = presentation else { return }
-        explain(result)
+        if lastRequestWasDeeper {
+            explainDeeper(result)
+        } else {
+            explain(result)
+        }
     }
 
     /// Clear presentation state (closes the sheet).

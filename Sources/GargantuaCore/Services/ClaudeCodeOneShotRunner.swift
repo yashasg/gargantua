@@ -46,6 +46,14 @@ public struct ClaudeCodeOneShotRunner: @unchecked Sendable {
             "text",
             "--max-turns",
             "1",
+            // Pure text completion only: disable every built-in tool (Bash,
+            // Read, Grep, …) so the model can't read local files or run
+            // commands — it answers from the prompt alone. Combined with the
+            // empty + strict MCP config below, no tools of any kind are
+            // available. This matters for the deeper-explain path, which sends
+            // metadata only and must not let the CLI pull file contents.
+            "--tools",
+            "",
             "--mcp-config",
             emptyMCPConfig.path,
             "--strict-mcp-config",

@@ -188,6 +188,98 @@ struct AIExplanationControllerTests {
 
         #expect(controller.presentation == nil)
     }
+
+    @Test("retry after a deeper failure re-runs the deeper provider, not the local engine")
+    func retryAfterDeeperFailureStaysDeeper() async {
+        // Local engine would yield .ai; the deeper provider yields .cloud.
+        let service = StubAIService(result: .success(AIExplanation(text: "local", source: .ai)))
+        let calls = CallCounter()
+        let controller = AIExplanationController(
+            service: service,
+            deeperExplain: { _, _ in
+                defer { calls.invocations += 1 }
+                if calls.invocations == 0 { throw StubError.boom }
+                return AIExplanation(text: "deeper", source: .cloud)
+            },
+            deeperAvailable: { true }
+        )
+
+        controller.explainDeeper(makeResult())
+        try? await Task.sleep(for: .milliseconds(20))
+        guard case .failed = controller.presentation else {
+            Issue.record("Expected .failed, got \(String(describing: controller.presentation))")
+            return
+        }
+
+        controller.retry()
+        try? await Task.sleep(for: .milliseconds(20))
+
+        guard case .loaded(_, let explanation) = controller.presentation else {
+            Issue.record("Expected .loaded, got \(String(describing: controller.presentation))")
+            return
+        }
+        // .cloud (deeper), not .ai (local) — retry stayed on the deeper path.
+        #expect(explanation.source == .cloud)
+    }
+
+    @Test("a superseding deeper request is not overwritten by the cancelled one's error")
+    func cancelledDeeperDoesNotOverwrite() async {
+        let gate = DeeperGate()
+        let calls = CallCounter()
+        let service = StubAIService(result: .success(AIExplanation(text: "local", source: .ai)))
+        let controller = AIExplanationController(
+            service: service,
+            deeperExplain: { _, _ in
+                let index = calls.invocations
+                calls.invocations += 1
+                if index == 0 {
+                    // First request blocks, then fails — mimics the runner
+                    // mapping a cancellation-terminated subprocess to a CLI error.
+                    await gate.wait()
+                    throw StubError.boom
+                }
+                return AIExplanation(text: "deeper", source: .cloud)
+            },
+            deeperAvailable: { true }
+        )
+
+        let result = makeResult(id: "same")
+        controller.explainDeeper(result) // task1 blocks on the gate
+        controller.explainDeeper(result) // cancels task1, task2 succeeds
+        try? await Task.sleep(for: .milliseconds(20))
+        await gate.open() // task1 resumes and throws
+        try? await Task.sleep(for: .milliseconds(20))
+
+        // The successful second request must remain visible.
+        guard case .loaded(_, let explanation) = controller.presentation else {
+            Issue.record("Expected .loaded, got \(String(describing: controller.presentation))")
+            return
+        }
+        #expect(explanation.source == .cloud)
+    }
+}
+
+@MainActor
+private final class CallCounter {
+    var invocations = 0
+}
+
+private actor DeeperGate {
+    private var waiter: CheckedContinuation<Void, Never>?
+    private var opened = false
+
+    func wait() async {
+        if opened { return }
+        await withCheckedContinuation { continuation in
+            waiter = continuation
+        }
+    }
+
+    func open() {
+        opened = true
+        waiter?.resume()
+        waiter = nil
+    }
 }
 
 // MARK: - Test doubles
