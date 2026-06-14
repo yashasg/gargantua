@@ -83,6 +83,14 @@ public final class AIModelsState {
         phase = .summary
     }
 
+    /// License gate blocked the cleanup. Revert from the cleaning console
+    /// back to the results list without discarding the scan.
+    public func cancelCleanupForBlock() {
+        isCleaning = false
+        pathStream.clear()
+        phase = .results
+    }
+
     public func dismissSummary() {
         scanProgress = ScanProgress()
         scanDuration = 0

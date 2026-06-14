@@ -1,3 +1,5 @@
+import AppKit
+import GargantuaLicensing
 import OSLog
 import SwiftUI
 
@@ -22,6 +24,7 @@ public struct AIModelsView: View {
     private let session: AIModelsState
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var blockedReason: BlockReason?
 
     private let onExplain: ((ScanResult) -> Void)?
     private let onAdvisory: (([ScanResult]) -> Void)?
@@ -106,6 +109,31 @@ public struct AIModelsView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: session.showConfirmation)
+        .sheet(item: $blockedReason) { reason in
+            UnlockGargantuaSheet(
+                reason: reason,
+                onDismiss: { blockedReason = nil },
+                onBuy: {
+                    openBuyURL()
+                    blockedReason = nil
+                },
+                onActivate: { key in await attemptActivate(key: key) }
+            )
+        }
+    }
+
+    private func attemptActivate(key: String) async -> UnlockGargantuaSheet.ActivationOutcome {
+        let result = await LicenseStateModel.shared.activate(key: key)
+        switch result {
+        case .success:
+            return .ok
+        case .failure(let error):
+            return .error(LicenseErrorCopy.message(for: error))
+        }
+    }
+
+    private func openBuyURL() {
+        NSWorkspace.shared.open(LicensePolarConfig.checkoutURL)
     }
 
     /// Asymmetric phase transition matching SmartUninstaller / Deep Clean / Dev Purge.
@@ -284,6 +312,14 @@ extension AIModelsView {
     fileprivate func confirmCleanup(_ items: [ScanResult], method: CleanupMethod) {
         session.beginCleanup(method: method)
         Task {
+            // License gate fronts every AI Models execute. On blocked, revert
+            // the cleaning phase and present the Unlock sheet instead.
+            if case .blocked(let reason) = await LicenseGate.shared.canExecuteDestructiveAction() {
+                logger.info("AI Models clean blocked by license gate: \(String(describing: reason))")
+                session.cancelCleanupForBlock()
+                blockedReason = reason
+                return
+            }
             let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
             let result = await engine.clean(items, method: method, observer: session.pathStream)
             do {
