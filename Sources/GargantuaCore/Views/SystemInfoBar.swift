@@ -1,7 +1,10 @@
 import SwiftUI
 
 enum SidebarServiceIndicatorTone: Equatable {
+    /// Actively running right now (filled dot).
     case active
+    /// Enabled and available, but not actively running (outline dot).
+    case ready
     case attention
     case inactive
 }
@@ -16,7 +19,7 @@ struct SidebarServiceIndicatorPresentation: Equatable {
         label: "Native",
         status: "Ready",
         detail: "Native scanner is available.",
-        tone: .active
+        tone: .ready
     )
 
     static func mcp(from snapshot: MCPServerStatusSnapshot) -> SidebarServiceIndicatorPresentation {
@@ -52,45 +55,45 @@ struct SidebarServiceIndicatorPresentation: Equatable {
         }
     }
 
-    static func tier3(
+    static func agent(
         configuration: ClaudeCodeAgentConfiguration,
         cliAvailable: Bool
     ) -> SidebarServiceIndicatorPresentation {
         guard configuration.isEnabled else {
             return SidebarServiceIndicatorPresentation(
-                label: "Tier 3",
+                label: "Agent",
                 status: "Off",
-                detail: "Tier 3 Claude Code Agent is disabled.",
+                detail: "Claude Code Agent is disabled.",
                 tone: .inactive
             )
         }
 
         if cliAvailable {
             return SidebarServiceIndicatorPresentation(
-                label: "Tier 3",
+                label: "Agent",
                 status: "Ready",
-                detail: "Tier 3 Claude Code Agent is enabled.",
-                tone: .active
+                detail: "Claude Code Agent is enabled and available — it runs only when you start a maintenance task.",
+                tone: .ready
             )
         }
 
         return SidebarServiceIndicatorPresentation(
-            label: "Tier 3",
+            label: "Agent",
             status: "Needs CLI",
-            detail: "Tier 3 is enabled, but the Claude Code CLI is not available.",
+            detail: "Agent is enabled, but the Claude Code CLI is not available.",
             tone: .attention
         )
     }
 }
 
-/// Compact footer showing hardware model, macOS version, disk usage, engine status, MCP, and Tier 3.
+/// Compact footer showing hardware model, macOS version, disk usage, engine status, MCP, and the Claude Code Agent.
 struct SystemInfoBar: View {
     @ObservedObject var mcpStatusModel: MCPServerStatusViewModel
 
     @State private var hardwareModel: String?
     @State private var diskTotalGB: Int?
     @State private var diskUsedGB: Int?
-    @State private var tier3Presentation = SidebarServiceIndicatorPresentation.tier3(
+    @State private var agentPresentation = SidebarServiceIndicatorPresentation.agent(
         configuration: ClaudeCodeAgentConfiguration(),
         cliAvailable: false
     )
@@ -126,7 +129,7 @@ struct SystemInfoBar: View {
 
                 Spacer().frame(width: GargantuaSpacing.space1)
 
-                statusIndicator(tier3Presentation)
+                statusIndicator(agentPresentation)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -160,9 +163,7 @@ struct SystemInfoBar: View {
     @ViewBuilder
     private func statusIndicator(_ presentation: SidebarServiceIndicatorPresentation) -> some View {
         HStack(spacing: GargantuaSpacing.space1) {
-            Circle()
-                .fill(color(for: presentation.tone))
-                .frame(width: 6, height: 6)
+            indicatorDot(for: presentation.tone)
 
             Text(presentation.label)
                 .font(GargantuaFonts.caption)
@@ -182,7 +183,7 @@ struct SystemInfoBar: View {
     private func refreshRuntimeStatus() {
         mcpStatusModel.refresh()
         let configuration = agentConfigurationStore.load()
-        tier3Presentation = SidebarServiceIndicatorPresentation.tier3(
+        agentPresentation = SidebarServiceIndicatorPresentation.agent(
             configuration: configuration,
             cliAvailable: (try? agentCLIResolver.resolve(configuration: configuration)) != nil
         )
@@ -230,9 +231,25 @@ struct SystemInfoBar: View {
         return raw
     }
 
+    /// Filled dot = actively running; outline ring = enabled and available but
+    /// idle. The ring is what keeps a green "Ready" agent from reading as
+    /// "currently running".
+    @ViewBuilder
+    private func indicatorDot(for tone: SidebarServiceIndicatorTone) -> some View {
+        if tone == .ready {
+            Circle()
+                .strokeBorder(color(for: tone), lineWidth: 1.5)
+                .frame(width: 6, height: 6)
+        } else {
+            Circle()
+                .fill(color(for: tone))
+                .frame(width: 6, height: 6)
+        }
+    }
+
     private func color(for tone: SidebarServiceIndicatorTone) -> Color {
         switch tone {
-        case .active: GargantuaColors.safe
+        case .active, .ready: GargantuaColors.safe
         case .attention: GargantuaColors.review
         case .inactive: GargantuaColors.ink4
         }
@@ -240,7 +257,7 @@ struct SystemInfoBar: View {
 
     private func textColor(for tone: SidebarServiceIndicatorTone) -> Color {
         switch tone {
-        case .active, .attention: GargantuaColors.ink3
+        case .active, .ready, .attention: GargantuaColors.ink3
         case .inactive: GargantuaColors.ink4
         }
     }

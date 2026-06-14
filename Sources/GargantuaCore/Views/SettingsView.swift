@@ -144,8 +144,20 @@ public struct SettingsView: View {
         switch selectedTab {
         case .ai:
             aiTabIntro
+            aiJobGroupHeader(
+                "Inline explanations",
+                detail: "Automatic, on-device, free. Gargantua is fully functional on Template alone — everything below is optional."
+            )
             modelSection
+            aiJobGroupHeader(
+                "Deeper explanations, on demand",
+                detail: "Richer write-ups when you ask for them, billed to your own provider key."
+            )
             CloudAISettingsSection()
+            aiJobGroupHeader(
+                "Run maintenance for me",
+                detail: "Agentic runtimes that can propose and run cleanups on your behalf."
+            )
             ClaudeCodeAgentSettingsSection()
             CodexAgentSettingsSection()
         case .automation:

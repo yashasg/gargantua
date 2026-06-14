@@ -2,6 +2,27 @@ import SwiftUI
 
 extension SettingsView {
 
+    // MARK: - AI Tab Job Group Header
+
+    /// Splits the flat AI tab into job-shaped groups (inline / on-demand /
+    /// agentic) so each section reads as a distinct job rather than four
+    /// co-equal "pick the AI model" switches.
+    func aiJobGroupHeader(_ title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+            Text(title.uppercased())
+                .font(GargantuaFonts.sectionLabel)
+                .tracking(0.8)
+                .foregroundStyle(GargantuaColors.ink2)
+
+            Text(detail)
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, GargantuaSpacing.space2)
+    }
+
     // MARK: - AI Tab Intro
 
     var aiTabIntro: some View {

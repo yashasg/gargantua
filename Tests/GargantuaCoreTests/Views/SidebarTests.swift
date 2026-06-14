@@ -108,38 +108,38 @@ struct SidebarFooterStatusTests {
         #expect(presentation.status == "Off")
     }
 
-    @Test("Tier 3 enabled with CLI renders ready")
-    func tier3EnabledWithCLIIsActive() {
-        let presentation = SidebarServiceIndicatorPresentation.tier3(
+    @Test("Agent enabled with CLI renders ready, not running")
+    func agentEnabledWithCLIIsReady() {
+        let presentation = SidebarServiceIndicatorPresentation.agent(
             configuration: ClaudeCodeAgentConfiguration(isEnabled: true),
             cliAvailable: true
         )
 
-        #expect(presentation.label == "Tier 3")
-        #expect(presentation.tone == .active)
+        #expect(presentation.label == "Agent")
+        #expect(presentation.tone == .ready)
         #expect(presentation.status == "Ready")
     }
 
-    @Test("Tier 3 enabled without CLI renders attention")
-    func tier3EnabledWithoutCLINeedsAttention() {
-        let presentation = SidebarServiceIndicatorPresentation.tier3(
+    @Test("Agent enabled without CLI renders attention")
+    func agentEnabledWithoutCLINeedsAttention() {
+        let presentation = SidebarServiceIndicatorPresentation.agent(
             configuration: ClaudeCodeAgentConfiguration(isEnabled: true),
             cliAvailable: false
         )
 
-        #expect(presentation.label == "Tier 3")
+        #expect(presentation.label == "Agent")
         #expect(presentation.tone == .attention)
         #expect(presentation.status == "Needs CLI")
     }
 
-    @Test("Tier 3 disabled renders inactive")
-    func tier3DisabledIsInactive() {
-        let presentation = SidebarServiceIndicatorPresentation.tier3(
+    @Test("Agent disabled renders inactive")
+    func agentDisabledIsInactive() {
+        let presentation = SidebarServiceIndicatorPresentation.agent(
             configuration: ClaudeCodeAgentConfiguration(isEnabled: false),
             cliAvailable: true
         )
 
-        #expect(presentation.label == "Tier 3")
+        #expect(presentation.label == "Agent")
         #expect(presentation.tone == .inactive)
         #expect(presentation.status == "Off")
     }
