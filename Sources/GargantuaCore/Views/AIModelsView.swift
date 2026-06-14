@@ -259,6 +259,7 @@ public struct AIModelsView: View {
                     get: { session.selectedResultIDs },
                     set: { session.selectedResultIDs = $0 }
                 ),
+                initialGroupingMode: .folder,
                 onExplain: onExplain,
                 onClean: { session.showConfirmation = true },
                 onCancel: { session.clearResults() },

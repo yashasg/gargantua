@@ -37,7 +37,7 @@ public struct ScanBucketListView: View {
     public let onAdvisoryForReview: (([ScanResult]) -> Void)?
     public let onResolveNaturalLanguageFilter: ((String) async -> ScanFilterSet?)?
 
-    @State var groupingMode: ScanGroupingMode = .safety
+    @State var groupingMode: ScanGroupingMode
     @State var expandedGroupIDs: Set<String>
     @State var focusedItemID: String?
     @State var naturalLanguageQuery: String = ""
@@ -52,6 +52,7 @@ public struct ScanBucketListView: View {
         results: [ScanResult],
         scanDuration: TimeInterval,
         selectedIDs: Binding<Set<String>>,
+        initialGroupingMode: ScanGroupingMode = .safety,
         viewOnlyReasons: [String: String] = [:],
         blockedApps: [String: BlockedApp] = [:],
         onQuitBlockingApp: ((String) -> Void)? = nil,
@@ -76,9 +77,10 @@ public struct ScanBucketListView: View {
         self.onViewRule = onViewRule
         self.onAdvisoryForReview = onAdvisoryForReview
         self.onResolveNaturalLanguageFilter = onResolveNaturalLanguageFilter
-        // Start with every safety group expanded so the list doesn't flash
-        // collapsed on mount.
-        let initialGroups = ScanGrouper.group(results, mode: .safety)
+        self._groupingMode = State(initialValue: initialGroupingMode)
+        // Start with every group expanded so the list doesn't flash collapsed
+        // on mount.
+        let initialGroups = ScanGrouper.group(results, mode: initialGroupingMode)
         self._expandedGroupIDs = State(initialValue: Set(initialGroups.map(\.id)))
     }
 

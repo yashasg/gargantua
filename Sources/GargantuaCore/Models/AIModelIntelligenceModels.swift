@@ -180,12 +180,18 @@ public struct AIModelDuplicateGroup: Identifiable, Sendable, Equatable {
 public struct AIModelScanFindings: Sendable, Equatable {
     public let duplicateGroups: [AIModelDuplicateGroup]
     public let orphanCandidates: [AIModelFileCandidate]
+    /// Individual model files inside a known flat-file store (LM Studio, ComfyUI,
+    /// SD-WebUI, …) that aren't part of a duplicate group. One file ≈ one model,
+    /// so each is independently removable.
+    public let knownStoreCandidates: [AIModelFileCandidate]
 
     public init(
         duplicateGroups: [AIModelDuplicateGroup],
-        orphanCandidates: [AIModelFileCandidate]
+        orphanCandidates: [AIModelFileCandidate],
+        knownStoreCandidates: [AIModelFileCandidate] = []
     ) {
         self.duplicateGroups = duplicateGroups
         self.orphanCandidates = orphanCandidates
+        self.knownStoreCandidates = knownStoreCandidates
     }
 }

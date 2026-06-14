@@ -8,6 +8,7 @@ public struct AIModelIntelligenceScanAdapter: ScanAdapter {
     public static let tag = "ai-model-intelligence"
     public static let duplicateTag = "ai-model-duplicate"
     public static let orphanTag = "ai-model-orphan"
+    public static let modelTag = "ai-model-known-store"
 
     private static let modelExtensions: Set<String> = [
         "bin", "ckpt", "gguf", "onnx", "pt", "pth", "safetensors",
@@ -82,16 +83,21 @@ public struct AIModelIntelligenceScanAdapter: ScanAdapter {
             }
 
         let duplicatePaths = Set(duplicateGroups.flatMap { $0.candidates.map(\.path) })
+        let bySize: (AIModelFileCandidate, AIModelFileCandidate) -> Bool = { lhs, rhs in
+            if lhs.size != rhs.size { return lhs.size > rhs.size }
+            return lhs.path.localizedStandardCompare(rhs.path) == .orderedAscending
+        }
         let orphans = candidates
             .filter { !$0.isKnownStore && !duplicatePaths.contains($0.path) }
-            .sorted { lhs, rhs in
-                if lhs.size != rhs.size { return lhs.size > rhs.size }
-                return lhs.path.localizedStandardCompare(rhs.path) == .orderedAscending
-            }
+            .sorted(by: bySize)
+        let knownStore = candidates
+            .filter { $0.isKnownStore && !duplicatePaths.contains($0.path) }
+            .sorted(by: bySize)
 
         return AIModelScanFindings(
             duplicateGroups: duplicateGroups,
-            orphanCandidates: orphans
+            orphanCandidates: orphans,
+            knownStoreCandidates: knownStore
         )
     }
 }
@@ -234,7 +240,10 @@ private extension AIModelIntelligenceScanAdapter {
         let orphanResults = findings.orphanCandidates.enumerated().map { index, candidate in
             makeOrphanResult(candidate: candidate, index: index)
         }
-        return duplicateResults + orphanResults
+        let knownStoreResults = findings.knownStoreCandidates.enumerated().map { index, candidate in
+            makeKnownStoreResult(candidate: candidate, index: index)
+        }
+        return duplicateResults + orphanResults + knownStoreResults
     }
 
     private func makeDuplicateResults(group: AIModelDuplicateGroup) -> [ScanResult] {
@@ -276,6 +285,38 @@ private extension AIModelIntelligenceScanAdapter {
         )
     }
 
+    private func makeKnownStoreResult(candidate: AIModelFileCandidate, index: Int) -> ScanResult {
+        ScanResult(
+            id: "\(Self.resultIDPrefix)model-\(Self.sanitizedID(candidate.path))-\(index)",
+            name: "\(candidate.sourceName) model — \(candidate.fileName)",
+            path: candidate.path,
+            size: candidate.size,
+            safety: .review,
+            confidence: 72,
+            explanation: knownStoreExplanation(candidate: candidate),
+            source: SourceAttribution(name: candidate.sourceName),
+            lastAccessed: candidate.lastAccessed,
+            category: Self.category,
+            tags: tags(
+                candidate: candidate,
+                extra: [Self.modelTag] + modelKindTags(for: candidate)
+            ),
+            regenerates: false
+        )
+    }
+
+    private func knownStoreExplanation(candidate: AIModelFileCandidate) -> String {
+        let family = candidate.modelFamily.map { " Inferred family: \($0)." } ?? ""
+        let kind = Self.inferModelKind(from: candidate.path).map { " (\($0.label))" } ?? ""
+        return "Individual \(candidate.sourceName) model file\(kind)." +
+            "\(family) Remove just this model — re-download cost is user-specific, so this stays review-only."
+    }
+
+    private func modelKindTags(for candidate: AIModelFileCandidate) -> [String] {
+        guard let kind = Self.inferModelKind(from: candidate.path) else { return [] }
+        return ["model-kind-\(kind.rawValue)"]
+    }
+
     private func duplicateExplanation(
         group: AIModelDuplicateGroup,
         candidate: AIModelFileCandidate
@@ -297,6 +338,44 @@ private extension AIModelIntelligenceScanAdapter {
             tags.append("model-family-\(Self.sanitizedID(family))")
         }
         return Array(Set(tags)).sorted()
+    }
+
+    /// The role a model file plays, inferred from the conventional store
+    /// subdirectory layout (ComfyUI / SD-WebUI organize weights by kind).
+    enum ModelKind: String {
+        case checkpoint
+        case lora
+        case vae
+        case controlnet
+        case embedding
+
+        var label: String {
+            switch self {
+            case .checkpoint: return "checkpoint"
+            case .lora: return "LoRA"
+            case .vae: return "VAE"
+            case .controlnet: return "ControlNet"
+            case .embedding: return "embedding"
+            }
+        }
+    }
+
+    /// Match the model kind from a path component (e.g. `.../models/loras/foo`).
+    /// Directory names are the reliable signal; filenames vary too much.
+    static func inferModelKind(from path: String) -> ModelKind? {
+        let components = Set(path.lowercased().split(separator: "/").map(String.init))
+        let mapping: [(String, ModelKind)] = [
+            ("checkpoints", .checkpoint),
+            ("checkpoint", .checkpoint),
+            ("loras", .lora),
+            ("lora", .lora),
+            ("vae", .vae),
+            ("controlnet", .controlnet),
+            ("controlnets", .controlnet),
+            ("embeddings", .embedding),
+            ("embedding", .embedding),
+        ]
+        return mapping.first { components.contains($0.0) }?.1
     }
 
     private static func inferModelFamily(from fileName: String) -> String? {

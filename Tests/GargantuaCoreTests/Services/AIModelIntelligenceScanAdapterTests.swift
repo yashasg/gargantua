@@ -49,12 +49,12 @@ struct AIModelIntelligenceScanAdapterTests {
         #expect(results.first?.tags.contains(AIModelIntelligenceScanAdapter.orphanTag) == true)
     }
 
-    @Test("known store files are not emitted as orphan candidates")
-    func knownStoresAreExcludedFromOrphans() async throws {
+    @Test("known flat-store files surface as individual models, not orphans")
+    func knownStoresSurfaceAsIndividualModels() async throws {
         let fixture = try FixtureTree()
         let downloads = try fixture.makeDir("Downloads")
         let comfyRoot = try fixture.makeDir("Downloads/ComfyUI/models")
-        try fixture.makeFile("Downloads/ComfyUI/models/sdxl.safetensors", byteCount: 512)
+        try fixture.makeFile("Downloads/ComfyUI/models/loras/sdxl.safetensors", byteCount: 512)
 
         let adapter = makeAdapter(
             knownStores: [
@@ -68,7 +68,14 @@ struct AIModelIntelligenceScanAdapterTests {
 
         #expect(findings.duplicateGroups.isEmpty)
         #expect(findings.orphanCandidates.isEmpty)
-        #expect(results.isEmpty)
+        #expect(findings.knownStoreCandidates.count == 1)
+        #expect(results.count == 1)
+        let result = try #require(results.first)
+        #expect(result.name == "ComfyUI model — sdxl.safetensors")
+        #expect(result.safety == .review)
+        #expect(result.source.name == "ComfyUI")
+        #expect(result.tags.contains(AIModelIntelligenceScanAdapter.modelTag))
+        #expect(result.tags.contains("model-kind-lora"))
     }
 
     @Test("known stores can opt into extensionless model blobs only")
