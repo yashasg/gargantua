@@ -131,8 +131,29 @@ public struct KeychainCloudAPIKeyStore: CloudAPIKeyStore {
         }
     }
 
+    /// Existence check that does NOT decrypt the secret. Returning attributes
+    /// only (no `kSecReturnData`) means macOS doesn't run the item's ACL, so a
+    /// status check — e.g. opening Settings → AI — never raises the "allow
+    /// access to your keychain" prompt. The prompt is reserved for `read()`,
+    /// when the key is actually used for a request.
     public func hasKey() throws -> Bool {
-        try read() != nil
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnAttributes as String: true,
+        ]
+
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound {
+            return false
+        }
+        guard status == errSecSuccess else {
+            throw KeychainCloudAPIKeyStoreError(status: status)
+        }
+        return true
     }
 }
 
