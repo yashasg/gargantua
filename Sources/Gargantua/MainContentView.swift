@@ -145,10 +145,7 @@ struct MainContentView: View {
                                     onCleanupCompleted: dashboardCleanupHandler
                                 )
                             case "fileOrganizer":
-                                FileOrganizerView(
-                                    session: organizerSession,
-                                    mlxAvailabilityProvider: { isMLXOrganizerReady }
-                                )
+                                FileOrganizerView(session: organizerSession)
                             case "fileHealth":
                                 FileHealthContainerView(
                                     state: fileHealthState,

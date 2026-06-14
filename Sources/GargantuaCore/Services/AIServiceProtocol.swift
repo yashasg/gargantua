@@ -19,6 +19,16 @@ public enum ExplanationSource: Sendable, Equatable {
     case claudeCode
     /// Explanation generated through the user's local Codex CLI.
     case codex
+
+    /// Whether this came from an on-device engine (or its YAML fallback).
+    /// The sheet only offers "Explain deeper" on local results — there's no
+    /// point escalating output that already came from a remote/agent engine.
+    public var isLocalEngine: Bool {
+        switch self {
+        case .template, .ai, .rule: true
+        case .cloud, .claudeCode, .codex: false
+        }
+    }
 }
 
 /// An explanation of a scan result, with metadata about how it was generated.

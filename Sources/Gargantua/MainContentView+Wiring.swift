@@ -21,16 +21,6 @@ extension MainContentView {
         AIEnginePreference(rawValue: preferredAIEngineRawValue) ?? .template
     }
 
-    /// True when the user has selected MLX as their local AI engine AND
-    /// the model is on disk. Drives the File Organizer's MLX row's
-    /// enabled state. Loading the model on demand is handled by
-    /// `LocalAIService` when the organizer actually calls in.
-    var isMLXOrganizerReady: Bool {
-        guard preferredAIEngine == .mlx else { return false }
-        if case .downloaded = downloadManager.state { return true }
-        return false
-    }
-
     /// Closure handed to scan views so their per-row Explain button can kick
     /// off an explanation without knowing about the controller.
     var explainHandler: (ScanResult) -> Void {

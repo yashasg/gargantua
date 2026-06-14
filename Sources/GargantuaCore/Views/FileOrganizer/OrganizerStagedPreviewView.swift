@@ -11,16 +11,13 @@ public struct OrganizerStagedPreviewView: View {
     @State var customFolders: [URL] = []
 
     let folderStore: OrganizerCustomFolderStore
-    let mlxAvailabilityProvider: @MainActor () -> Bool
 
     public init(
         session: OrganizerSessionState,
-        folderStore: OrganizerCustomFolderStore = OrganizerCustomFolderStore(),
-        mlxAvailabilityProvider: @escaping @MainActor () -> Bool = { false }
+        folderStore: OrganizerCustomFolderStore = OrganizerCustomFolderStore()
     ) {
         self.session = session
         self.folderStore = folderStore
-        self.mlxAvailabilityProvider = mlxAvailabilityProvider
     }
 
     public var body: some View {

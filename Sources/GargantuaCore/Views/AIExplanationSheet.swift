@@ -264,8 +264,8 @@ public struct AIExplanationSheet: View {
     /// (never on already-deep cloud/agent results) and only when the selected
     /// deeper provider is configured.
     @ViewBuilder
-    private func deeperButton(for _: AIExplanation, result: ScanResult) -> some View {
-        if controller.canOfferDeeper {
+    private func deeperButton(for explanation: AIExplanation, result: ScanResult) -> some View {
+        if explanation.source.isLocalEngine, controller.canOfferDeeper {
             Button("Explain deeper") {
                 controller.explainDeeper(result)
             }
