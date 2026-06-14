@@ -66,7 +66,7 @@ public struct CodexAgentView: View {
                 .textFieldStyle(.plain)
                 .font(GargantuaFonts.body)
                 .foregroundStyle(GargantuaColors.ink)
-                .lineLimit(2...5)
+                .lineLimit(2 ... 5)
                 .padding(GargantuaSpacing.space3)
                 .background(GargantuaColors.surface3)
                 .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
