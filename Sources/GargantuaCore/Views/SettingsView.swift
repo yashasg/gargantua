@@ -143,8 +143,7 @@ public struct SettingsView: View {
     private var tabContent: some View {
         switch selectedTab {
         case .ai:
-            aiTabIntro
-            aiJobGroupHeader(
+            aiSectionHeader(
                 "Your AI engines",
                 detail: "Set these up once. Template is always on and free; the rest are optional. Assign them to jobs below."
             )
@@ -152,9 +151,9 @@ public struct SettingsView: View {
             CloudAISettingsSection()
             ClaudeCodeAgentSettingsSection()
             CodexAgentSettingsSection()
-            aiJobGroupHeader(
+            aiSectionHeader(
                 "What uses which engine",
-                detail: "Pick which engine powers each job. Greyed-out engines can’t do that job — hover to see why."
+                detail: "Pick the engine for each job. Greyed-out engines can’t do that job — hover to see why."
             )
             AIEngineAssignmentSection()
         case .automation:

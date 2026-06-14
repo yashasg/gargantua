@@ -7,13 +7,13 @@ import SwiftUI
 /// Implements DESIGN.md §6 ("Don't make cards inside cards") and gives each
 /// section a heading bright enough to anchor a stack of 3-4 of them per tab.
 struct SettingsSectionContainer<Content: View>: View {
-    let title: String
+    let title: String?
     let subtitle: String?
     let trailingCount: Int?
     @ViewBuilder let content: () -> Content
 
     init(
-        _ title: String,
+        _ title: String? = nil,
         subtitle: String? = nil,
         count: Int? = nil,
         @ViewBuilder content: @escaping () -> Content
@@ -24,26 +24,34 @@ struct SettingsSectionContainer<Content: View>: View {
         self.content = content
     }
 
+    private var hasHeader: Bool {
+        (title?.isEmpty == false) || (subtitle?.isEmpty == false)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-                HStack(spacing: GargantuaSpacing.space2) {
-                    Text(title)
-                        .font(GargantuaFonts.title)
-                        .foregroundStyle(GargantuaColors.ink)
+            if hasHeader {
+                VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
+                    if let title, !title.isEmpty {
+                        HStack(spacing: GargantuaSpacing.space2) {
+                            Text(title)
+                                .font(GargantuaFonts.title)
+                                .foregroundStyle(GargantuaColors.ink)
 
-                    if let trailingCount {
-                        Text("\(trailingCount)")
-                            .font(GargantuaFonts.monoData)
-                            .foregroundStyle(GargantuaColors.ink3)
+                            if let trailingCount {
+                                Text("\(trailingCount)")
+                                    .font(GargantuaFonts.monoData)
+                                    .foregroundStyle(GargantuaColors.ink3)
+                            }
+                        }
                     }
-                }
 
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(GargantuaFonts.caption)
-                        .foregroundStyle(GargantuaColors.ink3)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if let subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
 

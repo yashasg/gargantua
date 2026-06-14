@@ -8,17 +8,12 @@ import SwiftUI
 struct AIEngineAssignmentSection: View {
     @State private var selections: [AIUseCase: AIEngineID] = [:]
 
-    /// Jobs that actually route through an assigned engine today. `.maintenance`
-    /// is intentionally excluded until the Codex agent runtime exists and Agent
-    /// Run / scheduled audits honor the assignment — showing it now would be a
-    /// control that does nothing.
-    private let displayedUseCases: [AIUseCase] = [.inlineExplain, .deeperExplain, .organize]
+    private let displayedUseCases: [AIUseCase] = AIUseCase.allCases
 
     var body: some View {
-        SettingsSectionContainer(
-            "What uses which engine",
-            subtitle: "Pick the engine for each job. Set the engines up above; assign them here."
-        ) {
+        // Untitled: the "What uses which engine" section header sits above this
+        // card, so the card shouldn't repeat the title.
+        SettingsSectionContainer {
             ForEach(Array(displayedUseCases.enumerated()), id: \.element) { index, useCase in
                 if index > 0 {
                     Divider().overlay(GargantuaColors.border)

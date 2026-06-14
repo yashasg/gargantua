@@ -26,14 +26,14 @@ struct AIEngineMatrixTests {
         }
     }
 
-    @Test("Maintenance only accepts the agentic CLIs")
-    func maintenanceAcceptsAgentsOnly() {
-        for engine in [AIEngineID.template, .mlx, .cloud] {
+    @Test("Maintenance accepts only Claude Code today; everything else is greyed with a reason")
+    func maintenanceAcceptsClaudeCodeOnly() {
+        for engine in [AIEngineID.template, .mlx, .cloud, .codex] {
             #expect(!AIUseCase.maintenance.canUse(engine))
             #expect(AIUseCase.maintenance.disabledReason(for: engine) != nil)
         }
         #expect(AIUseCase.maintenance.canUse(.claudeCode))
-        #expect(AIUseCase.maintenance.canUse(.codex))
+        #expect(AIUseCase.maintenance.disabledReason(for: .claudeCode) == nil)
     }
 
     @Test("Every use case's default engine can serve it")

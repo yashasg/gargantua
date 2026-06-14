@@ -2,17 +2,16 @@ import SwiftUI
 
 extension SettingsView {
 
-    // MARK: - AI Tab Job Group Header
+    // MARK: - AI Tab Section Header
 
-    /// Splits the flat AI tab into job-shaped groups (inline / on-demand /
-    /// agentic) so each section reads as a distinct job rather than four
-    /// co-equal "pick the AI model" switches.
-    func aiJobGroupHeader(_ title: String, detail: String) -> some View {
+    /// Top-level header for the two AI-tab sections ("Your AI engines" and
+    /// "What uses which engine"). Rendered at Heading tier so it sits ABOVE the
+    /// Title-tier cards it groups, rather than reading as a sub-label.
+    func aiSectionHeader(_ title: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-            Text(title.uppercased())
-                .font(GargantuaFonts.sectionLabel)
-                .tracking(0.8)
-                .foregroundStyle(GargantuaColors.ink2)
+            Text(title)
+                .font(GargantuaFonts.heading)
+                .foregroundStyle(GargantuaColors.ink)
 
             Text(detail)
                 .font(GargantuaFonts.caption)
@@ -21,64 +20,6 @@ extension SettingsView {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, GargantuaSpacing.space2)
-    }
-
-    // MARK: - AI Tab Intro
-
-    var aiTabIntro: some View {
-        HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
-            VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
-                Text("Active explanation engine")
-                    .font(GargantuaFonts.sectionLabel)
-                    .tracking(0.8)
-                    .foregroundStyle(GargantuaColors.ink3)
-
-                Text(activeExplanationEngineLabel)
-                    .font(GargantuaFonts.title)
-                    .foregroundStyle(GargantuaColors.ink)
-
-                Text(activeExplanationEngineDetail)
-                    .font(GargantuaFonts.caption)
-                    .foregroundStyle(GargantuaColors.ink3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer()
-        }
-        .padding(GargantuaSpacing.space4)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(GargantuaColors.surface1)
-        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.medium))
-        .overlay(
-            RoundedRectangle(cornerRadius: GargantuaRadius.medium)
-                .stroke(GargantuaColors.borderSoft, lineWidth: 1)
-        )
-    }
-
-    private var activeExplanationEngineLabel: String {
-        switch (preferredAIEngine, downloadManager.state) {
-        case (.mlx, .downloaded): return "Local MLX"
-        case (.mlx, _): return "Local MLX (not downloaded)"
-        case (.template, _): return "Template (rule-based)"
-        }
-    }
-
-    private var activeExplanationEngineDetail: String {
-        switch (preferredAIEngine, downloadManager.state) {
-        case (.mlx, .downloaded):
-            if let size = downloadManager.formattedDownloadedSize {
-                return "Powers in-app explanations. Ready, \(size) on disk."
-            }
-            return "Powers in-app explanations. Ready."
-        case (.mlx, .downloading):
-            return "Local model still downloading. Template explanations run until it lands."
-        case (.mlx, .failed):
-            return "Local model download failed. Template explanations run until it succeeds."
-        case (.mlx, .notDownloaded):
-            return "Local model not on disk yet. Template explanations run until you download it below."
-        case (.template, _):
-            return "Powers in-app explanations. Instant, no model required."
-        }
     }
 
     // MARK: - AI Model Section
