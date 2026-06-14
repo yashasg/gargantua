@@ -12,6 +12,8 @@ public enum CloudAIFeature: String, Codable, Sendable, CaseIterable {
     case scanRuleSuggestion = "scan_rule_suggestion"
     /// File-organization proposals for cluttered user folders.
     case fileOrganization = "file_organization"
+    /// Deeper, on-demand explanation of a single scan result.
+    case explanation = "explanation"
 
     /// User-facing feature name.
     public var displayName: String {
@@ -21,6 +23,7 @@ public enum CloudAIFeature: String, Codable, Sendable, CaseIterable {
         case .duplicateResolution: "Duplicate resolution"
         case .scanRuleSuggestion: "Scan-rule suggestions"
         case .fileOrganization: "File organization"
+        case .explanation: "Explanation"
         }
     }
 }

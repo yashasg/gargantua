@@ -222,6 +222,74 @@ struct CloudAITests {
         #expect(await transport.callCount == 0)
     }
 
+    @Test("Explanation prompt is prose, keeps the path, and stays advisory")
+    func explanationPromptShape() throws {
+        let result = makeResult(id: "explain-me", safety: .safe)
+        let items = try CloudAIRedactor.items(from: [result], allowsFileContents: false)
+        let prompt = try CloudAIPromptBuilder.explanationPrompt(item: try #require(items.first))
+
+        #expect(prompt.contains(result.path))
+        #expect(prompt.lowercased().contains("explain"))
+        // It must not ask for JSON (this is the prose path, unlike deepAnalysis).
+        #expect(!prompt.contains("Return JSON"))
+        // It must reinforce the advisory contract.
+        #expect(prompt.lowercased().contains("advisory"))
+    }
+
+    @Test("Deeper explain routes through the explanation feature and is cloud-sourced")
+    func deeperExplainProducesCloudExplanation() async throws {
+        let defaults = try makeDefaults()
+        let configStore = CloudAIConfigurationStore(defaults: defaults)
+        configStore.save(CloudAIConfiguration(isEnabled: true, monthlySpendCapCents: 500))
+        let transport = FakeCloudAITransport(response: CloudAIResponse(
+            text: "  This cache is regenerated automatically and is safe to remove.  ",
+            inputTokens: 20,
+            outputTokens: 20
+        ))
+        let service = CloudAIService(
+            configurationStore: configStore,
+            keyStore: FakeCloudAPIKeyStore(apiKey: "sk-ant-api03-\(String(repeating: "a", count: 32))"),
+            transport: transport,
+            usageLedger: CloudAIUsageLedger(defaults: defaults),
+            logger: CloudAIRequestLogger(logURL: tempURL("cloud-explain-log.jsonl"))
+        )
+        let result = makeResult(id: "explain-me", safety: .safe)
+
+        let explanation = try await service.explain(
+            result: result,
+            rule: AIExplanationController.derivedRule(from: result)
+        )
+
+        #expect(explanation.source == .cloud)
+        // Output is trimmed of surrounding whitespace.
+        #expect(explanation.text == "This cache is regenerated automatically and is safe to remove.")
+        #expect(await transport.callCount == 1)
+        #expect(await transport.lastRequest?.feature == .explanation)
+    }
+
+    @Test("canExplainDeeper requires both enabled and a stored key")
+    func canExplainDeeperRequiresEnabledAndKey() throws {
+        let defaults = try makeDefaults()
+        let configStore = CloudAIConfigurationStore(defaults: defaults)
+        let transport = FakeCloudAITransport(response: CloudAIResponse(text: "{}", inputTokens: 1, outputTokens: 1))
+
+        func service(enabled: Bool, key: String?) -> CloudAIService {
+            configStore.save(CloudAIConfiguration(isEnabled: enabled))
+            return CloudAIService(
+                configurationStore: configStore,
+                keyStore: FakeCloudAPIKeyStore(apiKey: key),
+                transport: transport,
+                usageLedger: CloudAIUsageLedger(defaults: defaults),
+                logger: CloudAIRequestLogger(logURL: tempURL("cloud-can-log.jsonl"))
+            )
+        }
+        let key = "sk-ant-api03-\(String(repeating: "a", count: 32))"
+
+        #expect(service(enabled: true, key: key).canExplainDeeper())
+        #expect(!service(enabled: false, key: key).canExplainDeeper())
+        #expect(!service(enabled: true, key: nil).canExplainDeeper())
+    }
+
     private func makeResult(
         id: String,
         safety: SafetyLevel,

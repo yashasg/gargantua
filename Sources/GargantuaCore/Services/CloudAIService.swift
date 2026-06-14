@@ -7,7 +7,7 @@ public final class CloudAIService: ObservableObject {
     @Published public private(set) var isRunning = false
 
     let configurationStore: CloudAIConfigurationStore
-    private let keyStore: any CloudAPIKeyStore
+    let keyStore: any CloudAPIKeyStore
     private let transport: any CloudAITransport
     private let usageLedger: CloudAIUsageLedger
     private let logger: CloudAIRequestLogger

@@ -55,11 +55,29 @@ public enum AIExplanationPresentation: Sendable, Identifiable, Equatable {
 public final class AIExplanationController: ObservableObject {
     @Published public private(set) var presentation: AIExplanationPresentation?
 
+    /// Escalation seam for "Explain deeper". Injected as a closure so the
+    /// controller stays free of provider-specific types and tests can stub it.
+    public typealias DeeperExplainHandler = @MainActor (ScanResult, ScanRule) async throws -> AIExplanation
+
     private let service: any AIServiceProtocol
+    private let deeperExplain: DeeperExplainHandler?
+    private let deeperAvailable: @MainActor () -> Bool
     private var activeTask: Task<Void, Never>?
 
-    public init(service: any AIServiceProtocol) {
+    public init(
+        service: any AIServiceProtocol,
+        deeperExplain: DeeperExplainHandler? = nil,
+        deeperAvailable: @escaping @MainActor () -> Bool = { false }
+    ) {
         self.service = service
+        self.deeperExplain = deeperExplain
+        self.deeperAvailable = deeperAvailable
+    }
+
+    /// Whether the sheet should offer an "Explain deeper" button: a deeper
+    /// provider is wired in AND the currently selected one is configured.
+    public var canExplainDeeper: Bool {
+        deeperExplain != nil && deeperAvailable()
     }
 
     /// True while an explanation request is in flight. Useful for dimming
@@ -90,6 +108,33 @@ public final class AIExplanationController: ObservableObject {
                 try Task.checkCancellation()
                 guard let self else { return }
                 // Guard against a stale response overwriting a newer request.
+                if self.presentation?.result.id == result.id {
+                    self.presentation = .loaded(result, explanation)
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                guard let self else { return }
+                if self.presentation?.result.id == result.id {
+                    self.presentation = .failed(result, message: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    /// Escalate the given result to the selected deeper provider (Cloud or
+    /// Claude Code). Replaces any in-flight request; the sheet shows the
+    /// loading state and then the deeper, prose explanation.
+    public func explainDeeper(_ result: ScanResult) {
+        guard let deeperExplain else { return }
+        activeTask?.cancel()
+        presentation = .loading(result)
+        let rule = Self.derivedRule(from: result)
+        activeTask = Task { [weak self] in
+            do {
+                let explanation = try await deeperExplain(result, rule)
+                try Task.checkCancellation()
+                guard let self else { return }
                 if self.presentation?.result.id == result.id {
                     self.presentation = .loaded(result, explanation)
                 }

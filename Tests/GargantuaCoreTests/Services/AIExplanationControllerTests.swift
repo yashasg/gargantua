@@ -132,6 +132,62 @@ struct AIExplanationControllerTests {
         try? await Task.sleep(for: .milliseconds(20))
         #expect(controller.isBusy == false)
     }
+
+    // MARK: - Deeper explain
+
+    @Test("canExplainDeeper is false without a deeper handler")
+    func canExplainDeeperFalseWithoutHandler() {
+        let service = StubAIService(result: .success(AIExplanation(text: "x", source: .ai)))
+        let controller = AIExplanationController(service: service)
+
+        #expect(controller.canExplainDeeper == false)
+    }
+
+    @Test("canExplainDeeper reflects the injected availability closure")
+    func canExplainDeeperReflectsAvailability() {
+        let service = StubAIService(result: .success(AIExplanation(text: "x", source: .ai)))
+        var available = false
+        let controller = AIExplanationController(
+            service: service,
+            deeperExplain: { _, _ in AIExplanation(text: "deep", source: .cloud) },
+            deeperAvailable: { available }
+        )
+
+        #expect(controller.canExplainDeeper == false)
+        available = true
+        #expect(controller.canExplainDeeper == true)
+    }
+
+    @Test("explainDeeper loads a deeper, provider-sourced explanation")
+    func explainDeeperLoadsDeeperExplanation() async {
+        let service = StubAIService(result: .success(AIExplanation(text: "shallow", source: .ai)))
+        let controller = AIExplanationController(
+            service: service,
+            deeperExplain: { _, _ in AIExplanation(text: "deeper prose", source: .claudeCode) },
+            deeperAvailable: { true }
+        )
+
+        controller.explainDeeper(makeResult())
+        try? await Task.sleep(for: .milliseconds(20))
+
+        guard case .loaded(_, let explanation) = controller.presentation else {
+            Issue.record("Expected .loaded, got \(String(describing: controller.presentation))")
+            return
+        }
+        #expect(explanation.text == "deeper prose")
+        #expect(explanation.source == .claudeCode)
+    }
+
+    @Test("explainDeeper is a no-op when no deeper handler is wired")
+    func explainDeeperNoopWithoutHandler() async {
+        let service = StubAIService(result: .success(AIExplanation(text: "x", source: .ai)))
+        let controller = AIExplanationController(service: service)
+
+        controller.explainDeeper(makeResult())
+        try? await Task.sleep(for: .milliseconds(20))
+
+        #expect(controller.presentation == nil)
+    }
 }
 
 // MARK: - Test doubles

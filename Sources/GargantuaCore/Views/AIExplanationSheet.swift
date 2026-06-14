@@ -190,6 +190,18 @@ public struct AIExplanationSheet: View {
                 icon: "doc.text.magnifyingglass",
                 color: GargantuaColors.ink3
             )
+        case .cloud:
+            badge(
+                label: "Deeper · Cloud (Anthropic)",
+                icon: "cloud",
+                color: GargantuaColors.accent
+            )
+        case .claudeCode:
+            badge(
+                label: "Deeper · Claude Code",
+                icon: "terminal",
+                color: GargantuaColors.accent
+            )
         }
     }
 
@@ -213,6 +225,7 @@ public struct AIExplanationSheet: View {
         HStack(spacing: GargantuaSpacing.space2) {
             if case .loaded(_, let explanation) = presentation {
                 footerCTA(for: explanation)
+                deeperButton(for: explanation, result: presentation.result)
             }
 
             if case .failed = presentation {
@@ -241,10 +254,25 @@ public struct AIExplanationSheet: View {
     ///   couldn't run.
     /// - `.rule` (engine error / no-model fallback) → "Download Model".
     /// - `.ai` → no CTA needed.
+    /// "Explain deeper" escalation. Offered only on locally-generated output
+    /// (never on already-deep cloud/agent results) and only when the selected
+    /// deeper provider is configured.
+    @ViewBuilder
+    private func deeperButton(for explanation: AIExplanation, result: ScanResult) -> some View {
+        if !explanation.source.isDeeper, controller.canExplainDeeper {
+            Button("Explain deeper") {
+                controller.explainDeeper(result)
+            }
+            .buttonStyle(AIModalButtonStyle(tone: .accent))
+            .focusable(false)
+            .help("Generate a richer explanation via your configured deeper provider")
+        }
+    }
+
     @ViewBuilder
     private func footerCTA(for explanation: AIExplanation) -> some View {
         switch explanation.source {
-        case .ai:
+        case .ai, .cloud, .claudeCode:
             EmptyView()
         case .template:
             if preferredAIEngineKind == .template {

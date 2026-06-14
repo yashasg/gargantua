@@ -62,11 +62,21 @@ struct MainContentView: View {
         _activeAIEngineKind = State(initialValue: selectedEngine.kind)
         _downloadManager = StateObject(wrappedValue: manager)
         _aiService = StateObject(wrappedValue: service)
-        _aiExplanation = StateObject(wrappedValue: AIExplanationController(service: service))
+
+        // Cloud service is needed before the explanation controller so the
+        // "Explain deeper" escalation can route to it (or to Claude Code).
+        let cloudAI = CloudAIService()
+        let deeperExplanation = DeeperExplanationService(cloud: cloudAI)
+        _aiExplanation = StateObject(wrappedValue: AIExplanationController(
+            service: service,
+            deeperExplain: { result, rule in
+                try await deeperExplanation.explainDeeper(result: result, rule: rule)
+            },
+            deeperAvailable: { deeperExplanation.isAvailable() }
+        ))
         _aiAdvisory = StateObject(wrappedValue: AIAdvisoryController(service: service))
         _mcpStatusModel = StateObject(wrappedValue: MCPServerStatusViewModel())
 
-        let cloudAI = CloudAIService()
         let mlxProposer = MLXOrganizerProposer(aiService: service)
         _cloudAIService = StateObject(wrappedValue: cloudAI)
         _organizerSession = StateObject(wrappedValue: OrganizerSessionState(

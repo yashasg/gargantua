@@ -151,8 +151,9 @@ public struct SettingsView: View {
             modelSection
             aiJobGroupHeader(
                 "Deeper explanations, on demand",
-                detail: "Richer write-ups when you ask for them, billed to your own provider key."
+                detail: "Richer write-ups when you ask for them — via your Anthropic API key, or your Claude Code subscription."
             )
+            DeeperExplainProviderSection()
             CloudAISettingsSection()
             aiJobGroupHeader(
                 "Run maintenance for me",

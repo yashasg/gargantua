@@ -142,6 +142,24 @@ public enum CloudAIPromptBuilder {
     the requested schema.
     """
 
+    /// Prose (not JSON) prompt for a deeper, single-item explanation. Used by
+    /// both the Cloud and Claude Code "Explain deeper" providers so the two
+    /// paths produce comparable output.
+    public static func explanationPrompt(item: CloudAIInputItem) throws -> String {
+        let payload = try encodedJSON(item)
+        return """
+        Explain this item found by a macOS cleanup scan, for a developer deciding whether to delete it.
+        Cover, in 2–4 short paragraphs of plain prose (no JSON, no headings):
+        what it is and what created it, why it's on the machine, whether it's safe to remove,
+        and what removing it would affect or cost to regenerate.
+        This is advisory only — do not contradict or override the item's safety classification,
+        and never imply the item has already been deleted.
+        Inputs are path and metadata only unless a content_preview field is present.
+        Item:
+        \(payload)
+        """
+    }
+
     public static func deepAnalysisPrompt(items: [CloudAIInputItem]) throws -> String {
         let payload = try encodedJSON(items)
         return """
