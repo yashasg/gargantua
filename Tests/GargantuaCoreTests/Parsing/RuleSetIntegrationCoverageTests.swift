@@ -117,8 +117,12 @@ struct RuleSetIntegrationCoverageTests {
         let aiModels = result.rules.filter { $0.category == "ai_models" }
         let ids = Set(aiModels.map(\.id))
 
-        // Known-location rules — the heavyweight ones the bean called out.
-        #expect(ids.contains("ollama_models"), "Missing Ollama models rule")
+        // Ollama is a managed-manifest store handled per-model by
+        // OllamaModelScanAdapter, so it must NOT have a whole-folder rule here
+        // (that would double-count and allow path-trashing the blob store).
+        #expect(!ids.contains("ollama_models"), "Ollama should be covered per-model, not as a whole-folder rule")
+
+        // Known-location rules — the heavyweight flat-file stores.
         #expect(ids.contains(where: { $0.hasPrefix("lm_studio") }), "Missing LM Studio rules")
         #expect(ids.contains("torch_hub_checkpoints"), "Missing PyTorch hub checkpoints rule")
         #expect(ids.contains("comfyui_user_models"), "Missing ComfyUI rule")

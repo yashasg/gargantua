@@ -1,35 +1,15 @@
 rules:
   # Known-location model storage. Each rule surfaces the whole model
-  # directory because the user generally thinks of "all my Ollama models"
-  # as a single decision rather than per-blob. Safety is `review` because
-  # re-downloading takes minutes to hours and the user invested in choosing
-  # the model.
-
-  - id: ollama_models
-    name: Ollama Models
-    paths:
-      - "~/.ollama/models"
-    safety: review
-    confidence: 92
-    explanation: "Ollama's downloaded model blobs and manifests. Often the largest local-AI footprint on a machine — re-pull with `ollama pull <name>` to restore."
-    source:
-      name: Ollama
-      bundle_id: com.electron.ollama
-    regenerates: false
-    regenerate_command: "ollama pull <model>"
-    category: ai_models
-    tags:
-      - developer
-      - ai
-      - models
-    safety_overrides:
-      - condition: "age > 180d"
-        safety: safe
-        confidence: 88
-        explanation_suffix: "No access in 6+ months."
-        profiles:
-          - aiModels
-          - deep
+  # directory because the user generally thinks of a flat-file store
+  # (LM Studio, ComfyUI, …) as a single decision rather than per-blob.
+  # Safety is `review` because re-downloading takes minutes to hours and
+  # the user invested in choosing the model.
+  #
+  # Ollama is intentionally NOT listed here. It's a managed-manifest store
+  # (shared content-addressed blobs), so OllamaModelScanAdapter surfaces it
+  # per named model and routes deletion through `ollama rm`. A whole-folder
+  # rule would double-count that storage and let the store be path-trashed
+  # (blobs and all) instead of removed safely.
 
   - id: lm_studio_models_cache
     name: LM Studio Models (cache)
