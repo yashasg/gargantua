@@ -123,6 +123,10 @@ public enum GargantuaColors {
 
 /// Design system typography from .interface-design/system.md.
 public enum GargantuaFonts {
+    /// Top-level grouping header that sits ABOVE a stack of cards (e.g. the
+    /// AI tab's "Your AI engines" / "What uses which engine"). 20px, 700 — a
+    /// clear step between the 28px page display title and the 15px card titles.
+    public static let sectionHeading = Font.system(size: 20, weight: .bold)
     /// Section headers. 16px, 600 weight.
     public static let heading = Font.system(size: 16, weight: .semibold)
     /// Panel names, dynamic state headlines, status titles. 15px, 600 weight.

@@ -10,7 +10,7 @@ extension SettingsView {
     func aiSectionHeader(_ title: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space1) {
             Text(title)
-                .font(GargantuaFonts.heading)
+                .font(GargantuaFonts.sectionHeading)
                 .foregroundStyle(GargantuaColors.ink)
 
             Text(detail)
@@ -19,7 +19,7 @@ extension SettingsView {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, GargantuaSpacing.space2)
+        .padding(.top, GargantuaSpacing.space4)
     }
 
     // MARK: - AI Model Section
