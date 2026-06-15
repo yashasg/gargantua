@@ -143,6 +143,31 @@ struct AIModelsStateTests {
         #expect(state.cleanupResult == nil)
     }
 
+    @Test("pruneCleaned (retry path) removes recovered items without leaving the summary")
+    @MainActor
+    func pruneCleanedKeepsSummaryPhase() {
+        let state = AIModelsState()
+        let kept = makeItem(id: "kept", safety: .review)
+        let stillFailed = makeItem(id: "stuck", safety: .safe)
+        let recovered = makeItem(id: "recovered", safety: .safe)
+        state.finishScan(results: [kept, stillFailed, recovered], duration: 1.0)
+        // Simulate a partial clean that left two items failed, then showed the summary.
+        state.finishCleanup(result: CleanupResult(itemResults: [
+            CleanupItemResult(item: stillFailed, succeeded: false, error: "Operation not permitted"),
+            CleanupItemResult(item: recovered, succeeded: false, error: "Operation not permitted"),
+        ]))
+        #expect(state.phase == .summary)
+        #expect(state.scanResults?.map(\.id) == ["kept", "stuck", "recovered"])
+
+        // A retry recovers "recovered" — onRetried calls pruneCleaned.
+        state.pruneCleaned(CleanupResult(itemResults: [
+            CleanupItemResult(item: recovered, succeeded: true),
+        ]))
+
+        #expect(state.scanResults?.map(\.id) == ["kept", "stuck"]) // pruned in place
+        #expect(state.phase == .summary) // still on the summary, not bounced away
+    }
+
     @Test("dismissSummary clears everything back to idle when nothing remains")
     @MainActor
     func dismissSummaryReturnsToIdle() {

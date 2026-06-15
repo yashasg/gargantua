@@ -80,15 +80,19 @@ public final class AIModelsState {
     public func finishCleanup(result: CleanupResult) {
         isCleaning = false
         cleanupResult = result
-        // Drop the items we just cleaned out of scanResults so dismissing the
-        // summary returns the user to the results list minus what was removed,
-        // instead of forcing a full re-scan to see what's left.
-        if let current = scanResults {
-            let succeededIDs = Set(result.succeededItems.map(\.item.id))
-            scanResults = current.filter { !succeededIDs.contains($0.id) }
-            selectedResultIDs.subtract(succeededIDs)
-        }
+        pruneCleaned(result)
         phase = .summary
+    }
+
+    /// Drop the items a clean (or an in-summary retry) removed out of
+    /// `scanResults`, so dismissing the summary returns the user to the results
+    /// list minus what was removed instead of forcing a full re-scan. Safe to
+    /// call again on retry — it only ever removes succeeded ids.
+    public func pruneCleaned(_ result: CleanupResult) {
+        guard let current = scanResults else { return }
+        let succeededIDs = Set(result.succeededItems.map(\.item.id))
+        scanResults = current.filter { !succeededIDs.contains($0.id) }
+        selectedResultIDs.subtract(succeededIDs)
     }
 
     /// License gate blocked the cleanup. Revert from the cleaning console

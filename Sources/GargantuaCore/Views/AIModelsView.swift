@@ -289,9 +289,13 @@ extension AIModelsView {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 480)
             }
-            CleanupSummaryView(result: result, outcomeAccent: accent, onExplain: onExplain) {
-                session.dismissSummary()
-            }
+            CleanupSummaryView(
+                result: result,
+                outcomeAccent: accent,
+                onExplain: onExplain,
+                onRetried: { session.pruneCleaned($0) },
+                onDismiss: { session.dismissSummary() }
+            )
             Spacer()
         }
         .padding(GargantuaSpacing.space6)
