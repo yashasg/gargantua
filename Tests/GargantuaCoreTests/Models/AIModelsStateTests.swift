@@ -117,7 +117,33 @@ struct AIModelsStateTests {
         #expect(state.phase == .idle)
     }
 
-    @Test("dismissSummary clears everything back to idle")
+    @Test("cleanup drops only succeeded items and dismiss returns to results when some remain")
+    @MainActor
+    func cleanupFiltersInPlaceAndReturnsToResults() {
+        let state = AIModelsState()
+        let kept = makeItem(id: "kept", safety: .review)
+        let removed = makeItem(id: "removed", safety: .safe)
+        state.finishScan(results: [kept, removed], duration: 1.0)
+        state.selectedResultIDs = ["removed"]
+        state.beginCleanup(method: .trash)
+        state.finishCleanup(result: CleanupResult(itemResults: [
+            CleanupItemResult(item: removed, succeeded: true),
+        ]))
+
+        // Cleaned item is gone from the list immediately; selection cleared.
+        #expect(state.scanResults?.map(\.id) == ["kept"])
+        #expect(!state.selectedResultIDs.contains("removed"))
+        #expect(state.phase == .summary)
+
+        state.dismissSummary()
+
+        // Back to the results list, not the idle screen, with the row removed.
+        #expect(state.phase == .results)
+        #expect(state.scanResults?.map(\.id) == ["kept"])
+        #expect(state.cleanupResult == nil)
+    }
+
+    @Test("dismissSummary clears everything back to idle when nothing remains")
     @MainActor
     func dismissSummaryReturnsToIdle() {
         let state = AIModelsState()

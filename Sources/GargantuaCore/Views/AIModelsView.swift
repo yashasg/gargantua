@@ -166,15 +166,23 @@ public struct AIModelsView: View {
                     .font(GargantuaFonts.heading)
                     .foregroundStyle(GargantuaColors.ink)
 
-                Text(
-                    "Surface multi-GB model files left by Ollama, LM Studio, ComfyUI, "
-                        + "and friends — plus orphan .gguf / .safetensors weights forgotten "
-                        + "in your folders."
-                )
-                .font(GargantuaFonts.body)
-                .foregroundStyle(GargantuaColors.ink2)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 420)
+                Text("Finds downloaded model weights from your local AI tools, plus orphaned model files left in your folders.")
+                    .font(GargantuaFonts.body)
+                    .foregroundStyle(GargantuaColors.ink2)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 320)
+
+                HStack(spacing: GargantuaSpacing.space2) {
+                    ForEach(["Ollama", "LM Studio", "Hugging Face", "ComfyUI", "Orphans"], id: \.self) { label in
+                        Text(label)
+                            .font(GargantuaFonts.caption)
+                            .foregroundStyle(GargantuaColors.ink3)
+                            .padding(.horizontal, GargantuaSpacing.space2)
+                            .padding(.vertical, 3)
+                            .background(GargantuaColors.surface2)
+                            .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+                    }
+                }
 
                 if !session.scanProgress.errors.isEmpty {
                     HStack(spacing: GargantuaSpacing.space1) {
@@ -188,17 +196,8 @@ public struct AIModelsView: View {
                     }
                 }
 
-                Button(action: startScan) {
-                    Text("Scan AI Models")
-                        .font(GargantuaFonts.label)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, GargantuaSpacing.space4)
-                        .padding(.vertical, GargantuaSpacing.space2)
-                        .background(GargantuaColors.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
-                }
-                .buttonStyle(.plain)
-                .padding(.top, GargantuaSpacing.space2)
+                GargantuaButton("Scan AI Models", tone: .primary, action: startScan)
+                    .padding(.top, GargantuaSpacing.space2)
             }
 
             Spacer()
