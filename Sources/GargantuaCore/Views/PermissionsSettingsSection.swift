@@ -31,13 +31,9 @@ struct PermissionsSettingsSection: View {
 
             automationRow
 
-            // Shown only when the build ships a helper (the AGPL source build
-            // signed by another team reports `.notFound` — no toggle to offer).
-            if helperStatus != .notFound {
-                SettingsHairlineDivider()
+            SettingsHairlineDivider()
 
-                privilegedHelperRow
-            }
+            privilegedHelperRow
         }
         .onReceive(timer) { _ in
             hasFullDiskAccess = PermissionChecker.hasFullDiskAccess
@@ -63,9 +59,16 @@ struct PermissionsSettingsSection: View {
 
             Spacer(minLength: GargantuaSpacing.space3)
 
-            if helperStatus == .enabled {
+            switch helperStatus {
+            case .enabled:
                 grantedBadge
-            } else {
+            case .notFound:
+                // No embedded helper (a raw `swift build` run, or a fork signed
+                // by another team). Informational — there's nothing to approve.
+                Text("Not in this build")
+                    .font(GargantuaFonts.label)
+                    .foregroundStyle(GargantuaColors.ink4)
+            case .requiresApproval, .notRegistered, .unknown:
                 GargantuaButton("Open Settings", icon: "arrow.up.forward.app") {
                     // Re-register so the toggle is present in the list, reflect
                     // the new status immediately, then deep-link straight to the
@@ -87,14 +90,19 @@ struct PermissionsSettingsSection: View {
             return "Not approved — system-owned items can’t be removed until you enable Gargantua under "
                 + "Login Items & Extensions."
         case .notFound:
-            return ""
+            return "Not included in this build — system-owned items can’t be removed. The signed release "
+                + "ships the helper; files you own are still cleaned."
         case .unknown:
             return "Status unknown — check Gargantua under Login Items & Extensions."
         }
     }
 
     private var helperDetailColor: Color {
-        helperStatus == .enabled ? GargantuaColors.safe : GargantuaColors.review
+        switch helperStatus {
+        case .enabled: GargantuaColors.safe
+        case .notFound: GargantuaColors.ink3
+        case .requiresApproval, .notRegistered, .unknown: GargantuaColors.review
+        }
     }
 
     private var loginItemsURL: URL {
