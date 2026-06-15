@@ -57,4 +57,32 @@ public enum CleanupFailureClassifier {
             false
         }
     }
+
+    /// Plain-language reason for display. Maps the recovered kind to a human
+    /// message, keeps macOS's own description when it's already readable, and
+    /// never surfaces a bare "unknown error" or an empty string. The raw error
+    /// stays on the model (for `kind(of:)`/audit); this is display-only.
+    public static func friendlyReason(for error: String?) -> String {
+        let raw = (error ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        switch kind(of: error) {
+        case .ownership:
+            return "Owned by macOS or another user — needs Gargantua’s privileged helper."
+        case .automation:
+            return "Finder Automation was denied, and the direct Trash API couldn’t move it either."
+        case .permission:
+            return "Permission denied for this item."
+        case .none, .other:
+            let low = raw.lowercased()
+            if low.contains("busy") || low.contains("in use") {
+                return "In use by a running app — quit it, then retry."
+            }
+            if low.contains("read-only") || low.contains("read only") {
+                return "On a read-only volume."
+            }
+            if raw.isEmpty || low == "unknown error" {
+                return "Couldn’t be removed — macOS gave no further detail."
+            }
+            return raw
+        }
+    }
 }
