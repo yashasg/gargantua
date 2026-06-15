@@ -84,11 +84,11 @@ public final class CodexAgentRunController: ObservableObject {
         runTask = Task { [weak self] in
             do {
                 let text = try await runner.run(executable: executable, prompt: prompt, model: model)
-                await self?.finish(with: text.trimmingCharacters(in: .whitespacesAndNewlines), token: token)
+                self?.finish(with: text.trimmingCharacters(in: .whitespacesAndNewlines), token: token)
             } catch let error as CodexOneShotError {
-                await self?.fail(with: CodexExplainError(oneShot: error), token: token)
+                self?.fail(with: CodexExplainError(oneShot: error), token: token)
             } catch {
-                await self?.fail(with: error, token: token)
+                self?.fail(with: error, token: token)
             }
         }
     }
