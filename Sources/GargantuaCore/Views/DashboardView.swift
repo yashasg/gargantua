@@ -84,7 +84,34 @@ public struct DashboardView: View {
             title: "Dashboard",
             subtitle: "Glance the system. Pick where to dig in next.",
             subtitleStyle: .voice
-        )
+        ) {
+            if hasRunTriageScan || scanProgress.isScanning {
+                triageRefreshButton
+            }
+        }
+    }
+
+    private var triageRefreshButton: some View {
+        Button(action: startTriageScan) {
+            HStack(spacing: GargantuaSpacing.space1) {
+                if scanProgress.isScanning {
+                    AccretionDiskView(activityRate: 14, size: 12, color: GargantuaColors.accent)
+                    Text("Scanning")
+                        .font(GargantuaFonts.label)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("Re-run triage")
+                        .font(GargantuaFonts.label)
+                }
+            }
+            .foregroundStyle(GargantuaColors.accent)
+        }
+        .buttonStyle(.plain)
+        .disabled(scanProgress.isScanning)
+        .keyboardShortcut("r", modifiers: .command)
+        .help("Re-run triage to refresh reclaimable estimates after a cleanup (⌘R)")
+        .accessibilityLabel("Re-run triage")
     }
 
     // MARK: - Triage Overview
