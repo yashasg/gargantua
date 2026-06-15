@@ -12,6 +12,9 @@ import SwiftUI
 public struct CleanupSummaryView: View {
     let result: CleanupResult
     let outcomeAccent: Color?
+    /// Optional "Why?" handler for failed rows — routes the item into the same
+    /// explanation sheet the scan lists use. Nil hides the affordance.
+    let onExplain: ((ScanResult) -> Void)?
     let onDismiss: () -> Void
 
     @State var sort: SummarySort = .size
@@ -20,6 +23,10 @@ public struct CleanupSummaryView: View {
     @State var succeededExpanded: Bool = true
     @State var narrative: CleanupNarrative?
     @State var didShowFirstWarmupAtStart: Bool = false
+    /// Result after an in-place "Retry failed items" re-run; `nil` until the
+    /// user retries. All sections render `shown`, so the summary updates live.
+    @State var liveResult: CleanupResult?
+    @State var isRetrying: Bool = false
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.cleanupNarrator) var cleanupNarrator
     @Environment(\.aiEngineNeedsFirstWarmup) var needsFirstWarmup
@@ -57,11 +64,34 @@ public struct CleanupSummaryView: View {
     public init(
         result: CleanupResult,
         outcomeAccent: Color? = nil,
+        onExplain: ((ScanResult) -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) {
         self.result = result
         self.outcomeAccent = outcomeAccent
+        self.onExplain = onExplain
         self.onDismiss = onDismiss
+    }
+
+    /// The result the summary renders — the live (retried) one if present,
+    /// otherwise the original.
+    var shown: CleanupResult { liveResult ?? result }
+
+    /// Re-attempts just the failed items through the privileged helper (e.g.
+    /// after the user approved it or quit a blocking app) and merges the
+    /// outcome back in, so recovered items move to the success list without a
+    /// full rescan.
+    @MainActor
+    func retryFailed() async {
+        let failed = shown.failedItems.map(\.item)
+        guard !failed.isEmpty, !isRetrying else { return }
+        isRetrying = true
+        defer { isRetrying = false }
+
+        let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
+        let retry = await engine.clean(failed, method: shown.cleanupMethod, observer: nil)
+        let merged = shown.succeededItems + retry.itemResults
+        liveResult = CleanupResult(itemResults: merged, cleanupMethod: shown.cleanupMethod)
     }
 
     public var body: some View {
@@ -75,7 +105,7 @@ public struct CleanupSummaryView: View {
 
             header
 
-            let outcome = Self.outcome(for: result)
+            let outcome = Self.outcome(for: shown)
 
             if cleanupNarrator != nil {
                 Rectangle()
@@ -97,7 +127,7 @@ public struct CleanupSummaryView: View {
                 successSection
             }
 
-            if !result.failedItems.isEmpty {
+            if !shown.failedItems.isEmpty {
                 Rectangle()
                     .fill(GargantuaColors.border)
                     .frame(height: 1)

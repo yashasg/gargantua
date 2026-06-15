@@ -56,7 +56,7 @@ extension CleanupSummaryView {
                     .foregroundStyle(GargantuaColors.ink)
 
                 if outcome != .failed {
-                    Text("\(AlertItem.formatBytes(result.totalFreed)) freed")
+                    Text("\(AlertItem.formatBytes(shown.totalFreed)) freed")
                         .font(GargantuaFonts.monoData)
                         .foregroundStyle(GargantuaColors.safe)
                 }
@@ -71,11 +71,11 @@ extension CleanupSummaryView {
 
     var successSection: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
-            let count = result.succeededItems.count
+            let count = shown.succeededItems.count
             HStack(spacing: GargantuaSpacing.space2) {
                 Text(count == 1
-                    ? "1 item \(result.cleanupMethod.summaryActionText)"
-                    : "\(count) items \(result.cleanupMethod.summaryActionText)")
+                    ? "1 item \(shown.cleanupMethod.summaryActionText)"
+                    : "\(count) items \(shown.cleanupMethod.summaryActionText)")
                     .font(GargantuaFonts.label)
                     .foregroundStyle(GargantuaColors.ink2)
 
@@ -105,8 +105,8 @@ extension CleanupSummaryView {
                 }
             }
 
-            if succeededExpanded, !result.succeededItems.isEmpty {
-                itemList(sorted(result.succeededItems), foreground: GargantuaColors.ink)
+            if succeededExpanded, !shown.succeededItems.isEmpty {
+                itemList(sorted(shown.succeededItems), foreground: GargantuaColors.ink)
             }
         }
         .padding(GargantuaSpacing.space4)
@@ -115,7 +115,7 @@ extension CleanupSummaryView {
     // MARK: - Failure Section
 
     private var permissionFailureCount: Int {
-        result.failedItems.filter {
+        shown.failedItems.filter {
             CleanupFailureClassifier.isElevatable($0.error)
         }.count
     }
@@ -126,15 +126,15 @@ extension CleanupSummaryView {
     /// (needs elevated removal) or Finder Automation was denied, not a toggle
     /// the user has already flipped.
     private var dominantFailureGuidance: PermissionFailureGuidance? {
-        guard !result.failedItems.isEmpty,
-              permissionFailureCount * 2 >= result.failedItems.count
+        guard !shown.failedItems.isEmpty,
+              permissionFailureCount * 2 >= shown.failedItems.count
         else { return nil }
 
         if !PermissionChecker.hasFullDiskAccess {
             return .fullDiskAccess
         }
 
-        let automationCount = result.failedItems.filter {
+        let automationCount = shown.failedItems.filter {
             CleanupFailureClassifier.kind(of: $0.error) == .automation
         }.count
         if automationCount * 2 >= permissionFailureCount {
@@ -163,7 +163,7 @@ extension CleanupSummaryView {
 
     var failureSection: some View {
         VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
-            let count = result.failedItems.count
+            let count = shown.failedItems.count
             HStack(spacing: GargantuaSpacing.space2) {
                 Circle()
                     .fill(GargantuaColors.protected_)
@@ -173,6 +173,8 @@ extension CleanupSummaryView {
                     .foregroundStyle(GargantuaColors.protected_)
 
                 Spacer()
+
+                retryFailedButton
             }
 
             if let guidance = dominantFailureGuidance {
@@ -181,7 +183,7 @@ extension CleanupSummaryView {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(sorted(result.failedItems), id: \.item.id) { failed in
+                    ForEach(sorted(shown.failedItems), id: \.item.id) { failed in
                         HStack(spacing: GargantuaSpacing.space2) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(failed.item.name)
@@ -189,15 +191,25 @@ extension CleanupSummaryView {
                                     .foregroundStyle(GargantuaColors.ink)
                                     .lineLimit(1)
 
-                                if let error = failed.error {
-                                    Text(error)
-                                        .font(GargantuaFonts.caption)
-                                        .foregroundStyle(GargantuaColors.ink3)
-                                        .lineLimit(2)
-                                }
+                                Text(CleanupFailureClassifier.friendlyReason(for: failed.error))
+                                    .font(GargantuaFonts.caption)
+                                    .foregroundStyle(GargantuaColors.ink3)
+                                    .lineLimit(2)
                             }
 
                             Spacer()
+
+                            if let onExplain {
+                                Button {
+                                    onExplain(failed.item)
+                                } label: {
+                                    Text("Why?")
+                                        .font(GargantuaFonts.caption)
+                                        .foregroundStyle(GargantuaColors.accent)
+                                }
+                                .buttonStyle(.plain)
+                                .help("Why was this item flagged, and is it safe to remove?")
+                            }
 
                             Text(AlertItem.formatBytes(failed.item.size))
                                 .font(GargantuaFonts.monoData)
@@ -210,6 +222,28 @@ extension CleanupSummaryView {
             .frame(maxHeight: 180)
         }
         .padding(GargantuaSpacing.space4)
+    }
+
+    /// Re-attempt the failed items in place. Hidden when the dominant cause is
+    /// `systemUnavailable` (a source build with no helper — a retry can't help;
+    /// the user needs the signed release).
+    @ViewBuilder
+    var retryFailedButton: some View {
+        if dominantFailureGuidance != .systemUnavailable {
+            if isRetrying {
+                HStack(spacing: GargantuaSpacing.space2) {
+                    AccretionDiskView(activityRate: 18, size: 14, color: GargantuaColors.accent)
+                    Text("Retrying…")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                }
+            } else {
+                GargantuaButton("Retry failed items", icon: "arrow.clockwise", tone: .ghost(GargantuaColors.accent)) {
+                    Task { await retryFailed() }
+                }
+                .help("Re-attempt the failed items — e.g. after approving the helper or quitting a blocking app")
+            }
+        }
     }
 
     // MARK: - Shared item list
@@ -277,7 +311,7 @@ extension CleanupSummaryView {
     /// True if there is at least one item (succeeded or failed) that the
     /// user could plausibly want to sort.
     var hasSortableItems: Bool {
-        !result.succeededItems.isEmpty || !result.failedItems.isEmpty
+        !shown.succeededItems.isEmpty || !shown.failedItems.isEmpty
     }
 
     func toggleSucceededExpanded() {
@@ -306,7 +340,7 @@ extension CleanupSummaryView {
 
             Spacer()
 
-            if result.cleanupMethod == .trash {
+            if shown.cleanupMethod == .trash {
                 // Undo - reveal Trash
                 Button(action: revealTrash) {
                     HStack(spacing: GargantuaSpacing.space1) {
@@ -354,136 +388,5 @@ extension CleanupSummaryView {
         if FileManager.default.fileExists(atPath: logFile.path) {
             NSWorkspace.shared.activateFileViewerSelecting([logFile])
         }
-    }
-}
-
-// MARK: - Permission Failure Prompt
-
-enum PermissionFailureGuidance {
-    /// Full Disk Access is genuinely missing.
-    case fullDiskAccess
-    /// Finder Automation (Apple Events) was denied.
-    case automation
-    /// Items are owned by macOS or another user; the privileged helper is
-    /// present but needs approval.
-    case ownership
-    /// Items are owned by the system but this build ships no privileged helper
-    /// (an AGPL source build, or a fork signed by another team), so elevated
-    /// removal can never work here.
-    case systemUnavailable
-    /// The privileged helper is active, but these items still couldn't be
-    /// removed — owned by root / another user, or in use. No approval helps.
-    case systemResidual
-
-    var title: String {
-        switch self {
-        case .fullDiskAccess: "These items require Full Disk Access"
-        case .automation: "These items need Automation permission"
-        case .ownership: "These items are owned by the system"
-        case .systemUnavailable: "This build can't remove system-owned items"
-        case .systemResidual: "Some items couldn't be removed"
-        }
-    }
-
-    var detail: String {
-        switch self {
-        case .fullDiskAccess:
-            "Open System Settings, click the \"+\" button, then add Gargantua from your Applications folder."
-        case .automation:
-            "Gargantua moves items to the Trash through Finder. Allow it to control Finder under Automation, "
-                + "or it will fall back to the direct Trash API."
-        case .ownership:
-            "Full Disk Access can't delete files owned by macOS or another user. Approve Gargantua's privileged "
-                + "helper under Login Items & Extensions so it can remove them, then run the clean again."
-        case .systemUnavailable:
-            "Files owned by macOS or another user need Gargantua's privileged helper, which only the signed "
-                + "release ships. Install it with Homebrew (brew install --cask gargantua), or build from source "
-                + "with your own Developer ID. Files you own were still cleaned."
-        case .systemResidual:
-            "These are owned by macOS or another user, or are in use by a running app (for example a root-owned "
-                + "app already in the Trash), so they couldn't be removed even with Gargantua's privileged helper. "
-                + "Each item's reason is shown below; the rest were cleaned."
-        }
-    }
-
-    /// Some states have no actionable button — the situation is informational.
-    var buttonLabel: String? {
-        switch self {
-        case .fullDiskAccess: "Open Full Disk Access Settings"
-        case .automation: "Open Automation Settings"
-        case .ownership: "Open Login Items & Extensions"
-        case .systemUnavailable: "Get the Signed Release"
-        case .systemResidual: nil
-        }
-    }
-
-    var buttonIcon: String {
-        switch self {
-        case .fullDiskAccess, .automation, .ownership: "gear"
-        case .systemUnavailable: "arrow.down.circle"
-        case .systemResidual: "info.circle"
-        }
-    }
-
-    var actionURL: URL? {
-        switch self {
-        case .fullDiskAccess:
-            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
-        case .automation:
-            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
-        case .ownership:
-            URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")
-        case .systemUnavailable:
-            URL(string: "https://github.com/inceptyon-labs/gargantua/releases/latest")
-        case .systemResidual:
-            nil
-        }
-    }
-}
-
-struct PermissionFailurePrompt: View {
-    let guidance: PermissionFailureGuidance
-
-    @Environment(\.openURL) private var openURL
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
-            HStack(spacing: GargantuaSpacing.space2) {
-                Image(systemName: "lock.shield")
-                    .font(.system(size: 14))
-                    .foregroundStyle(GargantuaColors.review)
-
-                Text(guidance.title)
-                    .font(GargantuaFonts.label)
-                    .foregroundStyle(GargantuaColors.ink)
-            }
-
-            Text(guidance.detail)
-                .font(GargantuaFonts.caption)
-                .foregroundStyle(GargantuaColors.ink2)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let actionURL = guidance.actionURL, let buttonLabel = guidance.buttonLabel {
-                Button {
-                    openURL(actionURL)
-                } label: {
-                    HStack(spacing: GargantuaSpacing.space1) {
-                        Image(systemName: guidance.buttonIcon)
-                            .font(.system(size: 11))
-                        Text(buttonLabel)
-                            .font(GargantuaFonts.caption)
-                    }
-                    .foregroundStyle(GargantuaColors.accent)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(GargantuaSpacing.space3)
-        .background(GargantuaColors.review.opacity(0.08))
-        .overlay(
-            RoundedRectangle(cornerRadius: GargantuaRadius.small)
-                .stroke(GargantuaColors.review.opacity(0.25), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
     }
 }
