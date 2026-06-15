@@ -61,10 +61,11 @@ struct CleanupNarrativeSection: View {
             Text("This is rule-based.")
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink3)
-            Button("Enable local AI") { openSettings() }
+            Button("Use AI for summaries") { openSettings() }
                 .font(GargantuaFonts.caption)
                 .buttonStyle(.plain)
                 .foregroundStyle(GargantuaColors.accent)
+                .help("Switch the summary engine from Template to an AI engine in Settings → AI")
         }
         .padding(.top, GargantuaSpacing.space1)
     }

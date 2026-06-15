@@ -126,7 +126,7 @@ public struct AIExplanationSheet: View {
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
 
-                if explanation.source == .template, preferredAIEngineKind == .template {
+                if explanation.source == .template, preferredAIEngineKind == .template, !controller.canOfferDeeper {
                     enableAIFooterNote
                 }
             }
@@ -139,7 +139,7 @@ public struct AIExplanationSheet: View {
             Image(systemName: "info.circle")
                 .font(.system(size: 12))
                 .foregroundStyle(GargantuaColors.ink3)
-            Text("This is rule-based. Enable local AI in Settings → AI Model for generated explanations.")
+            Text("This is rule-based. Set the “Why?” engine to AI in Settings → AI for generated explanations.")
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -253,9 +253,12 @@ public struct AIExplanationSheet: View {
         .padding(.vertical, GargantuaSpacing.space3)
     }
 
-    /// Footer CTA differs by source AND by the user's toggle:
-    /// - `.template` + AI toggle off → "Enable AI" (flip the toggle).
-    /// - `.template` + AI toggle on (model missing/corrupt fallback) →
+    /// Footer CTA differs by source AND by the inline-engine assignment:
+    /// - `.template`, inline engine is Template, and no deeper provider is
+    ///   configured → "Use AI for “Why?”" (deep-link to the assignment).
+    ///   Suppressed when "Explain deeper" is offered — a configured deeper
+    ///   provider means AI is already on, so an "enable" button would lie.
+    /// - `.template` + inline engine is MLX (model missing/corrupt fallback) →
     ///   "Download Model" — the user already wants AI, the engine just
     ///   couldn't run.
     /// - `.rule` (engine error / no-model fallback) → "Download Model".
@@ -282,14 +285,18 @@ public struct AIExplanationSheet: View {
             EmptyView()
         case .template:
             if preferredAIEngineKind == .template {
-                if let openSettings = onOpenSettings ?? openAIModelSettings {
-                    Button("Enable AI") {
+                // Inline “Why?” is rule-based. Invite switching it to AI — but
+                // NOT when “Explain deeper” is offered: a deeper provider being
+                // configured means AI is already enabled, so a co-equal blue
+                // “enable” button just competes with the action that matters.
+                if !controller.canOfferDeeper, let openSettings = onOpenSettings ?? openAIModelSettings {
+                    Button("Use AI for “Why?”") {
                         controller.dismiss()
                         openSettings()
                     }
                     .buttonStyle(AIModalButtonStyle(tone: .accent))
                     .focusable(false)
-                    .help("Open Settings → AI Model")
+                    .help("Switch the inline “Why?” engine from Template to an AI engine in Settings → AI")
                 }
             } else if !controller.isModelAvailable, onOpenSettings != nil {
                 Button("Download Model") {

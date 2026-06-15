@@ -162,7 +162,7 @@ public struct AIAdvisorySheet: View {
             Image(systemName: "info.circle")
                 .font(.system(size: 12))
                 .foregroundStyle(GargantuaColors.ink3)
-            Text("These are rule-based. Enable local AI in Settings → AI Model for generated advisories.")
+            Text("These are rule-based. Set the advisory engine to AI in Settings → AI for generated advisories.")
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -256,8 +256,10 @@ public struct AIAdvisorySheet: View {
         .padding(.vertical, GargantuaSpacing.space3)
     }
 
-    /// Footer CTA differs by what the advisory batch contains AND by toggle:
-    /// - `.template` entries + AI toggle off → "Enable AI".
+    /// Footer CTA differs by what the advisory batch contains AND by the
+    /// inline-engine assignment:
+    /// - `.template` entries + inline engine is Template → "Use AI for
+    ///   advisories" (deep-link to the assignment).
     /// - `.template` entries + AI toggle on (fallback) OR `.rule` fallback +
     ///   no model on disk → "Download Model".
     /// - all `.ai` (or `.rule` with model present, i.e. engine errors) → no
@@ -269,13 +271,13 @@ public struct AIAdvisorySheet: View {
 
         if hasTemplate, preferredAIEngineKind == .template {
             if let openSettings = onOpenSettings ?? openAIModelSettings {
-                Button("Enable AI") {
+                Button("Use AI for advisories") {
                     controller.dismiss()
                     openSettings()
                 }
                 .buttonStyle(AIModalButtonStyle(tone: .accent))
                 .focusable(false)
-                .help("Open Settings → AI Model")
+                .help("Switch the advisory engine from Template to an AI engine in Settings → AI")
             }
         } else if hasTemplate || hasRule,
                   !controller.isModelAvailable,
