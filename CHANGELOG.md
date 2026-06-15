@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-06-15
+
+### Added
+
+- **Keyboard shortcuts across every results surface.** A full shortcut set (⌘A/⇧⌘A/⌘I select, ⌘F filter, ⌘↩ clean, ⌘⌫ trash, ⌘R rescan, and more) is now discoverable through the menu bar; ⌘/ opens a cheat-sheet overlay so nothing stays hidden.
+- **"Explain deeper" on demand.** Any scan result can be escalated to a richer prose explanation routed through your Anthropic API key or a locally installed Claude Code CLI — no extra API key required for the CLI path.
+- **OpenAI-compatible Cloud provider.** The Cloud AI engine now accepts any OpenAI Chat Completions endpoint — OpenAI, OpenRouter, Groq, Together AI, or a local server — via a configurable base URL, with per-provider Keychain accounts.
+- **Codex as a maintenance engine.** The Agent Run screen and scheduled audits can now be routed to a local Codex one-shot runner as an alternative to Claude Code.
+- **Per-model Ollama cleanup.** Each Ollama model surfaces as its own candidate with a conservative reclaimable-size figure; deletion routes through the Ollama daemon so shared-blob GC stays safe.
+- **Per-repo Hugging Face cache cleanup.** Every cached HF repo (model, dataset, space) appears as its own cleanup candidate sized by real blob bytes; repos with detached snapshots surface an additional "stale revisions" entry that frees only blobs no live ref still needs.
+- **Individual model files for flat-file AI stores.** LM Studio, ComfyUI, SD-WebUI, and Pinokio now surface each model file as its own candidate — remove one checkpoint without wiping the whole store.
+
+### Changed
+
+- **Unified AI engine setup with per-job assignment matrix.** Configure your engines once (Template, MLX, Claude Code, Codex, Cloud), then assign one to each job — inline explanations, deeper explanations, organize, maintenance — instead of scattering the choice across features. The AI tab reads as an explicit numbered two-step flow with a consistent icon + label + control grid on every engine card.
+
+### Fixed
+
+- **Automation permission grant for signed builds.** Hardened-runtime builds were silently denied before the consent prompt could appear (missing Apple Events entitlement); the entitlement is now present, and a new Automation card in Settings lets existing users grant or repair the permission without re-running onboarding.
+- **Destructive shortcuts gated while a text field is focused.** ⌘⌫ and ⇧⌘⌫ now probe the live AppKit first-responder in addition to the published `isEditingText` flag, so Move to Trash / Delete Permanently can never fire while a filter or search field is active.
+
 ## [0.4.0] - 2026-06-13
 
 ### Added
