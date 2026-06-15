@@ -2,9 +2,15 @@ import SwiftUI
 
 public struct MenuBarStatusLabel: View {
     let snapshot: MenuBarStatusSnapshot
+    let updateAvailable: Bool
 
-    public init(snapshot: MenuBarStatusSnapshot) {
+    public init(snapshot: MenuBarStatusSnapshot, updateAvailable: Bool = false) {
         self.snapshot = snapshot
+        self.updateAvailable = updateAvailable
+    }
+
+    private var showsDot: Bool {
+        snapshot.pendingAlertCount > 0 || updateAvailable
     }
 
     public var body: some View {
@@ -15,23 +21,37 @@ public struct MenuBarStatusLabel: View {
         Image(systemName: "hurricane")
             .symbolRenderingMode(.monochrome)
             .overlay(alignment: .topTrailing) {
-                if snapshot.pendingAlertCount > 0 {
+                if showsDot {
                     Circle()
                         .fill(GargantuaColors.accent)
                         .frame(width: 6, height: 6)
                         .offset(x: 3, y: -3)
                 }
             }
-            .accessibilityLabel(snapshot.accessibilitySummary)
+            .accessibilityLabel(updateAvailable
+                ? "\(snapshot.accessibilitySummary), update available"
+                : snapshot.accessibilitySummary)
     }
 }
 
 public struct MenuBarWidgetView: View {
     @ObservedObject private var model: MenuBarStatusModel
+    private let updateAvailable: Bool
+    private let updateVersion: String?
+    private let onInstallUpdate: (() -> Void)?
     private let onOpenMainWindow: () -> Void
 
-    public init(model: MenuBarStatusModel, onOpenMainWindow: @escaping () -> Void) {
+    public init(
+        model: MenuBarStatusModel,
+        updateAvailable: Bool = false,
+        updateVersion: String? = nil,
+        onInstallUpdate: (() -> Void)? = nil,
+        onOpenMainWindow: @escaping () -> Void
+    ) {
         self.model = model
+        self.updateAvailable = updateAvailable
+        self.updateVersion = updateVersion
+        self.onInstallUpdate = onInstallUpdate
         self.onOpenMainWindow = onOpenMainWindow
     }
 
@@ -44,7 +64,7 @@ public struct MenuBarWidgetView: View {
             } else {
                 VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
                     metricRow(icon: "externaldrive", label: "Reclaimable", value: model.snapshot.reclaimableDisplay)
-                    metricRow(icon: "bell", label: "Alerts", value: model.snapshot.alertsDisplay)
+                    metricRow(icon: "sparkles", label: "Cleanup", value: model.snapshot.alertsDisplay)
                     metricRow(icon: "calendar", label: "Last Scan", value: model.snapshot.lastScanDisplay)
                 }
             }
@@ -64,6 +84,10 @@ public struct MenuBarWidgetView: View {
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Menu bar error, \(error)")
+            }
+
+            if updateAvailable {
+                updateRow
             }
 
             HStack(spacing: GargantuaSpacing.space2) {
@@ -109,6 +133,42 @@ public struct MenuBarWidgetView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Run a quick scan to see reclaimable space")
+    }
+
+    private var updateRow: some View {
+        HStack(spacing: GargantuaSpacing.space2) {
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(GargantuaColors.accent)
+                .frame(width: 18, alignment: .center)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Update available")
+                    .font(GargantuaFonts.caption)
+                    .foregroundStyle(GargantuaColors.ink)
+                if let updateVersion {
+                    Text("Version \(updateVersion)")
+                        .font(GargantuaFonts.caption)
+                        .foregroundStyle(GargantuaColors.ink3)
+                }
+            }
+
+            Spacer(minLength: GargantuaSpacing.space2)
+
+            Button(action: { onInstallUpdate?() }, label: {
+                Text("Install")
+                    .font(GargantuaFonts.caption)
+                    .padding(.horizontal, GargantuaSpacing.space2)
+                    .padding(.vertical, GargantuaSpacing.space1)
+            })
+            .buttonStyle(MenuBarActionButtonStyle())
+            .accessibilityLabel("Install update")
+        }
+        .padding(GargantuaSpacing.space2)
+        .background(GargantuaColors.accent.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: GargantuaRadius.small))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(updateVersion.map { "Update available, version \($0)" } ?? "Update available")
     }
 
     private var header: some View {

@@ -54,11 +54,18 @@ public final class AppUpdateSettingsViewModel: ObservableObject {
     @Published public private(set) var lastUpdateCheckDate: Date?
     @Published public private(set) var feedURL: URL?
     @Published public private(set) var channel: AppUpdateChannel
+    /// True when Sparkle has found a valid update the user hasn't installed yet.
+    /// Drives the menu bar update dot and the "Update available" popover row.
+    @Published public private(set) var updateAvailable: Bool = false
+    /// Human-readable version of the pending update, e.g. "0.5.0", when known.
+    @Published public private(set) var updateVersion: String?
 
     public var checkForUpdates: (() -> Void)?
     public var setAutomaticallyChecksForUpdates: ((Bool) -> Void)?
     public var setAutomaticallyDownloadsUpdates: ((Bool) -> Void)?
     public var setChannel: ((AppUpdateChannel) -> Void)?
+    /// Re-presents Sparkle's update flow so the user can install the pending update.
+    public var installUpdate: (() -> Void)?
 
     private let defaults: UserDefaults
 
@@ -118,6 +125,17 @@ public final class AppUpdateSettingsViewModel: ObservableObject {
     public func userCheckForUpdates() {
         guard canCheckForUpdates else { return }
         checkForUpdates?()
+    }
+
+    /// Records whether a valid update is pending. Called by the app-layer
+    /// Sparkle delegate when a check finds (or fails to find) an update.
+    public func setUpdateAvailable(_ available: Bool, version: String? = nil) {
+        updateAvailable = available
+        updateVersion = available ? version : nil
+    }
+
+    public func userInstallUpdate() {
+        installUpdate?()
     }
 
     public func userSetAutomaticallyChecksForUpdates(_ value: Bool) {

@@ -70,10 +70,16 @@ struct GargantuaApp: App {
 
     private var menuBarScene: some Scene {
         MenuBarExtra(isInserted: $menuBarWidgetEnabled) {
-            GargantuaMenuBarSceneContent(model: menuBarStatusModel)
-                .preferredColorScheme(appearance.colorScheme)
+            GargantuaMenuBarSceneContent(
+                model: menuBarStatusModel,
+                updateModel: updateController.settingsViewModel
+            )
+            .preferredColorScheme(appearance.colorScheme)
         } label: {
-            MenuBarStatusLabel(snapshot: menuBarStatusModel.snapshot)
+            MenuBarStatusLabel(
+                snapshot: menuBarStatusModel.snapshot,
+                updateAvailable: updateController.settingsViewModel.updateAvailable
+            )
         }
         .menuBarExtraStyle(.window)
     }
@@ -309,18 +315,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 private struct GargantuaMenuBarSceneContent: View {
     @Environment(\.openWindow) private var openWindow
     @ObservedObject var model: MenuBarStatusModel
+    @ObservedObject var updateModel: AppUpdateSettingsViewModel
 
     var body: some View {
-        MenuBarWidgetView(model: model) {
-            // Focus the existing main window if it's still open; only fall back
-            // to openWindow when there's none, so we don't spawn a duplicate
-            // window/tab every time the user taps Open.
-            if !AppDelegate.activateExistingMainWindow() {
-                openWindow(id: "main")
-                DispatchQueue.main.async {
-                    AppDelegate.activateMainWindow()
+        MenuBarWidgetView(
+            model: model,
+            updateAvailable: updateModel.updateAvailable,
+            updateVersion: updateModel.updateVersion,
+            onInstallUpdate: { updateModel.userInstallUpdate() },
+            onOpenMainWindow: {
+                // Focus the existing main window if it's still open; only fall
+                // back to openWindow when there's none, so we don't spawn a
+                // duplicate window/tab every time the user taps Open.
+                if !AppDelegate.activateExistingMainWindow() {
+                    openWindow(id: "main")
+                    DispatchQueue.main.async {
+                        AppDelegate.activateMainWindow()
+                    }
                 }
             }
-        }
+        )
     }
 }

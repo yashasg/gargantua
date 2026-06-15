@@ -52,9 +52,9 @@ public struct MenuBarStatusSnapshot: Equatable, Sendable {
             return "Snoozed until \(snoozedUntil.formatted(date: .omitted, time: .shortened))"
         }
         if pendingAlertCount == 1 {
-            return "1 pending"
+            return "1 to review"
         }
-        return "\(pendingAlertCount) pending"
+        return "\(pendingAlertCount) to review"
     }
 
     public var lastScanDisplay: String {
@@ -65,7 +65,7 @@ public struct MenuBarStatusSnapshot: Equatable, Sendable {
     public var statusDisplay: String {
         if isScanning { return "Scanning..." }
         if errorMessage != nil { return "Needs attention" }
-        if pendingAlertCount > 0 { return "Alerts pending" }
+        if pendingAlertCount > 0 { return "Cleanup pending" }
         return "Ready"
     }
 
@@ -89,8 +89,8 @@ public struct MenuBarStatusSnapshot: Equatable, Sendable {
         if isScanning {
             return "Gargantua menu bar, quick scan running"
         }
-        let alertPhrase = pendingAlertCount == 1 ? "1 pending alert" : "\(pendingAlertCount) pending alerts"
-        return "Gargantua menu bar, \(reclaimableDisplay) reclaimable, \(alertPhrase)"
+        let cleanupPhrase = pendingAlertCount == 1 ? "1 cleanup item to review" : "\(pendingAlertCount) cleanup items to review"
+        return "Gargantua menu bar, \(reclaimableDisplay) reclaimable, \(cleanupPhrase)"
     }
 }
 

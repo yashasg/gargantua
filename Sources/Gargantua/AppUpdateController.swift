@@ -48,6 +48,9 @@ final class AppUpdateController: NSObject, ObservableObject {
         settingsViewModel.setChannel = { [weak self] _ in
             self?.updaterController.updater.resetUpdateCycleAfterShortDelay()
         }
+        settingsViewModel.installUpdate = { [weak self] in
+            self?.updaterController.checkForUpdates(nil)
+        }
     }
 
     private func observeUpdater() {
@@ -109,6 +112,14 @@ private final class AppUpdateDelegate: NSObject, SPUUpdaterDelegate {
         case .stable: []
         case .beta: Set(["beta"])
         }
+    }
+
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        settingsViewModel.setUpdateAvailable(true, version: item.displayVersionString)
+    }
+
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
+        settingsViewModel.setUpdateAvailable(false)
     }
 
     func updater(
