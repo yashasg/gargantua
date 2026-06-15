@@ -26,7 +26,7 @@ extension CleanupSummaryView {
     // MARK: - Header
 
     var header: some View {
-        let outcome = Self.outcome(for: result)
+        let outcome = Self.outcome(for: shown)
         let icon: String
         let iconColor: Color
         let title: String

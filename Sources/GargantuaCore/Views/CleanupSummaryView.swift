@@ -1,5 +1,8 @@
 import AppKit
+import OSLog
 import SwiftUI
+
+private let summaryLogger = Logger(subsystem: "com.gargantua.core", category: "CleanupSummary")
 
 /// Post-clean summary showing freed space, item status, and undo option.
 ///
@@ -15,6 +18,9 @@ public struct CleanupSummaryView: View {
     /// Optional "Why?" handler for failed rows — routes the item into the same
     /// explanation sheet the scan lists use. Nil hides the affordance.
     let onExplain: ((ScanResult) -> Void)?
+    /// Called with the retry result after "Retry failed items" so the parent
+    /// scan list prunes items that were recovered. Nil leaves the parent as-is.
+    let onRetried: ((CleanupResult) -> Void)?
     let onDismiss: () -> Void
 
     @State var sort: SummarySort = .size
@@ -65,17 +71,29 @@ public struct CleanupSummaryView: View {
         result: CleanupResult,
         outcomeAccent: Color? = nil,
         onExplain: ((ScanResult) -> Void)? = nil,
+        onRetried: ((CleanupResult) -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) {
         self.result = result
         self.outcomeAccent = outcomeAccent
         self.onExplain = onExplain
+        self.onRetried = onRetried
         self.onDismiss = onDismiss
     }
 
     /// The result the summary renders — the live (retried) one if present,
     /// otherwise the original.
     var shown: CleanupResult { liveResult ?? result }
+
+    /// Overlay retry outcomes onto the current item results by id. A cancelled
+    /// `CleanupEngine.clean` returns fewer results than it was given, so this
+    /// keeps every original item and updates only the ones the retry re-ran —
+    /// no item can silently vanish from the summary.
+    static func mergeRetry(into current: [CleanupItemResult], retry: [CleanupItemResult]) -> [CleanupItemResult] {
+        var byID = Dictionary(current.map { ($0.item.id, $0) }, uniquingKeysWith: { _, new in new })
+        for outcome in retry { byID[outcome.item.id] = outcome }
+        return current.map { byID[$0.item.id] ?? $0 }
+    }
 
     /// Re-attempts just the failed items through the privileged helper (e.g.
     /// after the user approved it or quit a blocking app) and merges the
@@ -90,8 +108,22 @@ public struct CleanupSummaryView: View {
 
         let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
         let retry = await engine.clean(failed, method: shown.cleanupMethod, observer: nil)
-        let merged = shown.succeededItems + retry.itemResults
+
+        // Same audit trail as the original clean — every destructive attempt is
+        // recorded, including a retry.
+        do {
+            try AuditWriter().record(result: retry)
+        } catch {
+            summaryLogger.warning("Failed to write retry audit entry: \(error.localizedDescription)")
+        }
+
+        let merged = Self.mergeRetry(into: shown.itemResults, retry: retry.itemResults)
         liveResult = CleanupResult(itemResults: merged, cleanupMethod: shown.cleanupMethod)
+
+        // Tell the parent which items are now gone so its scan list isn't stale.
+        if !retry.succeededItems.isEmpty {
+            onRetried?(retry)
+        }
     }
 
     public var body: some View {

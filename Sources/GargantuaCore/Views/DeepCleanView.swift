@@ -154,7 +154,7 @@ public struct DeepCleanView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 480)
             }
-            CleanupSummaryView(result: result, outcomeAccent: accent, onExplain: onExplain) {
+            CleanupSummaryView(result: result, outcomeAccent: accent, onExplain: onExplain, onRetried: onCleanupCompleted) {
                 dismissSummary()
             }
             Spacer()

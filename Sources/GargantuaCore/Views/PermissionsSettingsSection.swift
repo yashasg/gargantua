@@ -67,9 +67,12 @@ struct PermissionsSettingsSection: View {
                 grantedBadge
             } else {
                 GargantuaButton("Open Settings", icon: "arrow.up.forward.app") {
-                    // Re-register so the toggle is present in the list, then
-                    // deep-link straight to the Login Items & Extensions pane.
-                    _ = try? SMAppServicePrivilegedHelperInstaller().register()
+                    // Re-register so the toggle is present in the list, reflect
+                    // the new status immediately, then deep-link straight to the
+                    // Login Items & Extensions pane.
+                    if let newStatus = try? SMAppServicePrivilegedHelperInstaller().register() {
+                        helperStatus = newStatus
+                    }
                     openURL(loginItemsURL)
                 }
             }
