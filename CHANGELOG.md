@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Automation permission grant for signed builds.** Hardened-runtime builds were silently denied before the consent prompt could appear (missing Apple Events entitlement); the entitlement is now present, and a new Automation card in Settings lets existing users grant or repair the permission without re-running onboarding.
 - **Destructive shortcuts gated while a text field is focused.** ⌘⌫ and ⇧⌘⌫ now probe the live AppKit first-responder in addition to the published `isEditingText` flag, so Move to Trash / Delete Permanently can never fire while a filter or search field is active.
+- **No Keychain prompt just for opening AI settings.** Checking whether a cloud key exists no longer decrypts the secret, so the "allow access to your keychain" prompt is reserved for an actual cloud request rather than firing on the settings screen.
 
 ## [0.4.0] - 2026-06-13
 

@@ -119,6 +119,14 @@ swift run Gargantua          # exercise via the GUI
 swift run GargantuaMCP       # or scan via MCP for a structured dry-run
 ```
 
+If you exercise the Cloud AI key flow from a dev build, macOS will re-prompt for Keychain access on every rebuild — `swift build` ad-hoc-signs the binary with a fresh signature each time, so "Always Allow" never sticks. Sign the debug binary with a stable identity once and the grant persists:
+
+```bash
+swift build && Scripts/dev-sign.sh && .build/debug/Gargantua
+```
+
+`Scripts/dev-sign.sh` uses your Apple Development cert (or `DEV_SIGN_IDENTITY`, or a self-signed code-signing cert). Click "Always Allow" once after the first signed run.
+
 Mole parity status and the inventory of deferred items live in [`docs/mole-rule-parity-audit.md`](docs/mole-rule-parity-audit.md). Use it as the reference for what's intentionally not yet ported.
 
 ### App-pack remnant rules

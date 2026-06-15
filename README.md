@@ -138,13 +138,15 @@ Everything below is configurable from **Settings**. Five tabs: AI · Automation 
 | --- | --- | --- | --- |
 | **Template** | On | Local-only | None (rule-based, instant) |
 | **Local MLX** | Off | Local-only after download | `~/Library/Application Support/Gargantua/Models/` |
-| **Cloud (Anthropic)** | Off | `api.anthropic.com` over TLS | API key in macOS Keychain |
+| **Cloud API** | Off | Anthropic, or any OpenAI-compatible endpoint (OpenRouter, Groq, Ollama, LM Studio…) over your configured base URL | API key(s) in macOS Keychain |
 | **Claude Code Agent** | Off | Spawns local Claude Code CLI | Configuration in app prefs; CLI manages its own auth |
+| **Codex** | Off | Spawns local `codex exec`, read-only | Configuration in app prefs; CLI manages its own auth |
 
 - **Template engine**: the default. Generates explanations directly from YAML rule metadata. No model required, no network.
 - **Local MLX**: opt-in. Downloads `mlx-community/Llama-3.2-1B-Instruct-4bit` (~700 MB) to local storage. Runs on Apple Silicon via MLX. First explanation per session compiles Metal shaders. Idle engine unloads after 60 s.
-- **Cloud AI (Anthropic)**: off by default. Requires a user-supplied Anthropic API key, stored only in macOS Keychain, never written to disk in plaintext. Sends file paths, sizes, classifications, and confidence scores. File content snippets (4 KB max, redacted for tokens and keys) are sent **only** with the explicit "Allow file-content previews" toggle. Configurable monthly spend cap (default $0; hard ceiling enforced client-side). Default model: `claude-sonnet-4-6`.
-- **Claude Code Agent**: opt-in local agent runtime. Spawns the Claude Code CLI for non-interactive maintenance runs. **Tools are read-only by default**; destructive MCP tools must be explicitly granted per session. Configurable model, max turns, and scheduled-audit toggle.
+- **Cloud API**: off by default. Talks to either Anthropic's Messages API or any **OpenAI-compatible** Chat Completions endpoint — OpenAI, OpenRouter, Groq, Together, or a local server (Ollama, LM Studio) — selected by a provider toggle and a configurable base URL. Each provider keeps its own user-supplied key in macOS Keychain (never on disk in plaintext); local servers can run keyless. Sends file paths, sizes, classifications, and confidence scores; file-content snippets (4 KB max, redacted for tokens and keys) are sent **only** with the explicit "Allow file-content previews" toggle. The monthly spend cap (default $0, hard ceiling enforced client-side) applies to the metered Anthropic path; OpenAI-compatible usage is billed by your chosen provider. Default Anthropic model: `claude-sonnet-4-6`.
+- **Claude Code Agent**: opt-in local agent runtime. Spawns the Claude Code CLI for non-interactive maintenance runs through the read-only MCP server. **Tools are read-only by default**; destructive MCP tools must be explicitly granted per session. Configurable model, max turns, and scheduled-audit toggle.
+- **Codex**: opt-in local engine. Runs a one-shot, read-only `codex exec` for explanations and for maintenance (Agent Run + scheduled audits) as an alternative to Claude Code. No MCP — it inspects the filesystem read-only and returns a written report; the read-only sandbox blocks any write. Configurable model and scheduled-audit toggle.
 
 In all engines: **AI can explain a classification but cannot lower it.** A `protected` finding remains `protected` regardless of what any model says.
 
@@ -280,7 +282,7 @@ Gargantua runs with elevated trust on a user's machine. Defenses are layered:
 - **Bundled protected roots**: `protected_roots.yaml` blocks cleanup at filesystem roots regardless of rule classification. Users can extend it but cannot remove bundled entries.
 - **Privileged helper**: operations needing elevated trust are routed through `GargantuaPrivilegedHelper`, registered via SMAppService and reached over XPC. The app never calls `sudo` directly.
 - **MCP guardrails**: bearer-token auth (Keychain-backed) for non-local binds, per-client rate limit, hard `protected` reject, audit log, cancel-notification grace period, and separate read-only/destructive tool registries.
-- **Keychain-only secret storage**: Anthropic API key and MCP bearer token live in Keychain, never on disk in plaintext.
+- **Keychain-only secret storage**: cloud API keys (Anthropic and OpenAI-compatible, in separate Keychain accounts) and the MCP bearer token live in Keychain, never on disk in plaintext. A presence check never decrypts the key, so it stays sealed until an actual request needs it.
 - **Cloud AI redaction**: outbound cloud requests strip apparent secrets and tokens from any included content. File contents are only sent with explicit per-config consent, capped at 4 KB per item, with hard monthly spend caps.
 - **Hardened runtime + notarization**: release builds are signed with Developer ID, hardened runtime enabled, notarized, and stapled. Sparkle update artifacts are EdDSA-signed and feed-validated.
 - **Pre-commit secret scanning**: versioned `.githooks/` with `gitleaks` blocks committed credentials. See [CONTRIBUTING.md](CONTRIBUTING.md#development-setup).
