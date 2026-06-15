@@ -74,7 +74,7 @@ enum ProcessSpawner {
         var argv = try buildCStringArray([executable.path] + arguments)
         defer { freeCStringArray(argv) }
         var envp = try buildCStringArray(
-            ProcessInfo.processInfo.environment.map { "\($0.key)=\($0.value)" }
+            childEnvironment(for: executable).map { "\($0.key)=\($0.value)" }
         )
         defer { freeCStringArray(envp) }
 
@@ -122,6 +122,32 @@ enum ProcessSpawner {
     private static func configureSpawnAttributes(_ attrs: inout posix_spawnattr_t?) throws {
         try check(posix_spawnattr_setflags(&attrs, Int16(POSIX_SPAWN_SETPGROUP)))
         try check(posix_spawnattr_setpgroup(&attrs, 0))
+    }
+
+    /// Build the child's environment, prepending the executable's own
+    /// directory to `PATH`.
+    ///
+    /// When Gargantua is launched from Finder/Dock it inherits launchd's
+    /// minimal `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`). We resolve developer
+    /// tools by absolute path, so the tool itself runs — but a Node-shim tool
+    /// like `pnpm` (Homebrew, nvm, corepack, volta, asdf, mise) re-execs
+    /// `#!/usr/bin/env node`, and `env` searches `PATH`. With node absent from
+    /// the inherited `PATH` that fails with exit 127, `env: node: No such file
+    /// or directory`. `node` is co-located with the shim in every one of those
+    /// layouts, so prepending the resolved binary's directory makes it
+    /// resolvable. Native binaries (brew, docker, go, cargo, xcrun) are
+    /// unaffected — they don't shell out to siblings via `env`.
+    static func childEnvironment(for executable: URL) -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        let binDir = executable.deletingLastPathComponent().path
+        guard !binDir.isEmpty, binDir != "/" else { return environment }
+
+        let existing = environment["PATH"] ?? ""
+        let segments = existing.split(separator: ":", omittingEmptySubsequences: true).map(String.init)
+        guard !segments.contains(binDir) else { return environment }
+
+        environment["PATH"] = existing.isEmpty ? binDir : "\(binDir):\(existing)"
+        return environment
     }
 
     /// Build a NULL-terminated argv/envp array from a Swift string array.
