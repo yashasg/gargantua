@@ -23,11 +23,11 @@ extension CleanupResultTests {
         #expect(!FileManager.default.fileExists(atPath: file.path))
     }
 
-    @Test("trash method uses injected Finder-first mover")
+    @Test("trash method uses injected mover")
     @MainActor
     func trashMethodUsesInjectedMover() async {
-        let item = makeItem(id: "finder-primary", path: "/tmp/gargantua-finder-primary", size: 12)
-        let expectedTrashURL = URL(fileURLWithPath: "/Users/test/.Trash/gargantua-finder-primary")
+        let item = makeItem(id: "trash-primary", path: "/tmp/gargantua-trash-primary", size: 12)
+        let expectedTrashURL = URL(fileURLWithPath: "/Users/test/.Trash/gargantua-trash-primary")
         let mover = RecordingTrashMover(outcome: .success(expectedTrashURL))
         let engine = CleanupEngine(homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser, trashMover: mover)
 
@@ -39,31 +39,31 @@ extension CleanupResultTests {
         #expect(mover.movedURLs == [URL(fileURLWithPath: item.path)])
     }
 
-    @Test("Finder Automation failure falls back to direct Trash mover")
+    @Test("primary trash failure falls back to the secondary mover")
     @MainActor
-    func finderFailureFallsBackToDirectTrashMover() async throws {
-        let item = makeItem(id: "finder-fallback", path: "/tmp/gargantua-finder-fallback", size: 34)
-        let expectedTrashURL = URL(fileURLWithPath: "/Users/test/.Trash/gargantua-finder-fallback")
-        let finder = RecordingTrashMover(outcome: .failure("Automation denied"))
-        let direct = RecordingTrashMover(outcome: .success(expectedTrashURL))
-        let mover = FinderFirstTrashMover(primary: finder, fallback: direct)
+    func primaryFailureFallsBackToSecondaryMover() async throws {
+        let item = makeItem(id: "trash-fallback", path: "/tmp/gargantua-trash-fallback", size: 34)
+        let expectedTrashURL = URL(fileURLWithPath: "/Users/test/.Trash/gargantua-trash-fallback")
+        let primary = RecordingTrashMover(outcome: .failure("Trash API failed"))
+        let fallback = RecordingTrashMover(outcome: .success(expectedTrashURL))
+        let mover = FallbackTrashMover(primary: primary, fallback: fallback)
         let engine = CleanupEngine(homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser, trashMover: mover)
 
         let result = await engine.clean([item], method: .trash)
 
         #expect(result.allSucceeded)
         #expect(result.itemResults.first?.trashURL == expectedTrashURL)
-        #expect(finder.movedURLs == [URL(fileURLWithPath: item.path)])
-        #expect(direct.movedURLs == [URL(fileURLWithPath: item.path)])
+        #expect(primary.movedURLs == [URL(fileURLWithPath: item.path)])
+        #expect(fallback.movedURLs == [URL(fileURLWithPath: item.path)])
     }
 
     @Test("Trash fallback failure preserves per-item result shape")
     @MainActor
     func trashFallbackFailurePreservesItemResult() async {
-        let item = makeItem(id: "finder-fallback-failure", path: "/tmp/gargantua-finder-fallback-failure", size: 56)
-        let finder = RecordingTrashMover(outcome: .failure("Automation denied"))
-        let direct = RecordingTrashMover(outcome: .failure("No such file"))
-        let mover = FinderFirstTrashMover(primary: finder, fallback: direct)
+        let item = makeItem(id: "trash-fallback-failure", path: "/tmp/gargantua-trash-fallback-failure", size: 56)
+        let primary = RecordingTrashMover(outcome: .failure("Trash API failed"))
+        let fallback = RecordingTrashMover(outcome: .failure("No such file"))
+        let mover = FallbackTrashMover(primary: primary, fallback: fallback)
         let engine = CleanupEngine(homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser, trashMover: mover)
 
         let result = await engine.clean([item], method: .trash)
@@ -75,7 +75,7 @@ extension CleanupResultTests {
         #expect(itemResult.succeeded == false)
         #expect(itemResult.trashURL == nil)
         #expect(itemResult.item.id == item.id)
-        #expect(itemResult.error?.contains("Finder Automation failed: Automation denied") == true)
-        #expect(itemResult.error?.contains("Direct Trash API fallback failed: No such file") == true)
+        #expect(itemResult.error?.contains("Trash move failed: Trash API failed") == true)
+        #expect(itemResult.error?.contains("Fallback also failed: No such file") == true)
     }
 }

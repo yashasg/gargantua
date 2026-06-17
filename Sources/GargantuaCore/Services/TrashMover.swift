@@ -17,16 +17,20 @@ struct TrashMoveFallbackFailure: LocalizedError, Sendable {
     let fallbackError: String
 
     var errorDescription: String? {
-        "Finder Automation failed: \(primaryError). Direct Trash API fallback failed: \(fallbackError)."
+        "Trash move failed: \(primaryError). Fallback also failed: \(fallbackError)."
     }
 }
 
-final class FinderFirstTrashMover: TrashMoving {
+/// Tries a primary mover, falling back to a second on failure. Both paths move
+/// items to the system Trash silently — unlike driving Finder over Apple Events,
+/// neither plays the per-item "move to Trash" sound, and both record the Put
+/// Back metadata so the user can restore from the Trash.
+final class FallbackTrashMover: TrashMoving {
     private let primary: any TrashMoving
     private let fallback: any TrashMoving
 
     init(
-        primary: any TrashMoving = FinderAutomationTrashMover(),
+        primary: any TrashMoving = FileManagerTrashMover(),
         fallback: any TrashMoving = WorkspaceTrashMover()
     ) {
         self.primary = primary
@@ -51,47 +55,19 @@ final class FinderFirstTrashMover: TrashMoving {
     }
 }
 
-final class FinderAutomationTrashMover: TrashMoving {
+/// Primary trash path: `FileManager.trashItem` moves the item to `~/.Trash`
+/// silently, records Put Back metadata, and returns the actual resulting Trash
+/// URL after any name-collision rename. Needs no Automation consent and doesn't
+/// depend on Finder being responsive. Runs off the main thread so a slow move
+/// (e.g. a cross-volume item) doesn't stall the UI mid-clean.
+final class FileManagerTrashMover: TrashMoving {
     @MainActor
     func moveToTrash(_ url: URL) async throws -> URL? {
-        let path = Self.appleScriptString(url.path)
-        return try await Task.detached(priority: .userInitiated) {
-            let source = """
-            tell application "Finder"
-                delete (POSIX file \(path) as alias)
-            end tell
-            """
-            guard let script = NSAppleScript(source: source) else {
-                throw TrashMoveFailure(message: "Could not create Finder Automation script.")
-            }
-
-            var errorInfo: NSDictionary?
-            _ = script.executeAndReturnError(&errorInfo)
-            if let errorInfo {
-                throw TrashMoveFailure(message: Self.finderErrorDescription(errorInfo))
-            }
-
-            // Finder does not reliably return the final Trash URL, especially when
-            // it resolves name collisions. Preserve result shape without guessing.
-            return nil
+        try await Task.detached(priority: .userInitiated) {
+            var resultingURL: NSURL?
+            try FileManager.default.trashItem(at: url, resultingItemURL: &resultingURL)
+            return resultingURL as URL?
         }.value
-    }
-
-    private static func appleScriptString(_ value: String) -> String {
-        let escaped = value
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-        return "\"\(escaped)\""
-    }
-
-    private static func finderErrorDescription(_ errorInfo: NSDictionary) -> String {
-        let message = errorInfo[NSAppleScript.errorMessage] as? String
-            ?? errorInfo[NSAppleScript.errorBriefMessage] as? String
-            ?? "Finder Automation failed."
-        if let number = errorInfo[NSAppleScript.errorNumber] as? NSNumber {
-            return "\(message) (\(number.intValue))"
-        }
-        return message
     }
 }
 

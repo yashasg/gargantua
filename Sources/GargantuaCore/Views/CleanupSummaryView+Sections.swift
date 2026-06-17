@@ -123,8 +123,7 @@ extension CleanupSummaryView {
     /// Pick the remediation that matches the *real* cause. Full Disk Access is
     /// only the blocker when it is genuinely missing — when it is granted, a
     /// permission failure means the items are owned by macOS or another user
-    /// (needs elevated removal) or Finder Automation was denied, not a toggle
-    /// the user has already flipped.
+    /// (needs elevated removal), not a toggle the user has already flipped.
     private var dominantFailureGuidance: PermissionFailureGuidance? {
         guard !shown.failedItems.isEmpty,
               permissionFailureCount * 2 >= shown.failedItems.count
@@ -132,13 +131,6 @@ extension CleanupSummaryView {
 
         if !PermissionChecker.hasFullDiskAccess {
             return .fullDiskAccess
-        }
-
-        let automationCount = shown.failedItems.filter {
-            CleanupFailureClassifier.kind(of: $0.error) == .automation
-        }.count
-        if automationCount * 2 >= permissionFailureCount {
-            return .automation
         }
 
         // Ownership failure: the remedy depends on the helper's *actual* state,

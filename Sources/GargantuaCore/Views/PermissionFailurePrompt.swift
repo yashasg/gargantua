@@ -6,8 +6,6 @@ import SwiftUI
 enum PermissionFailureGuidance {
     /// Full Disk Access is genuinely missing.
     case fullDiskAccess
-    /// Finder Automation (Apple Events) was denied.
-    case automation
     /// Items are owned by macOS or another user; the privileged helper is
     /// present but needs approval.
     case ownership
@@ -22,7 +20,6 @@ enum PermissionFailureGuidance {
     var title: String {
         switch self {
         case .fullDiskAccess: "These items require Full Disk Access"
-        case .automation: "These items need Automation permission"
         case .ownership: "These items are owned by the system"
         case .systemUnavailable: "This build can't remove system-owned items"
         case .systemResidual: "Some items couldn't be removed"
@@ -33,9 +30,6 @@ enum PermissionFailureGuidance {
         switch self {
         case .fullDiskAccess:
             "Open System Settings, click the \"+\" button, then add Gargantua from your Applications folder."
-        case .automation:
-            "Gargantua moves items to the Trash through Finder. Allow it to control Finder under Automation, "
-                + "or it will fall back to the direct Trash API."
         case .ownership:
             "Full Disk Access can't delete files owned by macOS or another user. Approve Gargantua's privileged "
                 + "helper under Login Items & Extensions so it can remove them, then run the clean again."
@@ -54,7 +48,6 @@ enum PermissionFailureGuidance {
     var buttonLabel: String? {
         switch self {
         case .fullDiskAccess: "Open Full Disk Access Settings"
-        case .automation: "Open Automation Settings"
         case .ownership: "Open Login Items & Extensions"
         case .systemUnavailable: "Get the Signed Release"
         case .systemResidual: nil
@@ -63,7 +56,7 @@ enum PermissionFailureGuidance {
 
     var buttonIcon: String {
         switch self {
-        case .fullDiskAccess, .automation, .ownership: "gear"
+        case .fullDiskAccess, .ownership: "gear"
         case .systemUnavailable: "arrow.down.circle"
         case .systemResidual: "info.circle"
         }
@@ -73,8 +66,6 @@ enum PermissionFailureGuidance {
         switch self {
         case .fullDiskAccess:
             URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
-        case .automation:
-            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")
         case .ownership:
             URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.extension")
         case .systemUnavailable:

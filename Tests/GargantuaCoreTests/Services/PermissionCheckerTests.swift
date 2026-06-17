@@ -1,4 +1,3 @@
-import CoreServices
 import Foundation
 import Testing
 @testable import GargantuaCore
@@ -43,45 +42,5 @@ struct PermissionCheckerTests {
         )
 
         #expect(result == true)
-    }
-
-    @Test("noErr maps to granted")
-    func noErrMapsToGranted() {
-        let result = PermissionChecker.finderAutomationPermission(prompt: true) { _ in noErr }
-        #expect(result == .granted)
-    }
-
-    @Test("errAEEventNotPermitted maps to denied")
-    func notPermittedMapsToDenied() {
-        let result = PermissionChecker.finderAutomationPermission(prompt: false) { _ in
-            OSStatus(errAEEventNotPermitted)
-        }
-        #expect(result == .denied)
-    }
-
-    @Test("would-require-consent maps to notDetermined")
-    func wouldRequireConsentMapsToNotDetermined() {
-        let result = PermissionChecker.finderAutomationPermission(prompt: false) { _ in
-            OSStatus(errAEEventWouldRequireUserConsent)
-        }
-        #expect(result == .notDetermined)
-    }
-
-    @Test("transient failures (e.g. Finder not running) map to notDetermined")
-    func transientFailureMapsToNotDetermined() {
-        let result = PermissionChecker.finderAutomationPermission(prompt: true) { _ in
-            OSStatus(procNotFound)
-        }
-        #expect(result == .notDetermined)
-    }
-
-    @Test("prompt flag is forwarded to the underlying determination")
-    func promptFlagForwarded() {
-        var captured: Bool?
-        _ = PermissionChecker.finderAutomationPermission(prompt: true) { ask in
-            captured = ask
-            return noErr
-        }
-        #expect(captured == true)
     }
 }

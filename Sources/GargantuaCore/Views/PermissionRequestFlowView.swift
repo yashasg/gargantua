@@ -4,14 +4,13 @@ import SwiftUI
 
 /// First-launch permission request flow.
 ///
-/// Steps through Full Disk Access and Automation permission screens.
-/// Each screen explains what the permission unlocks with a skip option.
-/// The flow completes by setting `hasCompletedOnboarding` to `true`.
+/// Presents the Full Disk Access permission screen, explaining what it unlocks
+/// with a skip option. The flow completes by setting `hasCompletedOnboarding`
+/// to `true`.
 public struct PermissionRequestFlowView: View {
     @Binding var isComplete: Bool
-    @State private var step = 0
 
-    private let totalSteps = 2
+    private let totalSteps = 1
 
     public init(isComplete: Binding<Bool>) {
         self._isComplete = isComplete
@@ -22,22 +21,8 @@ public struct PermissionRequestFlowView: View {
             GargantuaColors.void_
                 .ignoresSafeArea()
 
-            Group {
-                switch step {
-                case 0:
-                    FullDiskAccessScreen(onContinue: advance, stepIndex: 1, totalSteps: totalSteps)
-                        .transition(.push(from: .trailing))
-                default:
-                    AutomationScreen(onContinue: finish, stepIndex: 2, totalSteps: totalSteps)
-                        .transition(.push(from: .trailing))
-                }
-            }
-            .animation(.easeOut(duration: 0.2), value: step)
+            FullDiskAccessScreen(onContinue: finish, stepIndex: 1, totalSteps: totalSteps)
         }
-    }
-
-    private func advance() {
-        step += 1
     }
 
     private func finish() {
@@ -104,118 +89,6 @@ private struct FullDiskAccessScreen: View {
     }
 }
 
-// MARK: - Automation Screen
-
-private struct AutomationScreen: View {
-    var onContinue: () -> Void
-    let stepIndex: Int
-    let totalSteps: Int
-
-    @State private var status = PermissionChecker.finderAutomationPermission(prompt: false)
-    @State private var isRequesting = false
-    @State private var requestTask: Task<Void, Never>?
-
-    @Environment(\.openURL) private var openURL
-
-    /// Reflects changes made directly in System Settings (e.g. toggling the
-    /// entry back on after a prior denial) without re-prompting.
-    private let timer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
-
-    var body: some View {
-        PermissionScreen(
-            icon: "arrow.3.trianglepath",
-            title: "Automation",
-            explanation: "Unlock safer cleanup execution",
-            detail: "Gargantua asks Finder to move files to Trash first, then falls "
-                + "back to macOS Trash APIs if Automation is unavailable. macOS asks "
-                + "you to allow controlling Finder the first time — there's nothing to "
-                + "add by hand.",
-            unlocks: [
-                "Use Finder-first cleanup for ordinary files",
-                "Keep direct Trash fallback available when Automation is denied",
-            ],
-            limitedMode: "Without Automation, Gargantua can still scan and use direct Trash APIs for cleanup.",
-            permissionGranted: grantedState,
-            primaryTitle: primaryTitle,
-            onPrimary: primaryAction,
-            secondaryLinkTitle: nil,
-            onSecondary: nil,
-            manualHint: manualHint,
-            isBusy: isRequesting,
-            stepIndex: stepIndex,
-            totalSteps: totalSteps,
-            onContinue: onContinue
-        )
-        .onReceive(timer) { _ in
-            // Cheap, non-prompting probe; ignore while a prompt is in flight.
-            if !isRequesting {
-                status = PermissionChecker.finderAutomationPermission(prompt: false)
-            }
-        }
-        .onDisappear {
-            requestTask?.cancel()
-        }
-    }
-
-    /// `nil` (rather than `false`) while undetermined so the card shows the
-    /// neutral "recommended" state instead of a red "denied" mark.
-    private var grantedState: Bool? {
-        switch status {
-        case .granted: return true
-        case .denied: return false
-        case .notDetermined: return nil
-        }
-    }
-
-    private var primaryTitle: String {
-        switch status {
-        case .granted: return "Allowed"
-        // Once macOS records a denial it won't show the consent dialog again,
-        // so the only recovery path is System Settings — not a re-request.
-        case .denied: return "Open Automation Settings"
-        case .notDetermined: return "Allow Finder Control"
-        }
-    }
-
-    private var manualHint: String? {
-        switch status {
-        case .denied:
-            return "Previously denied. Turn Gargantua → Finder back on in "
-                + "Automation settings — macOS won't ask again from here."
-        case .granted, .notDetermined:
-            return nil
-        }
-    }
-
-    private func primaryAction() {
-        switch status {
-        case .granted:
-            break
-        case .denied:
-            openURL(automationURL)
-        case .notDetermined:
-            requestAccess()
-        }
-    }
-
-    private func requestAccess() {
-        guard !isRequesting, status != .granted else { return }
-        isRequesting = true
-        requestTask = Task.detached {
-            // Blocks while the consent dialog is on screen — must stay off main.
-            let result = PermissionChecker.finderAutomationPermission(prompt: true)
-            await MainActor.run {
-                status = result
-                isRequesting = false
-            }
-        }
-    }
-
-    private var automationURL: URL {
-        URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!
-    }
-}
-
 // MARK: - Shared Permission Screen Layout
 
 private struct PermissionScreen: View {
@@ -240,14 +113,16 @@ private struct PermissionScreen: View {
         VStack(spacing: GargantuaSpacing.space5) {
             Spacer()
 
-            VStack(spacing: GargantuaSpacing.space2) {
-                Text("STEP \(stepIndex) OF \(totalSteps)")
-                    .font(GargantuaFonts.sectionLabel)
-                    .tracking(0.8)
-                    .foregroundStyle(GargantuaColors.ink4)
+            if totalSteps > 1 {
+                VStack(spacing: GargantuaSpacing.space2) {
+                    Text("STEP \(stepIndex) OF \(totalSteps)")
+                        .font(GargantuaFonts.sectionLabel)
+                        .tracking(0.8)
+                        .foregroundStyle(GargantuaColors.ink4)
 
-                PermissionProgressIndicator(stepIndex: stepIndex, totalSteps: totalSteps)
-                    .frame(maxWidth: 220)
+                    PermissionProgressIndicator(stepIndex: stepIndex, totalSteps: totalSteps)
+                        .frame(maxWidth: 220)
+                }
             }
 
             // Icon

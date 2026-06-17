@@ -76,17 +76,11 @@ public final class CleanupEngine: Sendable {
     /// - Parameter privilegedHelper: pass `XPCPrivilegedUninstallHelper()` from
     ///   interactive flows to recover root-owned items that POSIX `EPERM`
     ///   blocked. Defaults to `nil` (no escalation).
-    /// - Parameter useFinderAutomation: when `true` (the GUI default) cleanup
-    ///   asks Finder to move items to Trash, falling back to the direct Trash
-    ///   API. Headless callers (the MCP server) pass `false`: a background
-    ///   process can't satisfy an Apple Events consent prompt, so attempting it
-    ///   only spawns a doomed request before the same fallback runs anyway.
     public init(
-        privilegedHelper: (any PrivilegedUninstallHelping)? = nil,
-        useFinderAutomation: Bool = true
+        privilegedHelper: (any PrivilegedUninstallHelping)? = nil
     ) {
         self.homeDirectory = FileManager.default.homeDirectoryForCurrentUser
-        self.trashMover = useFinderAutomation ? FinderFirstTrashMover() : WorkspaceTrashMover()
+        self.trashMover = FallbackTrashMover()
         self.protectedRootPolicy = .loadDefault()
         self.commandActionRunner = CommandActionCleanupRouter.production()
         self.ollamaModelRunner = OllamaModelCleanupRouter.production()
@@ -99,7 +93,7 @@ public final class CleanupEngine: Sendable {
     /// the already-gone path is exercised by passing `{ _ in false }`.
     internal init(
         homeDirectoryForTesting: URL,
-        trashMover: any TrashMoving = FinderFirstTrashMover(),
+        trashMover: any TrashMoving = FallbackTrashMover(),
         protectedRootPolicy: ProtectedRootPolicy = .loadDefault(),
         commandActionRunner: CommandActionCleanupRouter = .disabled,
         ollamaModelRunner: OllamaModelCleanupRouter = .disabled,
@@ -283,7 +277,7 @@ public final class CleanupEngine: Sendable {
 
         // TOCTOU guard: the path the scan recorded as a real file could have had
         // a symlink swapped into its parent chain before the user confirmed the
-        // clean. Both Finder trash and `removeItem` follow symlinked parents, so
+        // clean. Both `trashItem` and `removeItem` follow symlinked parents, so
         // refuse rather than risk deleting the link's target. The privileged
         // path enforces the same rule in the helper.
         guard SymlinkSwapGuard.isUnchanged(url) else {
@@ -322,10 +316,10 @@ public final class CleanupEngine: Sendable {
             && !message.lowercased().contains("no such file")
     }
 
-    /// Move a single URL to Trash. Finder Automation is tried first, with the
-    /// direct macOS Trash API kept as a fallback for denied or failed events.
-    /// Retries a transient hold (e.g. a browser's helper still releasing the
-    /// cache right after the user quit it via the Quit button).
+    /// Move a single URL to Trash via the direct macOS Trash API, with an
+    /// `NSWorkspace.recycle` fallback. Retries a transient hold (e.g. a
+    /// browser's helper still releasing the cache right after the user quit it
+    /// via the Quit button).
     @MainActor
     func recycleSingle(url: URL, item: ScanResult) async -> CleanupItemResult {
         var lastError = "unknown error"

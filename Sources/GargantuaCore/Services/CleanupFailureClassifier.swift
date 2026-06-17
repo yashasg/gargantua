@@ -12,8 +12,6 @@ public enum CleanupFailureKind: Sendable, Equatable {
     case none
     /// File is owned by root or another user; needs the privileged helper.
     case ownership
-    /// Apple Events to Finder were denied (Automation permission).
-    case automation
     /// Permission-class failure with no more specific signal.
     case permission
     case other
@@ -22,11 +20,6 @@ public enum CleanupFailureKind: Sendable, Equatable {
 public enum CleanupFailureClassifier {
     public static func kind(of error: String?) -> CleanupFailureKind {
         guard let raw = error?.lowercased(), !raw.isEmpty else { return .none }
-
-        if raw.contains("-1743") || raw.contains("apple event")
-            || raw.contains("not authorized to send") {
-            return .automation
-        }
 
         // POSIX EPERM / Cocoa "no permission": the file exists but the current
         // user can't remove it — almost always root or other-user ownership.
@@ -51,7 +44,7 @@ public enum CleanupFailureClassifier {
     /// could plausibly complete the removal.
     public static func isElevatable(_ error: String?) -> Bool {
         switch kind(of: error) {
-        case .ownership, .automation, .permission:
+        case .ownership, .permission:
             true
         case .none, .other:
             false
@@ -67,8 +60,6 @@ public enum CleanupFailureClassifier {
         switch kind(of: error) {
         case .ownership:
             return "Owned by macOS or another user — needs Gargantua’s privileged helper."
-        case .automation:
-            return "Finder Automation was denied, and the direct Trash API couldn’t move it either."
         case .permission:
             return "Permission denied for this item."
         case .none, .other:

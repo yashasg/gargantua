@@ -12,12 +12,6 @@ struct CleanupFailureReasonTests {
             .contains("privileged helper"))
     }
 
-    @Test("Automation denial maps to the Finder Automation message")
-    func automation() {
-        let reason = CleanupFailureClassifier.friendlyReason(for: "Not authorized to send Apple events (-1743)")
-        #expect(reason.contains("Finder Automation"))
-    }
-
     @Test("nil, empty, and bare \"unknown error\" never leak to the user")
     func noRawFallthrough() {
         let expected = "Couldn’t be removed — macOS gave no further detail."
