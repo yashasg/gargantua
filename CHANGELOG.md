@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-06-17
+
+### Fixed
+
+- **Silent trash during cleanup.** Move-to-Trash no longer plays the system Trash sound on each cleaned item; the Finder Automation permission is also no longer requested during onboarding, reducing setup to one step.
+- **Homebrew upgrade deprecation warning.** Gargantua's cask now uses the correct symbol form for the macOS dependency, so `brew upgrade` no longer prints a deprecation warning.
+
 ## [0.4.3] - 2026-06-15
 
 ### Added
