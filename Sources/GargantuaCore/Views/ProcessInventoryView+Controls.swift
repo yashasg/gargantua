@@ -50,7 +50,9 @@ extension ProcessInventoryView {
                 Button {
                     guard sortMetric != metric else { return }
                     sortMetric = metric
-                    startSnapshot()
+                    // While searching, the find-pass re-runs on metric change
+                    // (see `.task(id:)`); only re-sample the snapshot otherwise.
+                    if !isSearchActive { startSnapshot() }
                 } label: {
                     Text(metric.displayLabel)
                         .font(GargantuaFonts.caption)
@@ -95,15 +97,21 @@ extension ProcessInventoryView {
     var emptyState: some View {
         VStack(spacing: GargantuaSpacing.space2) {
             Spacer()
-            Image(systemName: "tray")
+            Image(systemName: isSearchActive ? "magnifyingglass" : "tray")
                 .font(.system(size: 28))
                 .foregroundStyle(GargantuaColors.ink3)
-            Text("No processes match the current filter.")
+            Text(emptyStateMessage)
                 .font(GargantuaFonts.body)
                 .foregroundStyle(GargantuaColors.ink2)
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var emptyStateMessage: String {
+        guard isSearchActive else { return "No processes match the current filter." }
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return "No processes match “\(query)”."
     }
 
     func footer(scan: ProcessInventoryScan) -> some View {

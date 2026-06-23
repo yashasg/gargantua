@@ -25,6 +25,7 @@ extension ProcessInventoryView {
 
     func clearSnapshot() {
         expandedID = nil
+        searchQuery = ""
         session.clearSnapshot()
     }
 

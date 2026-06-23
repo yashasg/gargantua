@@ -15,6 +15,8 @@ public struct ProcessInventoryView: View {
     @State var expandedID: String?
     @State var sortMetric: ProcessSortMetric = .cpu
     @State var safetyFilter: ProcessSafetyFilter = .all
+    @State var searchQuery: String = ""
+    @FocusState var isSearchFocused: Bool
     @State var pendingAction: PendingProcessAction?
     @State var lastError: String?
     let onExplain: ((ScanResult) -> Void)?
@@ -114,6 +116,7 @@ public struct ProcessInventoryView: View {
     // MARK: - States
 
     var subtitleText: String {
+        if isSearchActive { return searchSubtitle }
         if let scan = session.scan {
             let shown = scan.items.count
             let total = scan.totalProcessCount
@@ -124,6 +127,17 @@ public struct ProcessInventoryView: View {
         }
         if session.isScanning { return "Sampling running processes…" }
         return "Snapshot every running process. Decide what stays."
+    }
+
+    private var searchSubtitle: String {
+        if session.isSearching, session.searchResults == nil { return "Searching all processes…" }
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        let count = session.searchResults?.items.count ?? 0
+        if count >= ProcessInventorySession.searchResultLimit {
+            return "First \(count) matches for “\(query)”"
+        }
+        let noun = count == 1 ? "match" : "matches"
+        return "\(count) \(noun) for “\(query)”"
     }
 
     var startView: some View {
@@ -200,13 +214,17 @@ public struct ProcessInventoryView: View {
 
     @ViewBuilder
     func resultsState(_ scan: ProcessInventoryScan) -> some View {
-        let visible = visibleItems(scan)
+        // Search results replace the snapshot list while a query is active;
+        // clearing the query restores the snapshot with no re-sample.
+        let activeScan = isSearchActive ? (session.searchResults ?? scan) : scan
+        let visible = visibleItems(activeScan)
         // PID → row id for the displayed rows, so a child can deep-link to its
         // parent's row when the parent is on screen.
         let parentIDsByPID = parentRowIDsByPID(visible)
 
         VStack(spacing: 0) {
-            controlBar(scan: scan, visibleCount: visible.count)
+            searchBar
+            controlBar(scan: activeScan, visibleCount: visible.count)
 
             Rectangle()
                 .fill(GargantuaColors.border)
@@ -249,8 +267,26 @@ public struct ProcessInventoryView: View {
                 }
             }
 
-            footer(scan: scan)
+            footer(scan: activeScan)
         }
+        // Debounced full-table search: re-runs whenever the query OR sort
+        // metric changes (so results re-rank on a metric toggle), auto-
+        // cancelling the prior pass so only the latest request lands.
+        .task(id: "\(sortMetric.rawValue)\u{1}\(searchQuery)") {
+            let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else {
+                session.clearSearch()
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            await session.search(query: query, metric: sortMetric)
+        }
+    }
+
+    /// Whether a non-blank search query is active.
+    var isSearchActive: Bool {
+        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// Index the displayed rows by PID so a child can resolve its parent's row.

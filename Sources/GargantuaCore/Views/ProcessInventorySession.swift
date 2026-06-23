@@ -9,9 +9,21 @@ import Foundation
 public final class ProcessInventorySession {
     public private(set) var scan: ProcessInventoryScan?
     public private(set) var isScanning = false
+    /// Results of the active full-table search, or `nil` when not searching.
+    /// Kept separate from `scan` so clearing the query restores the snapshot
+    /// without a re-sample.
+    public private(set) var searchResults: ProcessInventoryScan?
+    /// True while a search find-pass is sampling, so the field can show a
+    /// spinner without blanking the current list.
+    public private(set) var isSearching = false
     /// IDs of processes currently being acted on. The row uses this to render
     /// a spinner inline so the user gets feedback while `kill(2)` runs.
     public private(set) var busyItemIDs: Set<String> = []
+
+    /// Cap on search matches resolved + displayed. Generous enough to cover any
+    /// real query; guards against resolving identity for hundreds of rows when
+    /// a one-character query matches almost everything.
+    public static let searchResultLimit = 200
 
     private let scanner: any ProcessInventoryScanning
     private let actionExecutor: (any ProcessActionExecuting)?
@@ -38,7 +50,37 @@ public final class ProcessInventorySession {
 
     public func clearSnapshot() {
         scan = nil
+        searchResults = nil
+        isSearching = false
         busyItemIDs.removeAll()
+    }
+
+    /// Run a full-table search and publish the matches. The view debounces and
+    /// cancels via `.task(id:)`, so a superseded call is dropped before it can
+    /// overwrite a newer result.
+    public func search(query: String, metric: ProcessSortMetric) async {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { clearSearch(); return }
+
+        isSearching = true
+        defer { isSearching = false }
+
+        let scanner = self.scanner
+        let limit = Self.searchResultLimit
+        let result = await Task.detached(priority: .userInitiated) {
+            await scanner.search(query: trimmed, metric: metric, limit: limit)
+        }.value
+
+        // A newer query may have superseded this one while the detached find
+        // pass ran; don't let the stale result overwrite it.
+        if Task.isCancelled { return }
+        searchResults = result
+    }
+
+    /// Drop search state and fall back to showing the captured snapshot.
+    public func clearSearch() {
+        searchResults = nil
+        isSearching = false
     }
 
     /// Run a `ProcessAction` against `item`, marking the row busy for the

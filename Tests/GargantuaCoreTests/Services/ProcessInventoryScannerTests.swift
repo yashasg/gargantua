@@ -411,6 +411,66 @@ struct ProcessInventoryScannerTests {
         #expect(DefaultProcessInventoryScanner.parentName(for: noPath) == "kernel_task")
     }
 
+    // MARK: - Search
+
+    @Test("search finds a low-resource process that the top-N snapshot would hide")
+    func searchFindsBelowCap() async {
+        // 60 busy processes dominate; perl is idle and would never make the
+        // top-50 cap, but a full-table search must still surface it.
+        var samples = (1 ... 60).map { i in
+            sample(pid: Int32(i), command: "busy\(i)", path: "/b\(i)", cpuTime: 0, rss: UInt64(i) * 1_000_000, at: 1)
+        }
+        samples.append(sample(pid: 9000, command: "perl5.34", path: "/usr/bin/perl5.34", cpuTime: 0, rss: 1, at: 1))
+        let scanner = makeScanner(first: [], second: samples)
+
+        // A normal capped scan excludes the idle process…
+        let snapshot = await scanner.scan(metric: .rss, topN: 50)
+        #expect(!snapshot.items.contains { $0.command == "perl5.34" })
+
+        // …but search finds it.
+        let results = await scanner.search(query: "perl", metric: .rss, limit: 200)
+        #expect(results.items.map(\.command) == ["perl5.34"])
+        #expect(results.totalProcessCount == 61)
+    }
+
+    @Test("search matches command, path, PID, and parent name")
+    func searchMatchFields() async {
+        let parent = sample(pid: 400, parent: 1, command: "node", path: "/usr/local/bin/node", cpuTime: 0, rss: 5, at: 1)
+        let child = sample(pid: 8080, parent: 400, command: "esbuild", path: "/tmp/xyz/esbuild", cpuTime: 0, rss: 5, at: 1)
+        let scanner = makeScanner(first: [], second: [parent, child])
+
+        let byCommand = await scanner.search(query: "esbuild", metric: .rss, limit: 200)
+        #expect(byCommand.items.map(\.command) == ["esbuild"])
+
+        let byPath = await scanner.search(query: "/tmp/xyz", metric: .rss, limit: 200)
+        #expect(byPath.items.map(\.command) == ["esbuild"])
+
+        let byPID = await scanner.search(query: "8080", metric: .rss, limit: 200)
+        #expect(byPID.items.map(\.command) == ["esbuild"])
+
+        // "node" matches node's own command AND esbuild via its parent name.
+        let byParent = await scanner.search(query: "node", metric: .rss, limit: 200)
+        #expect(Set(byParent.items.map(\.command)) == ["esbuild", "node"])
+    }
+
+    @Test("search caps results at the limit")
+    func searchCapsAtLimit() async {
+        let samples = (1 ... 50).map { i in
+            sample(pid: Int32(i), command: "daemon\(i)", path: "/d\(i)", cpuTime: 0, rss: UInt64(i), at: 1)
+        }
+        let scanner = makeScanner(first: [], second: samples)
+        let results = await scanner.search(query: "daemon", metric: .rss, limit: 10)
+        #expect(results.items.count == 10)
+    }
+
+    @Test("search with a blank query returns no matches")
+    func searchBlankQuery() async {
+        let s = sample(pid: 1, command: "anything", path: "/a", cpuTime: 0, at: 1)
+        let scanner = makeScanner(first: [], second: [s])
+        let results = await scanner.search(query: "   ", metric: .cpu, limit: 200)
+        #expect(results.items.isEmpty)
+    }
+
     @Test("Item ID includes start time so respawned same-binary PIDs are distinct")
     func idIncludesStartTime() async {
         let s1 = sample(pid: 77, command: "x", path: "/x", cpuTime: 0, startTime: 1_000, at: 1)

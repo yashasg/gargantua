@@ -73,6 +73,59 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
     }
 
     public func scan(metric: ProcessSortMetric, topN: Int?) async -> ProcessInventoryScan {
+        let env = await sampleEnvironment()
+        let rankedSamples = rankSamples(
+            env.secondSamples,
+            firstByPID: env.firstByPID,
+            metric: metric,
+            topN: topN
+        )
+        return finishScan(rankedSamples, env: env, metric: metric, topN: topN)
+    }
+
+    /// Search the FULL process table (not just the top-N snapshot). Filters the
+    /// raw samples by `query` over the cheap fields every process already
+    /// carries — command, executable path, PID, parent name — then resolves
+    /// identity/signatures only for the matches, capped at `limit`. This keeps
+    /// the cost proportional to the number of matches, not the ~hundreds of
+    /// running processes, so an idle daemon outside the top-N is still findable.
+    public func search(
+        query: String,
+        metric: ProcessSortMetric,
+        limit: Int
+    ) async -> ProcessInventoryScan {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let env = await sampleEnvironment()
+        guard !needle.isEmpty else {
+            return ProcessInventoryScan(
+                items: [],
+                totalProcessCount: env.secondSamples.count,
+                sortedBy: metric,
+                topN: nil,
+                scannedAt: now()
+            )
+        }
+        let matched = env.secondSamples.filter {
+            Self.sampleMatches($0, needle: needle, parentNames: env.parentNames)
+        }
+        let ranked = rankSamples(matched, firstByPID: env.firstByPID, metric: metric, topN: limit)
+        // topN nil: `ranked` is already capped at `limit`, and the result set is
+        // "matches" rather than "top N of everything" — the view labels it as such.
+        return finishScan(ranked, env: env, metric: metric, topN: nil)
+    }
+
+    /// Two CPU snapshots plus the launchd / foreground / parent-name context
+    /// every item build needs. Shared by `scan` and `search` so both see the
+    /// same process table and CPU baseline.
+    private struct SampleEnvironment {
+        let firstByPID: [Int32: RawProcessSample]
+        let secondSamples: [RawProcessSample]
+        let launchdItems: [LaunchdItem]
+        let foregroundSet: Set<Int32>
+        let parentNames: [Int32: String]
+    }
+
+    private func sampleEnvironment() async -> SampleEnvironment {
         // Long-lived resolvers cache per binary path; without an explicit
         // clear, a replaced binary at the same path could keep its prior
         // trusted identity across rescans.
@@ -82,61 +135,83 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
         await sleep(sampleIntervalNanoseconds)
         let secondSamples = snapshotProvider.snapshot()
 
-        let launchdItems = launchdIndex.enumerate()
-        let foregroundSet = foregroundPIDs()
-
-        // Resolve "what spawned this" from the FULL snapshot, before the top-N
-        // cap, so a child's parent name shows even when the parent itself was
-        // ranked out of the displayed list.
-        let parentNames = Self.buildParentNames(secondSamples)
-
         // Build a quick lookup from PID → first sample so we can compute the
         // CPU delta without an O(n²) scan.
         var firstByPID: [Int32: RawProcessSample] = [:]
         firstByPID.reserveCapacity(firstSamples.count)
         for sample in firstSamples { firstByPID[sample.pid] = sample }
 
-        let rankedSamples = rankSamples(
-            secondSamples,
+        return SampleEnvironment(
             firstByPID: firstByPID,
-            metric: metric,
-            topN: topN
+            secondSamples: secondSamples,
+            launchdItems: launchdIndex.enumerate(),
+            foregroundSet: foregroundPIDs(),
+            // Resolve "what spawned this" from the FULL snapshot, before any
+            // cap, so a child's parent name shows even when the parent itself
+            // was ranked or filtered out of the displayed list.
+            parentNames: Self.buildParentNames(secondSamples)
         )
+    }
 
+    /// Resolve identity/signature for the already-ranked sample slice and build
+    /// the final, re-ranked `ProcessInventoryScan`. The expensive identity work
+    /// runs only over `rankedSamples`, so callers control cost by how many
+    /// samples they pass.
+    private func finishScan(
+        _ rankedSamples: [RawProcessSample],
+        env: SampleEnvironment,
+        metric: ProcessSortMetric,
+        topN: Int?
+    ) -> ProcessInventoryScan {
         // Within a single scan, most processes share the same UID (the
         // logged-in user), so caching the lookup avoids ~95% of redundant
         // `getpwuid_r` calls per scan.
         var userNameCache: [UInt32: String?] = [:]
         let resolveUser: (UInt32) -> String? = { uid in
             if let cached = userNameCache[uid] { return cached }
-            let name = userNameForUID(uid)
+            let name = self.userNameForUID(uid)
             userNameCache[uid] = name
             return name
         }
 
         let context = ItemConstructionContext(
-            launchdItems: launchdItems,
-            foregroundPIDs: foregroundSet,
+            launchdItems: env.launchdItems,
+            foregroundPIDs: env.foregroundSet,
             resolveUser: resolveUser,
-            parentNames: parentNames
+            parentNames: env.parentNames
         )
 
         var items: [ProcessItem] = []
         items.reserveCapacity(rankedSamples.count)
         for current in rankedSamples {
-            let prior = comparablePrior(for: current, in: firstByPID)
-            let item = makeItem(prior: prior, current: current, context: context)
-            items.append(item)
+            let prior = comparablePrior(for: current, in: env.firstByPID)
+            items.append(makeItem(prior: prior, current: current, context: context))
         }
 
-        let sorted = rank(items, by: metric)
         return ProcessInventoryScan(
-            items: sorted,
-            totalProcessCount: secondSamples.count,
+            items: rank(items, by: metric),
+            totalProcessCount: env.secondSamples.count,
             sortedBy: metric,
             topN: topN,
             scannedAt: now()
         )
+    }
+
+    /// Cheap, identity-free match used to pre-filter the full sample set before
+    /// the expensive resolution pass. Matches command, executable path, PID,
+    /// and the resolved parent name. `needle` must already be lowercased.
+    static func sampleMatches(
+        _ sample: RawProcessSample,
+        needle: String,
+        parentNames: [Int32: String]
+    ) -> Bool {
+        if sample.command.lowercased().contains(needle) { return true }
+        if let path = sample.executablePath, path.lowercased().contains(needle) { return true }
+        if String(sample.pid).contains(needle) { return true }
+        if let parent = parentNames[sample.parentPID], parent.lowercased().contains(needle) {
+            return true
+        }
+        return false
     }
 
     /// Map every sampled PID to a short display name for use as a child's
