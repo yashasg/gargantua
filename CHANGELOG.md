@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-06-23
+
+### Added
+
+- **Full-table process search.** The search field now scans the entire running process table instead of the captured top-50 snapshot, so idle daemons and low-resource helpers are never silently excluded. Matches command name, executable path, PID, and parent name; results capped at 200.
+
+- **Parent process attribution.** Child processes now show the name of the process that spawned them — visible in the row header and expandable detail — so you can trace a mystery helper back to its launcher. Tapping the parent name (or using the context menu) scrolls to and expands that row in the list.
+
+### Fixed
+
+- **AI advisory engine assignment now respected.** The Review Advisories and Suspicious Triage panels in Deep Clean, AI Models, Background Items, and Process Inventory were hardwired to the local Template/MLX engine regardless of the Settings AI assignment. Cloud, Claude Code, and Codex selections now take effect; the advisory sheet CTA reflects the configured engine rather than always prompting to enable local AI.
+
 ## [0.4.4] - 2026-06-17
 
 ### Fixed
