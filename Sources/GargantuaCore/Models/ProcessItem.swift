@@ -128,6 +128,13 @@ public struct ProcessItem: Sendable, Equatable, Identifiable {
     /// Parent process ID at the time of the snapshot.
     public let parentPID: Int32
 
+    /// Display name of the parent process — what spawned this one. Resolved
+    /// from the full snapshot at scan time (basename of the parent's executable,
+    /// or its command), so it's populated even when the parent itself was capped
+    /// out of the displayed top-N list. `nil` when the parent has exited or
+    /// isn't introspectable.
+    public let parentName: String?
+
     /// Process start time in Unix epoch seconds, captured at snapshot time.
     /// Used by `ProcessActionExecutor` to detect PID recycling between
     /// SIGTERM and the SIGKILL fallback — if the start time changes between
@@ -182,6 +189,7 @@ public struct ProcessItem: Sendable, Equatable, Identifiable {
         id: String,
         pid: Int32,
         parentPID: Int32,
+        parentName: String? = nil,
         startTimeUnixSeconds: UInt64,
         command: String,
         uid: UInt32,
@@ -199,6 +207,7 @@ public struct ProcessItem: Sendable, Equatable, Identifiable {
         self.id = id
         self.pid = pid
         self.parentPID = parentPID
+        self.parentName = parentName
         self.startTimeUnixSeconds = startTimeUnixSeconds
         self.command = command
         self.uid = uid

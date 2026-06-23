@@ -1,12 +1,20 @@
 import Foundation
 
 extension DefaultProcessInventoryScanner {
+    /// Per-scan context shared across every item built in a pass. Bundled so
+    /// `makeItem` stays a 3-arg call instead of threading each piece through.
+    struct ItemConstructionContext {
+        let launchdItems: [LaunchdItem]
+        let foregroundPIDs: Set<Int32>
+        let resolveUser: (UInt32) -> String?
+        /// PID → spawner display name, built from the full pre-cap snapshot.
+        let parentNames: [Int32: String]
+    }
+
     func makeItem(
         prior: RawProcessSample?,
         current: RawProcessSample,
-        launchdItems: [LaunchdItem],
-        foregroundPIDs: Set<Int32>,
-        resolveUser: (UInt32) -> String?
+        context: ItemConstructionContext
     ) -> ProcessItem {
         let cpuFraction = computeCPUFraction(prior: prior, current: current)
         let identity = current.executablePath.map(resolver.resolve)
@@ -14,14 +22,14 @@ extension DefaultProcessInventoryScanner {
             executablePath: current.executablePath,
             command: current.command,
             parentPID: current.parentPID,
-            launchdItems: launchdItems
+            launchdItems: context.launchdItems
         )
 
         // Promote .userSession matches to .foregroundApp when the PID is
         // visible to NSWorkspace — the matcher can't see the workspace and
         // would otherwise leave every GUI app misclassified.
         let launchSource: ProcessLaunchSource = {
-            if case .userSession = rawSource, foregroundPIDs.contains(current.pid) {
+            if case .userSession = rawSource, context.foregroundPIDs.contains(current.pid) {
                 return .foregroundApp
             }
             return rawSource
@@ -40,7 +48,7 @@ extension DefaultProcessInventoryScanner {
         let launchSourceOrphaned: Bool = {
             guard confidence == .exact || confidence == .path else { return false }
             if case let .launchd(_, _, plistPath) = launchSource {
-                return launchdItemBinaryMissing(plistPath: plistPath, in: launchdItems)
+                return launchdItemBinaryMissing(plistPath: plistPath, in: context.launchdItems)
             }
             return false
         }()
@@ -65,10 +73,11 @@ extension DefaultProcessInventoryScanner {
             ),
             pid: current.pid,
             parentPID: current.parentPID,
+            parentName: context.parentNames[current.parentPID],
             startTimeUnixSeconds: current.startTimeUnixSeconds,
             command: current.command,
             uid: current.uid,
-            owningUser: resolveUser(current.uid) ?? String(current.uid),
+            owningUser: context.resolveUser(current.uid) ?? String(current.uid),
             executablePath: current.executablePath,
             cpuFraction: cpuFraction,
             residentBytes: current.residentBytes,

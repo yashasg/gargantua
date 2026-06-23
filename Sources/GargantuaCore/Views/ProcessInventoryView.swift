@@ -201,6 +201,9 @@ public struct ProcessInventoryView: View {
     @ViewBuilder
     func resultsState(_ scan: ProcessInventoryScan) -> some View {
         let visible = visibleItems(scan)
+        // PID → row id for the displayed rows, so a child can deep-link to its
+        // parent's row when the parent is on screen.
+        let parentIDsByPID = parentRowIDsByPID(visible)
 
         VStack(spacing: 0) {
             controlBar(scan: scan, visibleCount: visible.count)
@@ -212,33 +215,67 @@ public struct ProcessInventoryView: View {
             if visible.isEmpty {
                 emptyState
             } else {
-                ScrollView {
-                    LazyVStack(spacing: GargantuaSpacing.space2) {
-                        ForEach(visible) { item in
-                            ProcessInventoryRow(
-                                item: item,
-                                isExpanded: expandedID == item.id,
-                                isBusy: session.busyItemIDs.contains(item.id),
-                                onToggleExpand: {
-                                    withAnimation(.easeOut(duration: 0.15)) {
-                                        expandedID = expandedID == item.id ? nil : item.id
-                                    }
-                                },
-                                onRevealBinary: { revealBinary(item) },
-                                onRevealPlist: { revealPlist(item) },
-                                onExplain: onExplain != nil ? { explain(item) } : nil,
-                                onAction: { action in
-                                    pendingAction = PendingProcessAction(item: item, action: action)
-                                }
-                            )
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: GargantuaSpacing.space2) {
+                            ForEach(visible) { item in
+                                ProcessInventoryRow(
+                                    item: item,
+                                    isExpanded: expandedID == item.id,
+                                    isBusy: session.busyItemIDs.contains(item.id),
+                                    onToggleExpand: {
+                                        withAnimation(.easeOut(duration: 0.15)) {
+                                            expandedID = expandedID == item.id ? nil : item.id
+                                        }
+                                    },
+                                    onRevealBinary: { revealBinary(item) },
+                                    onRevealPlist: { revealPlist(item) },
+                                    onExplain: onExplain != nil ? { explain(item) } : nil,
+                                    onAction: { action in
+                                        pendingAction = PendingProcessAction(item: item, action: action)
+                                    },
+                                    onJumpToParent: jumpToParentAction(
+                                        for: item,
+                                        parentIDsByPID: parentIDsByPID,
+                                        proxy: proxy
+                                    )
+                                )
+                                .id(item.id)
+                            }
                         }
+                        .padding(.horizontal, GargantuaSpacing.space4)
+                        .padding(.vertical, GargantuaSpacing.space3)
                     }
-                    .padding(.horizontal, GargantuaSpacing.space4)
-                    .padding(.vertical, GargantuaSpacing.space3)
                 }
             }
 
             footer(scan: scan)
+        }
+    }
+
+    /// Index the displayed rows by PID so a child can resolve its parent's row.
+    func parentRowIDsByPID(_ items: [ProcessItem]) -> [Int32: String] {
+        var map: [Int32: String] = [:]
+        map.reserveCapacity(items.count)
+        for item in items { map[item.pid] = item.id }
+        return map
+    }
+
+    /// Closure that scrolls to + expands the parent's row, or `nil` when the
+    /// parent isn't in the displayed list (so the row shows plain parent text).
+    func jumpToParentAction(
+        for item: ProcessItem,
+        parentIDsByPID: [Int32: String],
+        proxy: ScrollViewProxy
+    ) -> (() -> Void)? {
+        guard let parentID = parentIDsByPID[item.parentPID], parentID != item.id else {
+            return nil
+        }
+        return {
+            withAnimation(.easeOut(duration: 0.2)) {
+                expandedID = parentID
+                proxy.scrollTo(parentID, anchor: .center)
+            }
         }
     }
 }

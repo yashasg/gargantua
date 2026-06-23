@@ -377,6 +377,40 @@ struct ProcessInventoryScannerTests {
         #expect(item?.reasons.contains(.foregroundApp) == true)
     }
 
+    @Test("Parent name resolves to the spawner even when the parent is ranked out of the list")
+    func parentNameResolvesAcrossCap() async {
+        // zsh (tiny) spawns perl5.34 (large). With topN=1 only the child
+        // survives the cap, but its parentName still resolves from the full
+        // snapshot — answering "what spawned this?" without the parent on screen.
+        let parent = sample(pid: 500, parent: 1, command: "zsh", path: "/bin/zsh", cpuTime: 0, rss: 1_000, at: 1)
+        let child = sample(pid: 600, parent: 500, command: "perl5.34", path: "/usr/bin/perl5.34", cpuTime: 0, rss: 50_000_000, at: 1)
+        let scanner = makeScanner(first: [], second: [parent, child])
+
+        let scan = await scanner.scan(metric: .rss, topN: 1)
+        let item = try? #require(scan.items.first)
+        #expect(item?.command == "perl5.34")
+        #expect(item?.parentName == "zsh")
+    }
+
+    @Test("A process parented by launchd resolves its parent name to launchd")
+    func parentNameLaunchdFallback() async {
+        // PID 1 isn't in the snapshot, but a reparented/launchd-rooted process
+        // should still name its parent rather than show a bare number.
+        let s = sample(pid: 700, parent: 1, command: "helper", path: "/usr/bin/helper", cpuTime: 0, at: 1)
+        let scanner = makeScanner(first: [], second: [s])
+
+        let scan = await scanner.scan(metric: .cpu, topN: nil)
+        #expect(scan.items.first?.parentName == "launchd")
+    }
+
+    @Test("parentName prefers the executable basename over the truncated command")
+    func parentNameBasenamePreference() {
+        let withPath = sample(pid: 1, command: "trunc", path: "/opt/homebrew/bin/python3.12", cpuTime: 0)
+        #expect(DefaultProcessInventoryScanner.parentName(for: withPath) == "python3.12")
+        let noPath = sample(pid: 2, command: "kernel_task", path: nil, cpuTime: 0)
+        #expect(DefaultProcessInventoryScanner.parentName(for: noPath) == "kernel_task")
+    }
+
     @Test("Item ID includes start time so respawned same-binary PIDs are distinct")
     func idIncludesStartTime() async {
         let s1 = sample(pid: 77, command: "x", path: "/x", cpuTime: 0, startTime: 1_000, at: 1)

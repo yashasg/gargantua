@@ -20,6 +20,10 @@ public struct ProcessInventoryRow: View {
     public let onRevealPlist: (() -> Void)?
     public let onExplain: (() -> Void)?
     public let onAction: ((ProcessAction) -> Void)?
+    /// Non-nil only when the parent process is present in the displayed list;
+    /// scrolls to + expands the parent row. Drives the tappable "Parent" value
+    /// and the "Reveal parent process" context-menu item.
+    public let onJumpToParent: (() -> Void)?
 
     @State var isHovered = false
 
@@ -31,7 +35,8 @@ public struct ProcessInventoryRow: View {
         onRevealBinary: (() -> Void)? = nil,
         onRevealPlist: (() -> Void)? = nil,
         onExplain: (() -> Void)? = nil,
-        onAction: ((ProcessAction) -> Void)? = nil
+        onAction: ((ProcessAction) -> Void)? = nil,
+        onJumpToParent: (() -> Void)? = nil
     ) {
         self.item = item
         self.isExpanded = isExpanded
@@ -41,6 +46,7 @@ public struct ProcessInventoryRow: View {
         self.onRevealPlist = onRevealPlist
         self.onExplain = onExplain
         self.onAction = onAction
+        self.onJumpToParent = onJumpToParent
     }
 
     public var body: some View {

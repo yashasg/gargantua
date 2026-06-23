@@ -85,6 +85,11 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
         let launchdItems = launchdIndex.enumerate()
         let foregroundSet = foregroundPIDs()
 
+        // Resolve "what spawned this" from the FULL snapshot, before the top-N
+        // cap, so a child's parent name shows even when the parent itself was
+        // ranked out of the displayed list.
+        let parentNames = Self.buildParentNames(secondSamples)
+
         // Build a quick lookup from PID → first sample so we can compute the
         // CPU delta without an O(n²) scan.
         var firstByPID: [Int32: RawProcessSample] = [:]
@@ -109,17 +114,18 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
             return name
         }
 
+        let context = ItemConstructionContext(
+            launchdItems: launchdItems,
+            foregroundPIDs: foregroundSet,
+            resolveUser: resolveUser,
+            parentNames: parentNames
+        )
+
         var items: [ProcessItem] = []
         items.reserveCapacity(rankedSamples.count)
         for current in rankedSamples {
             let prior = comparablePrior(for: current, in: firstByPID)
-            let item = makeItem(
-                prior: prior,
-                current: current,
-                launchdItems: launchdItems,
-                foregroundPIDs: foregroundSet,
-                resolveUser: resolveUser
-            )
+            let item = makeItem(prior: prior, current: current, context: context)
             items.append(item)
         }
 
@@ -131,6 +137,32 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
             topN: topN,
             scannedAt: now()
         )
+    }
+
+    /// Map every sampled PID to a short display name for use as a child's
+    /// "parent" label. Prefers the executable's basename (full, untruncated)
+    /// over `pbi_comm` (capped at 16 bytes). PID 0/1 are labeled even if the
+    /// snapshot couldn't sample them, since a reparented orphan points at
+    /// launchd.
+    static func buildParentNames(_ samples: [RawProcessSample]) -> [Int32: String] {
+        var names: [Int32: String] = [:]
+        names.reserveCapacity(samples.count + 2)
+        for sample in samples {
+            names[sample.pid] = parentName(for: sample)
+        }
+        if names[0] == nil { names[0] = "kernel_task" }
+        if names[1] == nil { names[1] = "launchd" }
+        return names
+    }
+
+    /// Best short name for a sample: executable basename, else command.
+    static func parentName(for sample: RawProcessSample) -> String {
+        if let path = sample.executablePath,
+           let base = path.split(separator: "/").last,
+           !base.isEmpty {
+            return String(base)
+        }
+        return sample.command
     }
 
     /// Returns the prior sample only when it represents the SAME process

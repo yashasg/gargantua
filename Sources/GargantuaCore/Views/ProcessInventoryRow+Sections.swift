@@ -44,7 +44,7 @@ extension ProcessInventoryRow {
                         .font(GargantuaFonts.caption.monospacedDigit())
                         .foregroundStyle(GargantuaColors.ink3)
 
-                    Text(item.launchSource.displayLabel)
+                    Text(launchSourceLabel)
                         .font(GargantuaFonts.caption)
                         .foregroundStyle(GargantuaColors.ink3)
                 }
@@ -78,6 +78,16 @@ extension ProcessInventoryRow {
         .padding(.horizontal, GargantuaSpacing.space4)
         .padding(.vertical, GargantuaSpacing.space3)
         .padding(.leading, GargantuaSpacing.space1)
+    }
+
+    /// Launch-source label for the header. For child processes, names the
+    /// spawner inline ("Child of perl") instead of the generic "Child Process"
+    /// so the answer to "what started this?" is visible without expanding.
+    var launchSourceLabel: String {
+        if case .childProcess = item.launchSource, let name = item.parentName, !name.isEmpty {
+            return "Child of \(name)"
+        }
+        return item.launchSource.displayLabel
     }
 
     var safetyIcon: some View {
@@ -228,7 +238,7 @@ extension ProcessInventoryRow {
 
             VStack(alignment: .leading, spacing: GargantuaSpacing.space2) {
                 detailRow(label: "PID", value: "\(item.pid)", mono: true)
-                detailRow(label: "Parent PID", value: "\(item.parentPID)", mono: true)
+                parentRow
                 detailRow(label: "User", value: item.owningUser)
                 detailRow(label: "Command", value: item.command, mono: true)
                 if let exe = item.executablePath {
@@ -275,6 +285,50 @@ extension ProcessInventoryRow {
         }
     }
 
+    /// "Parent" row — resolves the parent PID to what spawned this process.
+    /// When the parent is in the displayed list, the value is tappable and
+    /// jumps to its row; otherwise it's plain text.
+    @ViewBuilder
+    var parentRow: some View {
+        HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
+            Text("Parent")
+                .font(GargantuaFonts.caption)
+                .foregroundStyle(GargantuaColors.ink3)
+                .frame(width: 92, alignment: .leading)
+
+            if let onJumpToParent {
+                Button(action: onJumpToParent) {
+                    HStack(spacing: 4) {
+                        Text(parentDisplay)
+                            .font(GargantuaFonts.monoData)
+                        Image(systemName: "arrow.up.forward")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .foregroundStyle(GargantuaColors.accent)
+                }
+                .buttonStyle(.plain)
+                .help("Jump to the parent process")
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text(parentDisplay)
+                    .font(GargantuaFonts.monoData)
+                    .foregroundStyle(GargantuaColors.ink)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    /// Parent label: "name (pid)" when the spawner resolved, else the bare PID.
+    var parentDisplay: String {
+        if let name = item.parentName, !name.isEmpty {
+            return "\(name) (\(item.parentPID))"
+        }
+        return "\(item.parentPID)"
+    }
+
     func detailRow(label: String, value: String, mono: Bool = false) -> some View {
         HStack(alignment: .top, spacing: GargantuaSpacing.space3) {
             Text(label)
@@ -310,6 +364,9 @@ extension ProcessInventoryRow {
         }
         if let onRevealPlist, item.launchSource.plistPath != nil {
             Button("Reveal launching plist in Finder") { onRevealPlist() }
+        }
+        if let onJumpToParent {
+            Button("Reveal parent process") { onJumpToParent() }
         }
         if let onExplain {
             Button("Explain with AI") { onExplain() }
