@@ -27,9 +27,7 @@ extension LocalAIService {
         rules: [String: ScanRule],
         includeNonReview: Bool = false
     ) async throws -> [ScanResultAdvisory] {
-        let eligible = includeNonReview
-            ? results.filter { $0.safety != .protected_ }
-            : results.filter { $0.safety == .review }
+        let eligible = AdvisoryEligibility.filter(results, includeNonReview: includeNonReview)
         guard !eligible.isEmpty else { return [] }
 
         let engine = self.engine

@@ -203,12 +203,14 @@ extension SettingsView {
             get: { useLocalAI },
             set: { isOn in
                 preferredAIEngineRawValue = (isOn ? AIEnginePreference.mlx : .template).rawValue
-                // Keep the assignment matrix in sync: if inline "Why?" is
-                // pointed at a local engine, follow this Template/MLX switch so
-                // the matrix never claims a different local engine than the one
-                // actually running.
-                if AIEngineAssignments.engine(for: .inlineExplain).isLocal {
-                    AIEngineAssignments.set(isOn ? .mlx : .template, for: .inlineExplain)
+                // Keep the assignment matrix in sync: any job pointed at a local
+                // engine should follow this Template/MLX switch so the matrix
+                // never claims a different local engine than the one actually
+                // running. Inline "Why?" and advisories both dispatch locally
+                // through the shared service.
+                for useCase in [AIUseCase.inlineExplain, .advisory]
+                where AIEngineAssignments.engine(for: useCase).isLocal {
+                    AIEngineAssignments.set(isOn ? .mlx : .template, for: useCase)
                 }
             }
         )

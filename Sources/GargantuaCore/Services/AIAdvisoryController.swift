@@ -29,7 +29,18 @@ public enum AIAdvisoryPresentation: Sendable, Identifiable, Equatable {
 public final class AIAdvisoryController: ObservableObject {
     @Published public private(set) var presentation: AIAdvisoryPresentation?
 
+    /// Produces advisories for a batch. Injected so the controller stays free
+    /// of routing/provider types: `MainContentView` hands in an `AdvisoryRouter`
+    /// closure that honors the assignment matrix, while tests and the default
+    /// fall back to the local service.
+    public typealias AdviseHandler = @MainActor (
+        _ results: [ScanResult],
+        _ rules: [String: ScanRule],
+        _ includeNonReview: Bool
+    ) async throws -> [ScanResultAdvisory]
+
     private let service: LocalAIService
+    private let advise: AdviseHandler
     private var activeTask: Task<Void, Never>?
     private var lastRequestedResults: [ScanResult] = []
     private var lastRequestedResultsById: [String: ScanResult] = [:]
@@ -42,8 +53,15 @@ public final class AIAdvisoryController: ObservableObject {
         lastRequestedResultsById[advisoryId]
     }
 
-    public init(service: LocalAIService) {
+    public init(service: LocalAIService, advise: AdviseHandler? = nil) {
         self.service = service
+        self.advise = advise ?? { results, rules, includeNonReview in
+            try await service.advisory(
+                for: results,
+                rules: rules,
+                includeNonReview: includeNonReview
+            )
+        }
     }
 
     /// True while an advisory request is in flight.
@@ -55,6 +73,13 @@ public final class AIAdvisoryController: ObservableObject {
     /// Whether a downloaded model is available on disk.
     public var isModelAvailable: Bool {
         service.isModelAvailable
+    }
+
+    /// The engine currently assigned to the advisory job. The sheet's CTA reads
+    /// this to decide whether to nudge the user toward assigning an AI engine
+    /// (Template) or downloading the local model (MLX without a model).
+    public var advisoryEngine: AIEngineID {
+        AIEngineAssignments.engine(for: .advisory)
     }
 
     public var currentRequestIsTriage: Bool {
@@ -77,14 +102,10 @@ public final class AIAdvisoryController: ObservableObject {
         // isn't — the sheet fails soft instead.
         lastRequestedResultsById = results.reduce(into: [:]) { $0[$1.id] = $1 }
         let rules = Self.derivedRules(for: results)
-        let service = self.service
+        let advise = self.advise
         activeTask = Task { [weak self] in
             do {
-                let advisories = try await service.advisory(
-                    for: results,
-                    rules: rules,
-                    includeNonReview: includeNonReview
-                )
+                let advisories = try await advise(results, rules, includeNonReview)
                 try Task.checkCancellation()
                 guard let self else { return }
                 if case .loading = self.presentation {

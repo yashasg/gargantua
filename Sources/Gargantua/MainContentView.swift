@@ -78,7 +78,20 @@ struct MainContentView: View {
             },
             deeperAvailable: { router.isAvailable(.deeperExplain) }
         ))
-        _aiAdvisory = StateObject(wrappedValue: AIAdvisoryController(service: service))
+        // Advisories ("Review Advisories" / "Suspicious Triage") route through
+        // the same engine-assignment matrix as inline explanations, so the user
+        // can point them at the local model, Cloud, or a CLI agent.
+        let advisoryRouter = AdvisoryRouter(local: service, cloud: cloudAI)
+        _aiAdvisory = StateObject(wrappedValue: AIAdvisoryController(
+            service: service,
+            advise: { results, rules, includeNonReview in
+                try await advisoryRouter.advisory(
+                    for: results,
+                    rules: rules,
+                    includeNonReview: includeNonReview
+                )
+            }
+        ))
         _mcpStatusModel = StateObject(wrappedValue: MCPServerStatusViewModel())
 
         let mlxProposer = MLXOrganizerProposer(aiService: service)

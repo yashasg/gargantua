@@ -6,7 +6,7 @@ import Foundation
 ///
 /// - `.organize` reads/writes `OrganizerBackendPreference` (what the File
 ///   Organizer already consults), mapping `.template` ⇄ `.local`.
-/// - `.inlineExplain`, when set to a local engine, also mirrors
+/// - `.inlineExplain` and `.advisory`, when set to a local engine, also mirror
 ///   `AIEnginePreference` so `LocalAIService` (and the other local-AI features —
 ///   narrate, scan filter, cluster suggest) run the chosen Template/MLX engine.
 public enum AIEngineAssignments {
@@ -39,9 +39,10 @@ public enum AIEngineAssignments {
             defaults.set(engine.rawValue, forKey: key(for: useCase))
         }
 
-        // Picking a local engine for inline "Why?" also drives the shared
-        // local engine, so LocalAIService runs the right one.
-        if useCase == .inlineExplain, engine.isLocal {
+        // Picking a local engine for inline "Why?" or advisory also drives the
+        // shared local engine, so LocalAIService runs the right one — both use
+        // cases dispatch their local path through the same service.
+        if useCase == .inlineExplain || useCase == .advisory, engine.isLocal {
             (engine == .mlx ? AIEnginePreference.mlx : .template).store(in: defaults)
         }
     }

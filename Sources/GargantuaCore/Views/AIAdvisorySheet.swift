@@ -15,7 +15,6 @@ public struct AIAdvisorySheet: View {
 
     @Environment(\.aiEngineNeedsFirstWarmup) private var needsFirstWarmup
     @Environment(\.openAIModelSettings) private var openAIModelSettings
-    @Environment(\.preferredAIEngineKind) private var preferredAIEngineKind
 
     /// Mirror of `controller.presentation` retained across the sheet's
     /// dismiss animation. The moment the user taps Close, `controller.dismiss`
@@ -143,8 +142,8 @@ public struct AIAdvisorySheet: View {
         } else {
             ScrollView {
                 VStack(alignment: .leading, spacing: GargantuaSpacing.space3) {
-                    if preferredAIEngineKind == .template,
-                       advisories.allSatisfy({ $0.source == .template }) {
+                    if controller.advisoryEngine == .template,
+                       advisories.allSatisfy({ $0.source == .template || $0.source == .rule }) {
                         enableAIFooterNote
                     }
 
@@ -162,7 +161,7 @@ public struct AIAdvisorySheet: View {
             Image(systemName: "info.circle")
                 .font(.system(size: 12))
                 .foregroundStyle(GargantuaColors.ink3)
-            Text("These are rule-based. Set the advisory engine to AI in Settings → AI for generated advisories.")
+            Text("These are rule-based. Assign an AI engine to “Advisories & triage” in Settings → AI for generated advisories.")
                 .font(GargantuaFonts.caption)
                 .foregroundStyle(GargantuaColors.ink3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -256,20 +255,19 @@ public struct AIAdvisorySheet: View {
         .padding(.vertical, GargantuaSpacing.space3)
     }
 
-    /// Footer CTA differs by what the advisory batch contains AND by the
-    /// inline-engine assignment:
-    /// - `.template` entries + inline engine is Template → "Use AI for
-    ///   advisories" (deep-link to the assignment).
-    /// - `.template` entries + AI toggle on (fallback) OR `.rule` fallback +
-    ///   no model on disk → "Download Model".
-    /// - all `.ai` (or `.rule` with model present, i.e. engine errors) → no
-    ///   CTA needed.
+    /// Footer CTA differs by what the advisory batch contains AND by the engine
+    /// assigned to the advisory job:
+    /// - advisory engine is Template → "Use AI for advisories" (deep-link to the
+    ///   assignment so the user can point it at the local model, Cloud, or a CLI).
+    /// - advisory engine is MLX but the model isn't on disk (so it fell back to
+    ///   Template/rule output) → "Download Model".
+    /// - a configured AI engine produced the advisories → no CTA needed.
     @ViewBuilder
     private func footerCTA(for advisories: [ScanResultAdvisory]) -> some View {
         let hasTemplate = advisories.contains(where: { $0.source == .template })
         let hasRule = advisories.contains(where: { $0.source == .rule })
 
-        if hasTemplate, preferredAIEngineKind == .template {
+        if controller.advisoryEngine == .template {
             if let openSettings = onOpenSettings ?? openAIModelSettings {
                 Button("Use AI for advisories") {
                     controller.dismiss()
@@ -277,9 +275,10 @@ public struct AIAdvisorySheet: View {
                 }
                 .buttonStyle(AIModalButtonStyle(tone: .accent))
                 .focusable(false)
-                .help("Switch the advisory engine from Template to an AI engine in Settings → AI")
+                .help("Assign an AI engine to advisories in Settings → AI")
             }
-        } else if hasTemplate || hasRule,
+        } else if controller.advisoryEngine == .mlx,
+                  hasTemplate || hasRule,
                   !controller.isModelAvailable,
                   onOpenSettings != nil {
             Button("Download Model") {

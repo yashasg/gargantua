@@ -16,6 +16,7 @@ struct AIEngineAssignmentsTests {
         let defaults = try makeDefaults()
         #expect(AIEngineAssignments.engine(for: .inlineExplain, in: defaults) == .template)
         #expect(AIEngineAssignments.engine(for: .deeperExplain, in: defaults) == .cloud)
+        #expect(AIEngineAssignments.engine(for: .advisory, in: defaults) == .template)
         #expect(AIEngineAssignments.engine(for: .organize, in: defaults) == .template)
         #expect(AIEngineAssignments.engine(for: .maintenance, in: defaults) == .claudeCode)
     }
@@ -72,5 +73,22 @@ struct AIEngineAssignmentsTests {
         AIEngineAssignments.set(.cloud, for: .inlineExplain, in: defaults)
         #expect(AIEnginePreference.stored(in: defaults) == .mlx)
         #expect(AIEngineAssignments.engine(for: .inlineExplain, in: defaults) == .cloud)
+    }
+
+    @Test("Choosing a local engine for advisory also drives the shared local engine")
+    func advisoryLocalMirrorsEnginePreference() throws {
+        let defaults = try makeDefaults()
+        AIEngineAssignments.set(.mlx, for: .advisory, in: defaults)
+        #expect(AIEnginePreference.stored(in: defaults) == .mlx)
+        #expect(AIEngineAssignments.engine(for: .advisory, in: defaults) == .mlx)
+
+        AIEngineAssignments.set(.template, for: .advisory, in: defaults)
+        #expect(AIEnginePreference.stored(in: defaults) == .template)
+
+        // A non-local advisory engine doesn't disturb the local engine pref.
+        AIEnginePreference.mlx.store(in: defaults)
+        AIEngineAssignments.set(.cloud, for: .advisory, in: defaults)
+        #expect(AIEnginePreference.stored(in: defaults) == .mlx)
+        #expect(AIEngineAssignments.engine(for: .advisory, in: defaults) == .cloud)
     }
 }

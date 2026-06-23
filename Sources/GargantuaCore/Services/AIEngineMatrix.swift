@@ -45,6 +45,8 @@ public enum AIUseCase: String, CaseIterable, Identifiable, Sendable {
     case inlineExplain
     /// The on-demand "Explain deeper" escalation.
     case deeperExplain
+    /// The batch "Review Advisories" / "Suspicious Triage" suggestions.
+    case advisory
     /// File Organizer proposals.
     case organize
     /// Agentic maintenance runs (scheduled audits, agent runs).
@@ -56,6 +58,7 @@ public enum AIUseCase: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .inlineExplain: "Inline “Why?”"
         case .deeperExplain: "Explain deeper"
+        case .advisory: "Advisories & triage"
         case .organize: "Organize files"
         case .maintenance: "Run maintenance"
         }
@@ -65,6 +68,7 @@ public enum AIUseCase: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .inlineExplain: "The quick answer when you tap “Why?” on a scan row."
         case .deeperExplain: "The richer write-up when you tap “Explain deeper”."
+        case .advisory: "Suggestions when you run “Review Advisories” or “Suspicious Triage”."
         case .organize: "How the File Organizer proposes folder structures."
         case .maintenance: "The agent that runs scheduled audits and agent runs."
         }
@@ -76,6 +80,7 @@ public enum AIUseCase: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .inlineExplain: .template
         case .deeperExplain: .cloud
+        case .advisory: .template
         case .organize: .template
         case .maintenance: .claudeCode
         }
@@ -84,7 +89,7 @@ public enum AIUseCase: String, CaseIterable, Identifiable, Sendable {
     /// Engines that can actually perform this job. Order is the display order.
     public var supportedEngines: [AIEngineID] {
         switch self {
-        case .inlineExplain, .organize:
+        case .inlineExplain, .organize, .advisory:
             return AIEngineID.allCases
         case .deeperExplain:
             return [.cloud, .claudeCode, .codex]

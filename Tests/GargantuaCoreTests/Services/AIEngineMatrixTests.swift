@@ -4,14 +4,19 @@ import Testing
 
 @Suite("AIEngineMatrix")
 struct AIEngineMatrixTests {
-    @Test("Inline and organize accept every engine")
-    func inlineAndOrganizeAcceptAll() {
-        for useCase in [AIUseCase.inlineExplain, .organize] {
+    @Test("Inline, organize, and advisory accept every engine")
+    func inlineOrganizeAdvisoryAcceptAll() {
+        for useCase in [AIUseCase.inlineExplain, .organize, .advisory] {
             for engine in AIEngineID.allCases {
                 #expect(useCase.canUse(engine))
                 #expect(useCase.disabledReason(for: engine) == nil)
             }
         }
+    }
+
+    @Test("Advisory defaults to Template to preserve rule-based behavior")
+    func advisoryDefaultsToTemplate() {
+        #expect(AIUseCase.advisory.defaultEngine == .template)
     }
 
     @Test("Deeper explain rejects local engines with a reason, accepts the rest")
