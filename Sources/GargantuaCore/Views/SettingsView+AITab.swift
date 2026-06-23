@@ -209,7 +209,7 @@ extension SettingsView {
                 // running. Inline "Why?" and advisories both dispatch locally
                 // through the shared service.
                 for useCase in [AIUseCase.inlineExplain, .advisory]
-                where AIEngineAssignments.engine(for: useCase).isLocal {
+                    where AIEngineAssignments.engine(for: useCase).isLocal {
                     AIEngineAssignments.set(isOn ? .mlx : .template, for: useCase)
                 }
             }
