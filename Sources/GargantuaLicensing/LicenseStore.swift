@@ -90,12 +90,16 @@ public final class LicenseStore: @unchecked Sendable {
         }
         do {
             try storage.write(data)
-            migrationMarker.markDone()
-            try? FileManager.default.removeItem(at: legacyFileURL)
         } catch {
-            // Keychain write failed — leave the JSON in place so the next
-            // launch retries, but honor the receipt for this session.
+            // Fail closed: if we can't persist to the keychain, do NOT honor
+            // the receipt. Honoring an unpersistable receipt would make the
+            // on-disk JSON the de-facto store — the exact forgery vector this
+            // hardening removes. Leave the file and marker untouched so a
+            // launch with a healthy keychain migrates it properly.
+            return nil
         }
+        migrationMarker.markDone()
+        try? FileManager.default.removeItem(at: legacyFileURL)
         return receipt
     }
 

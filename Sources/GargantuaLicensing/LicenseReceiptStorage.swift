@@ -48,7 +48,12 @@ public struct KeychainLicenseMigrationMarker: LicenseMigrationMarker {
             kSecReturnAttributes as String: true,
         ]
         var result: CFTypeRef?
-        return SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        // Fail closed: only a definitive "not found" re-opens the one-shot
+        // migration window. Any other status — including transient keychain
+        // errors — counts as done, so a lookup hiccup can't relaunder a
+        // re-dropped license.json.
+        return status != errSecItemNotFound
     }
 
     public func markDone() {
