@@ -133,15 +133,69 @@ struct DuplicateFinderContainerStateTests {
     func applyRefreshReplaces() {
         let state = DuplicateFinderContainerState()
         state.finishScan(results: [Self.makeResult(id: "a")], errors: [])
+        state.isRefreshing = true
 
-        state.applyRefresh(pruned: [Self.makeResult(id: "b"), Self.makeResult(id: "c")])
+        let applied = state.applyRefresh(
+            pruned: [Self.makeResult(id: "b"), Self.makeResult(id: "c")],
+            generation: state.scanGeneration
+        )
 
+        #expect(applied)
+        #expect(!state.isRefreshing)
         guard case .results(let stored) = state.scanState else {
             Issue.record("Expected .results, got \(state.scanState)")
             return
         }
         #expect(stored.map(\.id) == ["b", "c"])
         #expect(state.cachedResults?.map(\.id) == ["b", "c"])
+    }
+
+    @Test("applyRefresh drops a prune that a Rescan superseded")
+    @MainActor
+    func applyRefreshDropsSupersededPrune() {
+        let state = DuplicateFinderContainerState()
+        state.finishScan(results: [Self.makeResult(id: "a"), Self.makeResult(id: "stale")], errors: [])
+        state.isRefreshing = true
+        let staleGeneration = state.scanGeneration
+
+        // Rescan lands while the refresh is stat()-ing: new generation,
+        // new results, new cache.
+        state.prepareForScan()
+        state.finishScan(results: [Self.makeResult(id: "fresh")], errors: [])
+
+        let applied = state.applyRefresh(
+            pruned: [Self.makeResult(id: "a")],
+            generation: staleGeneration
+        )
+
+        #expect(!applied)
+        #expect(!state.isRefreshing)
+        guard case .results(let stored) = state.scanState else {
+            Issue.record("Expected .results, got \(state.scanState)")
+            return
+        }
+        #expect(stored.map(\.id) == ["fresh"])
+        #expect(state.cachedResults?.map(\.id) == ["fresh"])
+    }
+
+    @Test("applyRefresh does not yank the view back to results after Back")
+    @MainActor
+    func applyRefreshRespectsIdle() {
+        let state = DuplicateFinderContainerState()
+        state.finishScan(results: [Self.makeResult(id: "a")], errors: [])
+        state.isRefreshing = true
+        let generation = state.scanGeneration
+
+        state.returnToIdle()
+
+        let applied = state.applyRefresh(pruned: [], generation: generation)
+
+        #expect(!applied)
+        #expect(!state.isRefreshing)
+        guard case .idle = state.scanState else {
+            Issue.record("Expected .idle, got \(state.scanState)")
+            return
+        }
     }
 
     @Test("showCachedResults restores from cache, and is a no-op when empty")

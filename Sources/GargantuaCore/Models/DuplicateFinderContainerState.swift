@@ -70,11 +70,19 @@ public final class DuplicateFinderContainerState {
         scanState = .error(message)
     }
 
-    /// Replace the live + cached results after a successful Refresh prune.
-    public func applyRefresh(pruned: [ScanResult]) {
+    /// Replace the live + cached results after a successful Refresh prune —
+    /// unless a Rescan superseded the refresh while it ran (generation
+    /// mismatch, same guard as the scan completion) or the user navigated
+    /// off the results state. Clears `isRefreshing` either way. Returns
+    /// whether the prune was applied.
+    @discardableResult
+    public func applyRefresh(pruned: [ScanResult], generation: Int) -> Bool {
+        isRefreshing = false
+        guard generation == scanGeneration, case .results = scanState else { return false }
         scanState = .results(pruned)
         cachedResults = pruned
         cachedAt = Date()
+        return true
     }
 
     /// Re-enter results from idle using the cached scan output.

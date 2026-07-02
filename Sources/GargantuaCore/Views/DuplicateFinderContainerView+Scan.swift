@@ -57,6 +57,7 @@ extension DuplicateFinderContainerView {
     func refreshResults() {
         guard !state.isRefreshing, case .results(let current) = state.scanState else { return }
         state.isRefreshing = true
+        let generation = state.scanGeneration
 
         let snapshot = current
         Task.detached(priority: .userInitiated) {
@@ -74,17 +75,13 @@ extension DuplicateFinderContainerView {
 
             await MainActor.run {
                 // Bail if a Rescan landed while we were stat()-ing — the new
-                // scan's results win.
-                guard case .results = state.scanState else {
-                    state.isRefreshing = false
-                    return
-                }
+                // scan's results (and cache) win. `applyRefresh` carries the
+                // same generation guard as the scan completion above.
+                guard state.applyRefresh(pruned: pruned, generation: generation) else { return }
                 selectedIDs = DuplicateFinderRefresh.sanitizeSelection(
                     selectedIDs: selectedIDs,
                     against: pruned
                 )
-                state.applyRefresh(pruned: pruned)
-                state.isRefreshing = false
             }
         }
     }
