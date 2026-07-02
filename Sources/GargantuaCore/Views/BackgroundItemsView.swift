@@ -16,6 +16,10 @@ public struct BackgroundItemsView: View {
     @State var filter: BackgroundItemFilter = .all
     @State var pendingAction: PendingBackgroundItemAction?
     @State var lastError: String?
+    /// Plist path a pre-selection already triggered one rescan for. The
+    /// cached scan can predate the item (an agent added since the last
+    /// scan), so a miss rescans once before reporting the path missing.
+    @State var preSelectionRescanPath: String?
     @Binding var preSelectedPlistPath: String?
     let onExplain: ((ScanResult) -> Void)?
     let onTriage: (([ScanResult]) -> Void)?
@@ -59,15 +63,24 @@ public struct BackgroundItemsView: View {
         .background(GargantuaColors.void_)
         .task {
             if preSelectedPlistPath != nil, session.scan == nil, !session.isScanning {
+                // This scan is already fresh for the pending path — a miss
+                // shouldn't trigger the rescan-once fallback on top of it.
+                preSelectionRescanPath = preSelectedPlistPath
                 await session.scan()
             }
             consumePendingPreSelection()
         }
-        .onChange(of: preSelectedPlistPath) { _, _ in
+        .onChange(of: preSelectedPlistPath) { _, newValue in
             // Re-trigger when Process Inventory navigates here a second time
             // for the same path — clearing then re-setting the binding makes
             // SwiftUI fire this even if the value matches the previous nil.
+            if newValue != nil {
+                // Each fresh handoff gets one rescan opportunity, even for a
+                // path an earlier handoff already burned its rescan on.
+                preSelectionRescanPath = nil
+            }
             if preSelectedPlistPath != nil, session.scan == nil, !session.isScanning {
+                preSelectionRescanPath = preSelectedPlistPath
                 Task { await session.scan() }
             }
             consumePendingPreSelection()

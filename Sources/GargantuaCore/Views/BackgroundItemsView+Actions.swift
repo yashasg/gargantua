@@ -55,25 +55,59 @@ extension BackgroundItemsView {
     /// row (and switch to the All filter so it's actually visible) once the
     /// scan has produced an item with that plist path. Clears the binding so
     /// the parent can re-trigger the same handoff later.
+    ///
+    /// A miss against the cached scan rescans once before reporting the path
+    /// missing — the cache can predate the item (an agent added since the
+    /// last scan). While a scan is in flight the pre-selection stays pending;
+    /// `.onChange(of: session.scan?.scannedAt)` re-enters here once it lands.
     func consumePendingPreSelection() {
         guard let path = preSelectedPlistPath else { return }
-        guard let scan = session.scan else { return }
-        guard let match = scan.items.first(where: { $0.plistPath == path }) else {
-            // Scan didn't surface the path — most likely a daemon plist that
-            // requires elevated enumeration. Surface as a soft error so the
-            // user understands why navigation didn't land somewhere visible.
+        guard let scan = session.scan, !session.isScanning else { return }
+        let match = scan.items.first { $0.plistPath == path }
+        switch Self.preSelectionStep(
+            matchFound: match != nil,
+            alreadyRescannedForPath: preSelectionRescanPath == path
+        ) {
+        case .expand:
+            guard let match else { return }
+            // The path may belong to an item filtered out by the current chip
+            // (e.g. Sensitive). Drop back to All so the row actually shows.
+            if !filter.apply([match]).contains(where: { $0.id == match.id }) {
+                filter = .all
+            }
+            withAnimation(.easeOut(duration: 0.15)) {
+                expandedID = match.id
+            }
+            preSelectedPlistPath = nil
+            preSelectionRescanPath = nil
+        case .rescanFirst:
+            preSelectionRescanPath = path
+            Task { await session.scan() }
+        case .reportMissing:
+            // A fresh scan didn't surface the path either — most likely a
+            // daemon plist that requires elevated enumeration. Surface as a
+            // soft error so the user understands why navigation didn't land
+            // somewhere visible.
             lastError = "Could not locate that source in the Background Items list. It may require elevated enumeration."
             preSelectedPlistPath = nil
-            return
+            preSelectionRescanPath = nil
         }
-        // The path may belong to an item filtered out by the current chip
-        // (e.g. Sensitive). Drop back to All so the row actually shows.
-        if !filter.apply([match]).contains(where: { $0.id == match.id }) {
-            filter = .all
-        }
-        withAnimation(.easeOut(duration: 0.15)) {
-            expandedID = match.id
-        }
-        preSelectedPlistPath = nil
+    }
+
+    /// What to do with a pending pre-selection given the current scan:
+    /// expand on a hit; on a miss, rescan once (the cached scan may predate
+    /// the item) before declaring the path missing.
+    static func preSelectionStep(
+        matchFound: Bool,
+        alreadyRescannedForPath: Bool
+    ) -> PreSelectionStep {
+        if matchFound { return .expand }
+        return alreadyRescannedForPath ? .reportMissing : .rescanFirst
+    }
+
+    enum PreSelectionStep: Equatable {
+        case expand
+        case rescanFirst
+        case reportMissing
     }
 }
