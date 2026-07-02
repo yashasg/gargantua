@@ -28,6 +28,15 @@ public final class ProcessInventorySession {
     private let scanner: any ProcessInventoryScanning
     private let actionExecutor: (any ProcessActionExecuting)?
 
+    /// Generation tag for search passes. A pass only publishes its results
+    /// (or clears the spinner) if no newer pass superseded it while its
+    /// detached find-pass ran — `Task.isCancelled` alone can't cover
+    /// session-initiated re-runs like the post-stop refresh.
+    private var searchGeneration = 0
+    /// Trimmed query of the most recent search pass, retained so a
+    /// successful stop can re-run the active search after its re-scan.
+    private var activeSearchQuery: String?
+
     public init(
         scanner: any ProcessInventoryScanning = DefaultProcessInventoryScanner(),
         actionExecutor: (any ProcessActionExecuting)? = DefaultProcessActionExecutor()
@@ -50,20 +59,26 @@ public final class ProcessInventorySession {
 
     public func clearSnapshot() {
         scan = nil
-        searchResults = nil
-        isSearching = false
+        clearSearch()
         busyItemIDs.removeAll()
     }
 
     /// Run a full-table search and publish the matches. The view debounces and
-    /// cancels via `.task(id:)`, so a superseded call is dropped before it can
-    /// overwrite a newer result.
+    /// cancels via `.task(id:)`; the generation tag additionally drops a
+    /// superseded pass that was already past cancellation when the newer one
+    /// started, so it can neither overwrite the newer results nor clear the
+    /// spinner the newer pass still owns.
     public func search(query: String, metric: ProcessSortMetric) async {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { clearSearch(); return }
 
+        searchGeneration &+= 1
+        let generation = searchGeneration
+        activeSearchQuery = trimmed
         isSearching = true
-        defer { isSearching = false }
+        defer {
+            if generation == searchGeneration { isSearching = false }
+        }
 
         let scanner = self.scanner
         let limit = Self.searchResultLimit
@@ -73,21 +88,26 @@ public final class ProcessInventorySession {
 
         // A newer query may have superseded this one while the detached find
         // pass ran; don't let the stale result overwrite it.
-        if Task.isCancelled { return }
+        if Task.isCancelled || generation != searchGeneration { return }
         searchResults = result
     }
 
     /// Drop search state and fall back to showing the captured snapshot.
+    /// Bumps the generation so an in-flight pass can't resurrect the
+    /// results it was computing.
     public func clearSearch() {
+        searchGeneration &+= 1
+        activeSearchQuery = nil
         searchResults = nil
         isSearching = false
     }
 
     /// Run a `ProcessAction` against `item`, marking the row busy for the
-    /// duration. After a successful `.stop`, the session re-scans so the row
-    /// disappears (or shows the orphaned-state if the source is still on
-    /// disk). `.removeSource` does not re-scan — the caller is expected to
-    /// navigate away to the Background Items pane.
+    /// duration. After a successful `.stop`, the session re-scans (and
+    /// re-runs any active search) so the row disappears (or shows the
+    /// orphaned-state if the source is still on disk). `.removeSource` does
+    /// not re-scan — the caller is expected to navigate away to the
+    /// Background Items pane.
     public func perform(
         _ action: ProcessAction,
         on item: ProcessItem,
@@ -115,6 +135,13 @@ public final class ProcessInventorySession {
 
         if outcome.succeeded, action == .stop {
             await scan(metric: metric, topN: topN)
+            // The visible list may be showing search results; re-run the
+            // active search so the stopped row disappears instead of
+            // lingering with a stale (possibly recycled) PID that a second
+            // Stop would signal.
+            if let query = activeSearchQuery {
+                await search(query: query, metric: metric)
+            }
         }
         return outcome
     }
