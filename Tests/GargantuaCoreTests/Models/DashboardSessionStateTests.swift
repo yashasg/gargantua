@@ -143,4 +143,24 @@ struct DashboardSessionStateTests {
         #expect(session.alerts.first?.reclaimableSize == 4_000_000_000)
         #expect(session.alerts.first?.itemCount == 2)
     }
+
+    @Test("beginTriageScan rejects re-entrant starts until the scan finishes")
+    @MainActor
+    func beginTriageScanRejectsReentry() {
+        let session = DashboardSessionState()
+
+        #expect(session.beginTriageScan())
+        #expect(session.hasRunTriageScan)
+        #expect(session.isTriageRequestInFlight)
+
+        // ⌘R key-repeat lands before the adapter flips
+        // scanProgress.isScanning — the slot is already claimed.
+        let progress = session.scanProgress
+        #expect(!session.beginTriageScan())
+        #expect(session.scanProgress === progress)
+
+        session.finishTriageScan()
+        #expect(!session.isTriageRequestInFlight)
+        #expect(session.beginTriageScan())
+    }
 }

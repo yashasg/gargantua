@@ -209,8 +209,10 @@ public struct DashboardView: View {
     }
 
     private func startTriageScan() {
-        session.hasRunTriageScan = true
-        session.scanProgress = ScanProgress()
+        // beginTriageScan claims the slot synchronously — ⌘R key-repeat or a
+        // double-click can't spawn a second overlapping scan in the window
+        // before the adapter flips `scanProgress.isScanning`.
+        guard session.beginTriageScan() else { return }
         let progress = session.scanProgress
         // Resolve the user's active profile up-front on MainActor so the
         // background scan honours their setting instead of always running
@@ -218,6 +220,7 @@ public struct DashboardView: View {
         // and would silently hide Dev Purge from the roadmap).
         let profile = resolveTriageProfile()
         Task {
+            defer { session.finishTriageScan() }
             do {
                 let pathExclusions = staleVersionPinnedPaths()
                 let adapter = try ProfileScanAdapterFactory.make(

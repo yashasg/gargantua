@@ -13,8 +13,31 @@ public final class DashboardSessionState {
     public var scanProgress = ScanProgress()
     public var hasRunTriageScan: Bool = false
     public var lastTriageAt: Date?
+    /// True from the moment a triage scan is requested until its task
+    /// finishes. `scanProgress.isScanning` only flips once the adapter
+    /// starts (and can flicker false between adapters), so guarding
+    /// re-entrancy on it races with ⌘R key-repeat.
+    public private(set) var isTriageRequestInFlight = false
 
     public init() {}
+
+    /// Claim the triage-scan slot. Returns false when a triage request is
+    /// already in flight so callers drop re-entrant starts instead of
+    /// spawning overlapping scans. On success, resets `scanProgress` and
+    /// marks triage as run.
+    public func beginTriageScan() -> Bool {
+        guard !isTriageRequestInFlight else { return false }
+        isTriageRequestInFlight = true
+        hasRunTriageScan = true
+        scanProgress = ScanProgress()
+        return true
+    }
+
+    /// Release the triage-scan slot once the scan task ends (success or
+    /// failure).
+    public func finishTriageScan() {
+        isTriageRequestInFlight = false
+    }
 
     /// Hours after which a successful triage is considered stale and the
     /// dashboard surfaces a refresh hint instead of treating the existing
