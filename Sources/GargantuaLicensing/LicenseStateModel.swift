@@ -9,16 +9,27 @@ public final class LicenseStateModel {
     public private(set) var state: LicenseState = .none
 
     private let gate: LicenseGate
+    @ObservationIgnored private var revalidationTask: Task<Void, Never>?
 
-    public init(gate: LicenseGate = .shared) {
+    public init(gate: LicenseGate = .shared, revalidationInterval: Duration = .seconds(6 * 60 * 60)) {
         self.gate = gate
-        // Set initial state from cache immediately, then revalidate against the
-        // server in the background. .task on a view that initially resolves to
-        // EmptyView doesn't reliably fire, so seed from init.
-        Task {
-            await self.refresh()
-            await self.revalidate()
+        // Set initial state from cache immediately (.task on a view that
+        // initially resolves to EmptyView doesn't reliably fire), then keep
+        // revalidating for as long as the app runs: each granted round-trip
+        // re-extends the 14-day offline grace window, so an always-on Mac
+        // never ages out of it while online.
+        revalidationTask = Task { [weak self] in
+            await self?.refresh()
+            while !Task.isCancelled {
+                await self?.revalidate()
+                try? await Task.sleep(for: revalidationInterval)
+                guard self != nil, !Task.isCancelled else { return }
+            }
         }
+    }
+
+    deinit {
+        revalidationTask?.cancel()
     }
 
     /// Fast: reads cache + trial clock, no network.

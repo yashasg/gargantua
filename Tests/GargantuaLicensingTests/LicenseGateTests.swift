@@ -4,26 +4,43 @@ import Testing
 
 @Suite("LicenseGate")
 struct LicenseGateTests {
-    private func tempFileURL() -> URL {
-        FileManager.default.temporaryDirectory
-            .appendingPathComponent("gargantua-gate-tests", isDirectory: true)
-            .appendingPathComponent("\(UUID().uuidString).json", isDirectory: false)
-    }
-
     private func makeGate(
         client: MockPolarClient = MockPolarClient(),
-        receiptURL: URL? = nil,
-        storage: any TrialClockStorage = InMemoryTrialClockStorage(),
+        storage: any LicenseReceiptStorage = InMemoryLicenseReceiptStorage(),
+        graceInterval: TimeInterval = LicensePolarConfig.validationGraceInterval,
+        trialStorage: any TrialClockStorage = InMemoryTrialClockStorage(),
         now: @escaping @Sendable () -> Date = { Date() }
     ) -> (LicenseGate, LicenseStore) {
         let store = LicenseStore(
-            fileURL: receiptURL ?? tempFileURL(),
+            storage: storage,
+            legacyFileURL: nil,
+            migrationMarker: InMemoryLicenseMigrationMarker(),
             client: client,
+            graceInterval: graceInterval,
             now: now,
             deviceLabel: { "Test Mac" }
         )
-        let clock = TrialClock(storage: storage, now: now)
+        let clock = TrialClock(storage: trialStorage, now: now)
         return (LicenseGate(store: store, clock: clock), store)
+    }
+
+    @Test("Failed local save maps to receiptSaveFailed, not a network error")
+    func saveFailureIsNotANetworkError() async {
+        let client = MockPolarClient()
+        let (gate, _) = makeGate(client: client, storage: FailingLicenseReceiptStorage())
+
+        let result = await gate.activate(key: "GARG-1")
+
+        guard case .failure(let error) = result else {
+            Issue.record("Expected failure, got \(result)")
+            return
+        }
+        guard case .receiptSaveFailed = error else {
+            Issue.record("Expected .receiptSaveFailed, got \(error)")
+            return
+        }
+        // Slot was rolled back so a retry is safe.
+        #expect(client.deactivateCount == 1)
     }
 
     #if GARGANTUA_LICENSING
@@ -47,7 +64,7 @@ struct LicenseGateTests {
             let start = Date(timeIntervalSince1970: 1_750_000_000)
             let storage = InMemoryTrialClockStorage(initialDate: start)
             let day30 = start.addingTimeInterval(30 * 24 * 60 * 60)
-            let (gate, _) = makeGate(storage: storage, now: { day30 })
+            let (gate, _) = makeGate(trialStorage: storage, now: { day30 })
 
             let state = await gate.currentState()
             let decision = await gate.canExecuteDestructiveAction()
@@ -58,8 +75,6 @@ struct LicenseGateTests {
 
         @Test("Activated license overrides trial expiry")
         func activatedLicenseOverridesTrial() async throws {
-            let url = tempFileURL()
-            defer { try? FileManager.default.removeItem(at: url) }
             let start = Date(timeIntervalSince1970: 1_750_000_000)
             let storage = InMemoryTrialClockStorage(initialDate: start)
             let day30 = start.addingTimeInterval(30 * 24 * 60 * 60)
@@ -68,7 +83,7 @@ struct LicenseGateTests {
                     PolarActivation(activationId: "act-9", status: .granted, email: "paid@user.com", name: "Paid")
                 )
             )
-            let (gate, store) = makeGate(client: client, receiptURL: url, storage: storage, now: { day30 })
+            let (gate, store) = makeGate(client: client, trialStorage: storage, now: { day30 })
             try await store.activate(key: "GARG-PAID")
 
             let state = await gate.currentState()
@@ -84,27 +99,22 @@ struct LicenseGateTests {
 
         @Test("Past-grace cached license falls back to trial/expired")
         func pastGraceFallsBack() async throws {
-            let url = tempFileURL()
-            defer { try? FileManager.default.removeItem(at: url) }
             let start = Date(timeIntervalSince1970: 1_750_000_000)
             // Trial also expired so we land on .expired, not .trial
-            let storage = InMemoryTrialClockStorage(initialDate: start)
-            let activateTime = start
+            let trialStorage = InMemoryTrialClockStorage(initialDate: start)
+            let receiptStorage = InMemoryLicenseReceiptStorage()
             let client = MockPolarClient()
-            let store = LicenseStore(
-                fileURL: url, client: client, graceInterval: 100,
-                now: { activateTime }, deviceLabel: { "Test Mac" }
+            let (_, earlyStore) = makeGate(
+                client: client, storage: receiptStorage, graceInterval: 100, now: { start }
             )
-            try await store.activate(key: "GARG-OLD") // lastValidated = start
+            try await earlyStore.activate(key: "GARG-OLD") // lastValidated = start
 
             // Far past both grace window and trial
             let later = start.addingTimeInterval(60 * 24 * 60 * 60)
-            let clock = TrialClock(storage: storage, now: { later })
-            let lateStore = LicenseStore(
-                fileURL: url, client: client, graceInterval: 100,
-                now: { later }, deviceLabel: { "Test Mac" }
+            let (gate, _) = makeGate(
+                client: client, storage: receiptStorage, graceInterval: 100,
+                trialStorage: trialStorage, now: { later }
             )
-            let gate = LicenseGate(store: lateStore, clock: clock)
 
             let state = await gate.currentState()
             #expect(state == .expired)

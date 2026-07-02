@@ -15,6 +15,8 @@ enum LicenseErrorCopy {
             return "License server error (\(code)). Please try again in a moment."
         case .decoding:
             return "Unexpected response from the license server. Please try again."
+        case .receiptSaveFailed:
+            return "Your key was activated but couldn't be saved on this Mac, so the activation was released. It's safe to try again."
         }
     }
 }

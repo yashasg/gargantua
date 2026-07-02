@@ -24,6 +24,9 @@ public enum PolarLicenseError: Error, Sendable, Equatable {
     case network(String)
     /// Response body didn't decode.
     case decoding(String)
+    /// Server-side activation succeeded but the receipt couldn't be stored
+    /// locally. The activation slot was released, so retrying is safe.
+    case receiptSaveFailed(String)
 }
 
 public protocol PolarLicenseValidating: Sendable {

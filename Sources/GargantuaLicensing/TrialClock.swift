@@ -71,7 +71,10 @@ public final class TrialClock: @unchecked Sendable {
         // as elapsed time, not as a negative interval that would inflate the
         // ceiling math.
         let launch = firstLaunchDate()
-        let elapsed = now().timeIntervalSince(launch)
+        // A clock moved behind the recorded launch date reads as negative
+        // elapsed time; clamp so backdating never mints more than the full
+        // trial window.
+        let elapsed = max(0, now().timeIntervalSince(launch))
         let remaining = Self.trialDuration - elapsed
         if remaining <= 0 { return 0 }
         return Int(ceil(remaining / (24 * 60 * 60)))

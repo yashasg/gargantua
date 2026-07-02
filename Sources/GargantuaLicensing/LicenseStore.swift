@@ -1,16 +1,24 @@
 import Foundation
 
 public enum LicenseStoreError: Error, Sendable, Equatable {
-    case fileIOFailed(String)
+    case persistenceFailed(String)
 }
 
 /// Persists the Polar license activation locally and brokers activate /
 /// revalidate / deactivate against `PolarLicenseValidating`. Reads are sync
-/// (cache on disk) so the license gate never blocks on the network; the
-/// `validate` round-trip happens in the background to extend the offline
+/// (keychain-cached receipt) so the license gate never blocks on the network;
+/// the `validate` round-trip happens in the background to extend the offline
 /// grace window and catch revocations.
 public final class LicenseStore: @unchecked Sendable {
-    private let fileURL: URL
+    /// Clock skew tolerated before a `lastValidated` in the future — i.e. a
+    /// clock moved backward — invalidates the cached receipt. Keeps a
+    /// backdated clock from extending offline grace indefinitely; the next
+    /// successful revalidation heals the stamp.
+    public static let clockSkewTolerance: TimeInterval = 60 * 60
+
+    private let storage: any LicenseReceiptStorage
+    private let legacyFileURL: URL?
+    private let migrationMarker: any LicenseMigrationMarker
     private let client: any PolarLicenseValidating
     private let graceInterval: TimeInterval
     private let now: @Sendable () -> Date
@@ -19,26 +27,32 @@ public final class LicenseStore: @unchecked Sendable {
 
     public convenience init() {
         self.init(
-            fileURL: LicenseStore.defaultFileURL,
+            storage: KeychainLicenseReceiptStorage(),
             client: PolarLicenseClient()
         )
     }
 
     public init(
-        fileURL: URL,
+        storage: any LicenseReceiptStorage,
+        legacyFileURL: URL? = LicenseStore.legacyFileURL,
+        migrationMarker: any LicenseMigrationMarker = UserDefaultsLicenseMigrationMarker(),
         client: any PolarLicenseValidating,
         graceInterval: TimeInterval = LicensePolarConfig.validationGraceInterval,
         now: @escaping @Sendable () -> Date = { Date() },
         deviceLabel: @escaping @Sendable () -> String = { LicenseStore.defaultDeviceLabel() }
     ) {
-        self.fileURL = fileURL
+        self.storage = storage
+        self.legacyFileURL = legacyFileURL
+        self.migrationMarker = migrationMarker
         self.client = client
         self.graceInterval = graceInterval
         self.now = now
         self.deviceLabel = deviceLabel
     }
 
-    public static var defaultFileURL: URL {
+    /// Where pre-keychain builds cached the receipt as plain JSON. Only read
+    /// during the one-shot migration; new receipts never touch disk.
+    public static var legacyFileURL: URL {
         let supportDir = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first!
@@ -55,16 +69,44 @@ public final class LicenseStore: @unchecked Sendable {
     public func loadCachedReceipt() -> LicenseReceipt? {
         lock.lock()
         defer { lock.unlock() }
-        guard let data = try? Data(contentsOf: fileURL) else { return nil }
-        return try? JSONDecoder().decode(LicenseReceipt.self, from: data)
+        if let data = try? storage.read(),
+           let receipt = try? JSONDecoder().decode(LicenseReceipt.self, from: data) {
+            return receipt
+        }
+        return migrateLegacyReceipt()
+    }
+
+    /// Trusts the legacy `license.json` exactly once — the first launch after
+    /// upgrading — moving it into the keychain with no re-activation and no
+    /// prompt. The marker means a hand-crafted JSON file dropped there later
+    /// is ignored instead of "migrated" into licensed status.
+    private func migrateLegacyReceipt() -> LicenseReceipt? {
+        guard !migrationMarker.isDone(), let legacyFileURL else { return nil }
+        guard let data = try? Data(contentsOf: legacyFileURL),
+              let receipt = try? JSONDecoder().decode(LicenseReceipt.self, from: data)
+        else {
+            migrationMarker.markDone()
+            return nil
+        }
+        do {
+            try storage.write(data)
+            migrationMarker.markDone()
+            try? FileManager.default.removeItem(at: legacyFileURL)
+        } catch {
+            // Keychain write failed — leave the JSON in place so the next
+            // launch retries, but honor the receipt for this session.
+        }
+        return receipt
     }
 
     /// A cached receipt is currently valid if it's `granted` and the last
-    /// server validation is within the grace window.
+    /// server validation is within the grace window — and not in the future,
+    /// which would mean the clock was moved backward.
     public func isCurrentlyValid(_ receipt: LicenseReceipt, at reference: Date? = nil) -> Bool {
         guard receipt.status == .granted else { return false }
         let ref = reference ?? now()
-        return ref.timeIntervalSince(receipt.lastValidated) < graceInterval
+        let sinceValidation = ref.timeIntervalSince(receipt.lastValidated)
+        return sinceValidation >= -Self.clockSkewTolerance && sinceValidation < graceInterval
     }
 
     // MARK: - Network operations
@@ -87,7 +129,15 @@ public final class LicenseStore: @unchecked Sendable {
             activatedAt: stamp,
             lastValidated: stamp
         )
-        try save(receipt)
+        do {
+            try save(receipt)
+        } catch {
+            // The server already consumed an activation slot; free it so a
+            // retry doesn't burn through the activation limit while this Mac
+            // stays unlicensed.
+            try? await client.deactivate(key: key, activationId: activation.activationId)
+            throw error
+        }
         return receipt
     }
 
@@ -132,24 +182,24 @@ public final class LicenseStore: @unchecked Sendable {
     public func save(_ receipt: LicenseReceipt) throws {
         lock.lock()
         defer { lock.unlock() }
-        let parent = fileURL.deletingLastPathComponent()
         do {
-            try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(receipt)
-            try data.write(to: fileURL, options: [.atomic])
+            try storage.write(data)
         } catch {
-            throw LicenseStoreError.fileIOFailed(error.localizedDescription)
+            throw LicenseStoreError.persistenceFailed(error.localizedDescription)
         }
     }
 
     public func clear() throws {
         lock.lock()
         defer { lock.unlock() }
-        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
         do {
-            try FileManager.default.removeItem(at: fileURL)
+            try storage.delete()
         } catch {
-            throw LicenseStoreError.fileIOFailed(error.localizedDescription)
+            throw LicenseStoreError.persistenceFailed(error.localizedDescription)
+        }
+        if let legacyFileURL {
+            try? FileManager.default.removeItem(at: legacyFileURL)
         }
     }
 

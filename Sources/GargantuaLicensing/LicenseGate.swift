@@ -57,6 +57,8 @@ public actor LicenseGate {
             return .success(try await store.activate(key: key))
         } catch let error as PolarLicenseError {
             return .failure(error)
+        } catch LicenseStoreError.persistenceFailed(let detail) {
+            return .failure(.receiptSaveFailed(detail))
         } catch {
             return .failure(.network(error.localizedDescription))
         }
