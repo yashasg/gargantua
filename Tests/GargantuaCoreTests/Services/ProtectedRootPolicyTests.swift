@@ -73,6 +73,37 @@ struct ProtectedRootPolicyTests {
         ) == nil)
     }
 
+    @Test("case-twisted spelling of a protected root is still protected on case-insensitive volumes")
+    func caseTwistedSpellingIsStillProtected() throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("protected-root-case-\(UUID().uuidString)", isDirectory: true)
+        let real = base.appendingPathComponent("Library", isDirectory: true)
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        // "library" names the same on-disk directory as "Library" only on a
+        // case-insensitive volume (the APFS default). On a case-sensitive
+        // volume there is nothing to bypass, so the scenario doesn't apply.
+        let twisted = base.appendingPathComponent("library", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: twisted.path) else { return }
+
+        let home = URL(fileURLWithPath: "/Users/gargantua-test", isDirectory: true)
+        let policy = ProtectedRootPolicy(entries: [
+            ProtectedRootEntry(path: real.path, reason: "User Library root"),
+        ])
+
+        #expect(policy.protectionReason(for: twisted, homeDirectory: home) == "User Library root")
+        // And the reverse: an entry authored with the wrong case still
+        // protects the real directory.
+        let twistedEntryPolicy = ProtectedRootPolicy(entries: [
+            ProtectedRootEntry(path: twisted.path, reason: "User Library root"),
+        ])
+        #expect(twistedEntryPolicy.protectionReason(for: real, homeDirectory: home) == "User Library root")
+        // A sibling that genuinely doesn't exist under the root stays cleanable.
+        let unrelated = base.appendingPathComponent("Caches", isDirectory: true)
+        #expect(policy.protectionReason(for: unrelated, homeDirectory: home) == nil)
+    }
+
     @Test("user store adds and removes custom protected roots")
     func userStoreRoundTrip() throws {
         let suite = "gargantua-protected-root-store-\(UUID().uuidString)"

@@ -51,6 +51,52 @@ extension CleanupResultTests {
         }
     }
 
+    @Test("items under a symlinked scan root reach Finder when scan-time ancestry was recorded")
+    @MainActor
+    func symlinkedScanRootItemsStillReachFinder() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cleanup-symlink-root-\(UUID().uuidString)", isDirectory: true)
+        let real = root.appendingPathComponent("real", isDirectory: true)
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: real.appendingPathComponent("cache.bin"))
+        let link = root.appendingPathComponent("dev")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // The scan walked through the symlinked root (~/dev -> elsewhere) and
+        // recorded where the parent chain resolved at scan time.
+        let throughLink = link.appendingPathComponent("cache.bin")
+        var item = makeItem(id: "symlinked-root-cache", path: throughLink.path, size: 1)
+        item.scanTimeResolvedParent = throughLink
+            .deletingLastPathComponent()
+            .resolvingSymlinksInPath()
+            .path
+
+        let expectedTrashURL = URL(fileURLWithPath: "/Users/test/.Trash/cache.bin")
+        let mover = RecordingTrashMover(outcome: .success(expectedTrashURL))
+        let engine = CleanupEngine(
+            homeDirectoryForTesting: URL(fileURLWithPath: "/Users/gargantua-test", isDirectory: true),
+            trashMover: mover
+        )
+
+        let result = await engine.clean([item], method: .trash)
+
+        #expect(result.allSucceeded)
+        #expect(mover.movedURLs == [URL(fileURLWithPath: throughLink.path)])
+
+        // Without the recording, the same item is still refused — fail-safe.
+        let unrecorded = makeItem(id: "symlinked-root-unrecorded", path: throughLink.path, size: 1)
+        let refusedMover = RecordingTrashMover(outcome: .success(expectedTrashURL))
+        let refusingEngine = CleanupEngine(
+            homeDirectoryForTesting: URL(fileURLWithPath: "/Users/gargantua-test", isDirectory: true),
+            trashMover: refusedMover
+        )
+        let refused = await refusingEngine.clean([unrecorded], method: .trash)
+        #expect(!refused.allSucceeded)
+        #expect(refused.failedItems.first?.error?.contains("symlink") == true)
+        #expect(refusedMover.movedURLs.isEmpty)
+    }
+
     @Test("nested Library cleanup targets still reach Finder")
     @MainActor
     func nestedLibraryCleanupTargetsStillReachFinder() async {

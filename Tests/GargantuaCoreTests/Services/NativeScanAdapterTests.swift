@@ -507,4 +507,25 @@ struct NativeScanAdapterTests {
         let strictResults = try await strict.scan()
         #expect(strictResults.isEmpty)
     }
+
+    // MARK: - fnmatch
+
+    @Test("fnmatch treats a wildcard-free pattern as an exact name, not a prefix")
+    func fnmatchWildcardFreeIsExact() {
+        #expect(NativeScanAdapter.fnmatch(pattern: "Cache.db", name: "Cache.db"))
+        #expect(!NativeScanAdapter.fnmatch(pattern: "Cache.db", name: "Cache.db-wal"))
+        #expect(!NativeScanAdapter.fnmatch(pattern: "Cache.db", name: "Cache.dbBackup"))
+        #expect(!NativeScanAdapter.fnmatch(pattern: "com.apple.Safari", name: "com.apple.SafariTechnologyPreview"))
+        #expect(NativeScanAdapter.fnmatch(pattern: "com.apple.Safari", name: "com.apple.Safari"))
+    }
+
+    @Test("fnmatch wildcard patterns keep prefix/suffix/contains semantics")
+    func fnmatchWildcardSemantics() {
+        #expect(NativeScanAdapter.fnmatch(pattern: "*", name: "anything"))
+        #expect(NativeScanAdapter.fnmatch(pattern: "Cache.db*", name: "Cache.db-wal"))
+        #expect(NativeScanAdapter.fnmatch(pattern: "*.db", name: "Cache.db"))
+        #expect(!NativeScanAdapter.fnmatch(pattern: "*.db", name: "Cache.db-wal"))
+        #expect(NativeScanAdapter.fnmatch(pattern: "*cache*", name: "somecachedir"))
+        #expect(!NativeScanAdapter.fnmatch(pattern: "*cache*", name: "somedir"))
+    }
 }

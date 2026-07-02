@@ -80,34 +80,130 @@ public struct ProtectedRootPolicy: Sendable {
             return failClosedReason
         }
 
-        let target = Self.normalizedPath(url.path, homeDirectory: homeDirectory, resolvesSymlinks: true)
-        let alternateTarget = Self.normalizedPath(url.path, homeDirectory: homeDirectory, resolvesSymlinks: false)
-        let candidatePaths = Set([target, alternateTarget])
+        let candidates = Set([
+            Self.normalizedPath(url.path, homeDirectory: homeDirectory, resolvesSymlinks: true),
+            Self.normalizedPath(url.path, homeDirectory: homeDirectory, resolvesSymlinks: false),
+        ])
+        let foldedCandidates = Set(candidates.map { $0.lowercased() })
+
+        // Entries whose authored spelling missed but whose case-folded
+        // spelling hit — deferred to the on-disk case check below so exact
+        // matches keep their attribution and the common unprotected item
+        // costs no extra filesystem work.
+        var caseScreened: [ScreenedEntry] = []
 
         for entry in entries {
             guard !entry.path.isEmpty else { continue }
-            if entry.path.contains("*") {
-                if candidatePaths.contains(where: { Self.matchesGlob(entry.path, path: $0, homeDirectory: homeDirectory) }) {
+            switch Self.match(entry, candidates: candidates, foldedCandidates: foldedCandidates, homeDirectory: homeDirectory) {
+            case .authoredSpelling:
+                return entry.reason
+            case .caseFoldedOnly(let screened):
+                caseScreened.append(screened)
+            case .none:
+                continue
+            }
+        }
+
+        return Self.caseConfirmedReason(for: caseScreened, candidates: candidates)
+    }
+
+    private enum EntryMatch {
+        case authoredSpelling
+        case caseFoldedOnly(ScreenedEntry)
+        case none
+    }
+
+    private struct ScreenedEntry {
+        let reason: String
+        let isGlob: Bool
+        let paths: Set<String>
+    }
+
+    private static func match(
+        _ entry: ProtectedRootEntry,
+        candidates: Set<String>,
+        foldedCandidates: Set<String>,
+        homeDirectory: URL
+    ) -> EntryMatch {
+        if entry.path.contains("*") {
+            let pattern = normalizedPath(entry.path, homeDirectory: homeDirectory, resolvesSymlinks: false)
+            if candidates.contains(where: { globMatches(pattern, path: $0) }) {
+                return .authoredSpelling
+            }
+            if foldedCandidates.contains(where: { globMatches(pattern.lowercased(), path: $0) }) {
+                return .caseFoldedOnly(ScreenedEntry(reason: entry.reason, isGlob: true, paths: [pattern]))
+            }
+        } else {
+            let protectedPaths = Set([
+                normalizedPath(entry.path, homeDirectory: homeDirectory, resolvesSymlinks: true),
+                normalizedPath(entry.path, homeDirectory: homeDirectory, resolvesSymlinks: false),
+            ])
+            if !candidates.isDisjoint(with: protectedPaths) {
+                return .authoredSpelling
+            }
+            if !foldedCandidates.isDisjoint(with: Set(protectedPaths.map { $0.lowercased() })) {
+                return .caseFoldedOnly(ScreenedEntry(reason: entry.reason, isGlob: false, paths: protectedPaths))
+            }
+        }
+        return .none
+    }
+
+    /// Case-folded near-miss confirmation: default APFS is case-insensitive,
+    /// so "~/library" names the real ~/Library on disk yet fails the exact
+    /// comparison. Confirm identity by asking the filesystem for both sides'
+    /// canonical on-disk spelling (`canonicalPathKey`) rather than trusting
+    /// the fold — a genuinely distinct ~/library on a case-sensitive volume
+    /// canonicalizes differently and never matches.
+    private static func caseConfirmedReason(for screened: [ScreenedEntry], candidates: Set<String>) -> String? {
+        guard !screened.isEmpty else { return nil }
+
+        let canonicalCandidates = addingCanonicalSpellings(to: candidates)
+        for entry in screened {
+            if entry.isGlob {
+                guard let pattern = entry.paths.first else { continue }
+                let canonicalPattern = canonicalDiskCasePath(pattern) ?? pattern
+                if canonicalCandidates.contains(where: { globMatches(canonicalPattern, path: $0) }) {
                     return entry.reason
                 }
             } else {
-                let protectedPath = Self.normalizedPath(
-                    entry.path,
-                    homeDirectory: homeDirectory,
-                    resolvesSymlinks: true
-                )
-                let alternateProtectedPath = Self.normalizedPath(
-                    entry.path,
-                    homeDirectory: homeDirectory,
-                    resolvesSymlinks: false
-                )
-                if candidatePaths.contains(protectedPath) || candidatePaths.contains(alternateProtectedPath) {
+                let canonicalProtected = addingCanonicalSpellings(to: entry.paths)
+                if !canonicalCandidates.isDisjoint(with: canonicalProtected) {
                     return entry.reason
                 }
             }
         }
-
         return nil
+    }
+
+    private static func addingCanonicalSpellings(to paths: Set<String>) -> Set<String> {
+        var expanded = paths
+        for path in paths {
+            if let canonical = canonicalDiskCasePath(path) {
+                expanded.insert(canonical)
+            }
+        }
+        return expanded
+    }
+
+    /// The on-disk canonical spelling of `path` (real case, firmlinks and
+    /// symlinks resolved), from the deepest existing ancestor; components that
+    /// don't exist are kept verbatim. `nil` when nothing on the path exists.
+    private static func canonicalDiskCasePath(_ path: String) -> String? {
+        var url = URL(fileURLWithPath: path)
+        var missing: [String] = []
+        while true {
+            if let canonical = try? url.resourceValues(forKeys: [.canonicalPathKey]).canonicalPath {
+                guard !missing.isEmpty else { return canonical }
+                var rebuilt = URL(fileURLWithPath: canonical)
+                for component in missing.reversed() {
+                    rebuilt.appendPathComponent(component)
+                }
+                return rebuilt.path
+            }
+            guard url.path != "/" else { return nil }
+            missing.append(url.lastPathComponent)
+            url = url.deletingLastPathComponent()
+        }
     }
 
     static func normalizedPath(
@@ -122,8 +218,9 @@ public struct ProtectedRootPolicy: Sendable {
         return path.hasSuffix("/") ? String(path.dropLast()) : path
     }
 
-    private static func matchesGlob(_ pattern: String, path: String, homeDirectory: URL) -> Bool {
-        let normalizedPattern = normalizedPath(pattern, homeDirectory: homeDirectory, resolvesSymlinks: false)
+    /// Component-count-anchored glob match; `normalizedPattern` must already
+    /// be normalized (tokens expanded, standardized).
+    private static func globMatches(_ normalizedPattern: String, path: String) -> Bool {
         let patternComponents = normalizedPattern.pathComponentsForPolicy
         let pathComponents = path.pathComponentsForPolicy
         guard patternComponents.count == pathComponents.count else { return false }

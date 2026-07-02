@@ -46,6 +46,14 @@ public struct ScanResult: Codable, Sendable, Identifiable {
     /// unblocks it. `nil` when nothing blocks removal.
     public var blockedByApp: BlockedApp?
 
+    /// Where `path`'s parent directory chain resolved at scan time. Recorded
+    /// by the scan pipeline so the pre-delete `SymlinkSwapGuard` can tell a
+    /// legitimate symlink ancestor that already existed when the item was
+    /// found (e.g. a symlinked scan root like `~/dev` → `/Volumes/Ext/dev`)
+    /// from one swapped in after the scan. `nil` when the producing surface
+    /// didn't record it; the guard then rejects any symlink ancestor.
+    public var scanTimeResolvedParent: String?
+
     public init(
         id: String,
         name: String,
@@ -60,7 +68,8 @@ public struct ScanResult: Codable, Sendable, Identifiable {
         tags: [String] = [],
         regenerates: Bool = false,
         regenerateCommand: String? = nil,
-        blockedByApp: BlockedApp? = nil
+        blockedByApp: BlockedApp? = nil,
+        scanTimeResolvedParent: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -76,6 +85,23 @@ public struct ScanResult: Codable, Sendable, Identifiable {
         self.regenerates = regenerates
         self.regenerateCommand = regenerateCommand
         self.blockedByApp = blockedByApp
+        self.scanTimeResolvedParent = scanTimeResolvedParent
+    }
+
+    /// Returns a copy with the parent-chain resolution recorded, for the
+    /// pre-delete symlink-swap guard. Must be called while the filesystem
+    /// still reflects scan time — i.e. by the scan pipeline as results are
+    /// returned, not at clean time. Non-filesystem items (command actions)
+    /// and already-recorded results pass through unchanged.
+    public func recordingScanTimeAncestry() -> ScanResult {
+        guard scanTimeResolvedParent == nil, path.hasPrefix("/") else { return self }
+        var copy = self
+        copy.scanTimeResolvedParent = URL(fileURLWithPath: path)
+            .standardizedFileURL
+            .deletingLastPathComponent()
+            .resolvingSymlinksInPath()
+            .path
+        return copy
     }
 }
 

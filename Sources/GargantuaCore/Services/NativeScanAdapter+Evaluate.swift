@@ -291,6 +291,12 @@ extension NativeScanAdapter {
     /// Minimal fnmatch — supports `*` only. Good enough for cleanup rule excludes.
     static func fnmatch(pattern: String, name: String) -> Bool {
         let parts = pattern.split(separator: "*", omittingEmptySubsequences: false).map(String.init)
+        // A wildcard-free pattern is an exact name, not a prefix: "Cache.db"
+        // must not sweep up Cache.db-wal, and an exclude of "com.apple.Safari"
+        // must not also strip com.apple.SafariTechnologyPreview.
+        if parts.count == 1 {
+            return pattern == name
+        }
         var cursor = name.startIndex
         for (i, part) in parts.enumerated() {
             if part.isEmpty { continue }

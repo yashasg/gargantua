@@ -20,10 +20,10 @@ struct SymlinkSwapGuardTests {
         let file = dir.appendingPathComponent("cache.bin")
         try Data("x".utf8).write(to: file)
 
-        #expect(SymlinkSwapGuard.isUnchanged(file))
+        #expect(SymlinkSwapGuard.isUnchanged(file, scanTimeResolvedParent: nil))
     }
 
-    @Test("A symlinked parent directory is rejected")
+    @Test("A symlinked parent directory is rejected without a scan-time recording")
     func symlinkedParentRejected() throws {
         let root = try makeTempDir()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -38,7 +38,7 @@ struct SymlinkSwapGuardTests {
 
         // Deleting through the symlinked parent must be refused.
         let throughLink = link.appendingPathComponent("cache.bin")
-        #expect(!SymlinkSwapGuard.isUnchanged(throughLink))
+        #expect(!SymlinkSwapGuard.isUnchanged(throughLink, scanTimeResolvedParent: nil))
     }
 
     @Test("A symlink at the leaf still passes (removeItem unlinks the link, not its target)")
@@ -52,6 +52,50 @@ struct SymlinkSwapGuardTests {
         let leafLink = dir.appendingPathComponent("leaf")
         try FileManager.default.createSymbolicLink(at: leafLink, withDestinationURL: target)
 
-        #expect(SymlinkSwapGuard.isUnchanged(leafLink))
+        #expect(SymlinkSwapGuard.isUnchanged(leafLink, scanTimeResolvedParent: nil))
+    }
+
+    @Test("A symlink ancestor the scan already resolved through passes")
+    func recordedSymlinkAncestorPasses() throws {
+        let root = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // A symlinked scan root: link -> real existed before the scan.
+        let real = root.appendingPathComponent("real", isDirectory: true)
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: real.appendingPathComponent("cache.bin"))
+
+        let link = root.appendingPathComponent("link")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+
+        let throughLink = link.appendingPathComponent("cache.bin")
+        let recorded = throughLink.deletingLastPathComponent().resolvingSymlinksInPath().path
+
+        #expect(SymlinkSwapGuard.isUnchanged(throughLink, scanTimeResolvedParent: recorded))
+    }
+
+    @Test("A symlink swapped to a different target after the recording is rejected")
+    func swappedSymlinkRejected() throws {
+        let root = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let real = root.appendingPathComponent("real", isDirectory: true)
+        let victim = root.appendingPathComponent("victim", isDirectory: true)
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: victim, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: real.appendingPathComponent("cache.bin"))
+        try Data("x".utf8).write(to: victim.appendingPathComponent("cache.bin"))
+
+        let link = root.appendingPathComponent("link")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+
+        let throughLink = link.appendingPathComponent("cache.bin")
+        let recorded = throughLink.deletingLastPathComponent().resolvingSymlinksInPath().path
+
+        // The swap: after scan time, the link is repointed at the victim.
+        try FileManager.default.removeItem(at: link)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: victim)
+
+        #expect(!SymlinkSwapGuard.isUnchanged(throughLink, scanTimeResolvedParent: recorded))
     }
 }

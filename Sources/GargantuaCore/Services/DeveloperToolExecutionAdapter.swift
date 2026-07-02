@@ -163,9 +163,10 @@ public struct DeveloperToolExecutionAdapter: Sendable {
 
         for target in targets where FileManager.default.fileExists(atPath: target.path) {
             // TOCTOU guard: skip any target whose parent chain now resolves
-            // through a symlink that wasn't there at scan time, so a swapped
-            // path can't redirect removeItem onto an unselected file.
-            guard SymlinkSwapGuard.isUnchanged(target.url) else { continue }
+            // through a symlink, so a swapped path can't redirect removeItem
+            // onto an unselected file. Preview items carry no scan-time
+            // ancestry recording, so any symlink ancestor is rejected.
+            guard SymlinkSwapGuard.isUnchanged(target.url, scanTimeResolvedParent: nil) else { continue }
             try FileManager.default.removeItem(at: target.url)
             removedFiles.append(AuditFile(path: target.path, size: target.bytes))
         }

@@ -63,6 +63,9 @@ public struct ScanEngine: ScanAdapter {
         logger.info(
             "ScanEngine: pipeline complete, \(merged.count, privacy: .public) total results from \(self.adapters.count, privacy: .public) adapter(s)"
         )
-        return merged
+        // Record each item's parent-chain resolution while it still reflects
+        // scan time, so the pre-delete SymlinkSwapGuard can distinguish a
+        // pre-existing symlink ancestor from a post-scan swap.
+        return merged.map { $0.recordingScanTimeAncestry() }
     }
 }

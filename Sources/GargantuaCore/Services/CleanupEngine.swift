@@ -278,9 +278,11 @@ public final class CleanupEngine: Sendable {
         // TOCTOU guard: the path the scan recorded as a real file could have had
         // a symlink swapped into its parent chain before the user confirmed the
         // clean. Both `trashItem` and `removeItem` follow symlinked parents, so
-        // refuse rather than risk deleting the link's target. The privileged
-        // path enforces the same rule in the helper.
-        guard SymlinkSwapGuard.isUnchanged(url) else {
+        // refuse rather than risk deleting the link's target. A symlink ancestor
+        // the scan already resolved through (a symlinked scan root) is allowed;
+        // only a post-scan change is a swap. The privileged path enforces the
+        // same rule in the helper.
+        guard SymlinkSwapGuard.isUnchanged(url, scanTimeResolvedParent: item.scanTimeResolvedParent) else {
             return CleanupItemResult(
                 item: item,
                 succeeded: false,

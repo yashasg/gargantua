@@ -35,6 +35,9 @@ public struct CompositeScanAdapter: ScanAdapter {
                 // executor issue can't bring down the whole scan.
             }
         }
-        return combined
+        // Record each item's parent-chain resolution while it still reflects
+        // scan time, so the pre-delete SymlinkSwapGuard can distinguish a
+        // pre-existing symlink ancestor from a post-scan swap.
+        return combined.map { $0.recordingScanTimeAncestry() }
     }
 }

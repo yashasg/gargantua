@@ -20,12 +20,27 @@ import Foundation
 /// `/var`, etc.) are not symlinks; `PrivilegedRemovabilityPolicy.canonical`
 /// normalizes those so they never trip the check.
 public enum SymlinkSwapGuard {
-    /// Returns `true` when `url`'s parent chain still resolves to itself — no
-    /// symlink redirection has appeared above the leaf since scan time.
-    public static func isUnchanged(_ url: URL) -> Bool {
+    /// Returns `true` when `url`'s parent chain still resolves to the same
+    /// place it did at scan time — no symlink redirection has appeared above
+    /// the leaf since the item was recorded.
+    ///
+    /// A parent chain with no symlinks always passes. One that resolves
+    /// through a symlink passes only when it lands exactly where
+    /// `scanTimeResolvedParent` (recorded by the scan pipeline, see
+    /// `ScanResult.recordingScanTimeAncestry()`) said it did — a legitimate
+    /// pre-existing link such as a symlinked scan root (`~/dev` →
+    /// `/Volumes/Ext/dev`), not a post-scan swap. Without a recording
+    /// (`nil`), any symlink ancestor is rejected, fail-safe.
+    public static func isUnchanged(_ url: URL, scanTimeResolvedParent: String?) -> Bool {
         let parent = url.standardizedFileURL.deletingLastPathComponent()
         let standardized = PrivilegedRemovabilityPolicy.canonical(parent.path)
         let resolved = PrivilegedRemovabilityPolicy.canonical(parent.resolvingSymlinksInPath().path)
-        return standardized == resolved
+        if standardized == resolved { return true }
+
+        guard let scanTimeResolvedParent else { return false }
+        let recorded = PrivilegedRemovabilityPolicy.canonical(
+            URL(fileURLWithPath: scanTimeResolvedParent).standardizedFileURL.path
+        )
+        return resolved == recorded
     }
 }
