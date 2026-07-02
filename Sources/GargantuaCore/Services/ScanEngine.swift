@@ -57,15 +57,19 @@ public struct ScanEngine: ScanAdapter {
             logger.info(
                 "ScanEngine: running adapter \(index + 1, privacy: .public)/\(self.adapters.count, privacy: .public)"
             )
+            // Record each adapter's parent-chain resolution the moment that
+            // adapter returns — not once at the tail — so a symlink swapped
+            // in while a *later* adapter is still running can't be captured
+            // as scan-time truth and slip past the pre-delete guard.
+            // Idempotent, so adapters that record at item creation pass
+            // through unchanged.
             let results = try await adapter.scan(progress: progress, observer: observer)
+                .map { $0.recordingScanTimeAncestry() }
             merged.append(contentsOf: results)
         }
         logger.info(
             "ScanEngine: pipeline complete, \(merged.count, privacy: .public) total results from \(self.adapters.count, privacy: .public) adapter(s)"
         )
-        // Record each item's parent-chain resolution while it still reflects
-        // scan time, so the pre-delete SymlinkSwapGuard can distinguish a
-        // pre-existing symlink ancestor from a post-scan swap.
-        return merged.map { $0.recordingScanTimeAncestry() }
+        return merged
     }
 }

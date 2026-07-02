@@ -24,23 +24,31 @@ public enum SymlinkSwapGuard {
     /// place it did at scan time — no symlink redirection has appeared above
     /// the leaf since the item was recorded.
     ///
-    /// A parent chain with no symlinks always passes. One that resolves
-    /// through a symlink passes only when it lands exactly where
-    /// `scanTimeResolvedParent` (recorded by the scan pipeline, see
-    /// `ScanResult.recordingScanTimeAncestry()`) said it did — a legitimate
-    /// pre-existing link such as a symlinked scan root (`~/dev` →
-    /// `/Volumes/Ext/dev`), not a post-scan swap. Without a recording
-    /// (`nil`), any symlink ancestor is rejected, fail-safe.
+    /// When a `scanTimeResolvedParent` recording is present it is
+    /// authoritative: the parent must still resolve to exactly where it did
+    /// at scan time. That rejects a symlink swapped *in* (the resolved parent
+    /// moves to the attacker's target) *and* a symlink swapped *out* —
+    /// replaced by a real directory at the same path — which a no-symlink
+    /// fast path alone would wave through even though the item now points at
+    /// different bytes. A legitimate pre-existing link such as a symlinked
+    /// scan root (`~/dev` → `/Volumes/Ext/dev`) resolves unchanged and
+    /// passes.
+    ///
+    /// Without a recording (`nil` — e.g. execution-time preview targets), the
+    /// classic guarantee applies: pass only when the parent chain has no
+    /// symlink at all, rejecting any symlink ancestor fail-safe.
     public static func isUnchanged(_ url: URL, scanTimeResolvedParent: String?) -> Bool {
         let parent = url.standardizedFileURL.deletingLastPathComponent()
-        let standardized = PrivilegedRemovabilityPolicy.canonical(parent.path)
         let resolved = PrivilegedRemovabilityPolicy.canonical(parent.resolvingSymlinksInPath().path)
-        if standardized == resolved { return true }
 
-        guard let scanTimeResolvedParent else { return false }
-        let recorded = PrivilegedRemovabilityPolicy.canonical(
-            URL(fileURLWithPath: scanTimeResolvedParent).standardizedFileURL.path
-        )
-        return resolved == recorded
+        if let scanTimeResolvedParent {
+            let recorded = PrivilegedRemovabilityPolicy.canonical(
+                URL(fileURLWithPath: scanTimeResolvedParent).standardizedFileURL.path
+            )
+            return resolved == recorded
+        }
+
+        let standardized = PrivilegedRemovabilityPolicy.canonical(parent.path)
+        return standardized == resolved
     }
 }

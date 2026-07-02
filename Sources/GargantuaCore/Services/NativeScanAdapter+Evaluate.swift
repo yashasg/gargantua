@@ -210,6 +210,12 @@ extension NativeScanAdapter {
         counter += 1
 
         let classified = classifier.classify(result: base, rule: rule, profile: profile)
+        // Record the parent-chain resolution here, at the moment the item is
+        // confirmed on disk, not at the pipeline tail. Recording later would
+        // capture a symlink swap that happened *during* the scan as if it
+        // were scan-time truth, defeating the pre-delete guard for the
+        // primary filesystem source. Idempotent, so the composite/engine
+        // backstop map is a no-op for these.
         return ScanResult(
             id: base.id,
             name: base.name,
@@ -224,7 +230,7 @@ extension NativeScanAdapter {
             tags: base.tags,
             regenerates: base.regenerates,
             regenerateCommand: base.regenerateCommand
-        )
+        ).recordingScanTimeAncestry()
     }
 
     static func expandTilde(_ path: String) -> String {

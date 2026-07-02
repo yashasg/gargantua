@@ -98,4 +98,32 @@ struct SymlinkSwapGuardTests {
 
         #expect(!SymlinkSwapGuard.isUnchanged(throughLink, scanTimeResolvedParent: recorded))
     }
+
+    @Test("A symlink ancestor replaced by a real directory after scan is rejected")
+    func recordedSymlinkReplacedByRealDirRejected() throws {
+        let root = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // Scan saw the item through `link -> real`, recording real as the
+        // resolved parent.
+        let real = root.appendingPathComponent("real", isDirectory: true)
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: real.appendingPathComponent("cache.bin"))
+        let link = root.appendingPathComponent("link")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+
+        let throughLink = link.appendingPathComponent("cache.bin")
+        let recorded = throughLink.deletingLastPathComponent().resolvingSymlinksInPath().path
+
+        // The swap-out: the symlink is replaced by a real directory holding a
+        // different (attacker-planted) cache.bin at the same path. The parent
+        // now has no symlink, so a naive no-symlink fast path would accept it
+        // — but the recorded parent (`real`) no longer matches, so the guard
+        // must reject rather than delete the planted file.
+        try FileManager.default.removeItem(at: link)
+        try FileManager.default.createDirectory(at: link, withIntermediateDirectories: true)
+        try Data("y".utf8).write(to: link.appendingPathComponent("cache.bin"))
+
+        #expect(!SymlinkSwapGuard.isUnchanged(throughLink, scanTimeResolvedParent: recorded))
+    }
 }

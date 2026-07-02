@@ -25,19 +25,23 @@ public struct CompositeScanAdapter: ScanAdapter {
         progress: ScanProgress?,
         observer: (any ScanProgressObserving)?
     ) async throws -> [ScanResult] {
+        // Record each adapter's parent-chain resolution the moment that
+        // adapter returns — not once at the tail — so a symlink swapped in
+        // while a *later* best-effort adapter is still running can't be
+        // captured as scan-time truth and slip past the pre-delete guard.
+        // Recording is idempotent, so adapters that already record at item
+        // creation (NativeScanAdapter) pass through unchanged.
         var combined = try await primary.scan(progress: progress, observer: observer)
+            .map { $0.recordingScanTimeAncestry() }
         for adapter in bestEffort {
             do {
                 let extra = try await adapter.scan(progress: progress, observer: observer)
-                combined.append(contentsOf: extra)
+                combined.append(contentsOf: extra.map { $0.recordingScanTimeAncestry() })
             } catch {
                 // Best-effort: swallow so a missing tool or transient
                 // executor issue can't bring down the whole scan.
             }
         }
-        // Record each item's parent-chain resolution while it still reflects
-        // scan time, so the pre-delete SymlinkSwapGuard can distinguish a
-        // pre-existing symlink ancestor from a post-scan swap.
-        return combined.map { $0.recordingScanTimeAncestry() }
+        return combined
     }
 }
