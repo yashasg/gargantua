@@ -32,6 +32,7 @@ struct MainContentView: View {
     @State var diskExplorerState = DiskExplorerState()
     @State var aiModelsSession = AIModelsState()
     @State var devToolsSession = DeveloperToolsSessionState()
+    @State var devPurgeSession = DevArtifactSessionState()
     @State var backgroundItemsSession = BackgroundItemsSession()
     @State var processInventorySession = ProcessInventorySession()
     @StateObject var organizerSession: OrganizerSessionState
@@ -209,6 +210,7 @@ struct MainContentView: View {
                             case "devPurge":
                                 DevArtifactScanView(
                                     profile: .devPurge,
+                                    session: devPurgeSession,
                                     scanRoots: resolvedScanRoots,
                                     staleVersionPinnedPaths: pathExclusionPatterns,
                                     onExplain: explainHandler,
