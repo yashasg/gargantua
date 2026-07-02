@@ -174,12 +174,14 @@ struct AIAdvisoryControllerTests {
                 )
             }
             while !flags.gateOpen { await Task.yield() }
-            return [ScanResultAdvisory(
-                resultId: "second",
-                rationale: "ok",
-                suggestedSafety: .review,
-                source: .ai
-            )]
+            return [
+                ScanResultAdvisory(
+                    resultId: "second",
+                    rationale: "ok",
+                    suggestedSafety: .review,
+                    source: .ai
+                ),
+            ]
         })
 
         controller.request(for: [makeResult(id: "first")])
@@ -191,7 +193,7 @@ struct AIAdvisoryControllerTests {
         while !flags.firstThrew, ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(5))
         }
-        for _ in 0..<20 { await Task.yield() }
+        for _ in 0 ..< 20 { await Task.yield() }
 
         // The stale failure must not have displaced the in-flight request.
         #expect(controller.presentation == .loading)
