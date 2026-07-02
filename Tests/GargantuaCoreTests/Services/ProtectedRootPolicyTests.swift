@@ -104,6 +104,53 @@ struct ProtectedRootPolicyTests {
         #expect(policy.protectionReason(for: unrelated, homeDirectory: home) == nil)
     }
 
+    @Test("canonicalDiskCasePath resolves a twisted spelling to the real on-disk case")
+    func canonicalDiskCasePathResolvesRealCase() throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("canonical-case-\(UUID().uuidString)", isDirectory: true)
+        let real = base.appendingPathComponent("Library", isDirectory: true)
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        // The real directory canonicalizes to itself (real case preserved).
+        let canonicalReal = try #require(ProtectedRootPolicy.canonicalDiskCasePath(real.path))
+        #expect(URL(fileURLWithPath: canonicalReal).lastPathComponent == "Library")
+
+        // A case-twisted spelling that names the same directory (only possible
+        // on a case-insensitive volume, the APFS default) canonicalizes to the
+        // real case — this is why the fold screen confirms as a match. On a
+        // case-sensitive volume the twisted name doesn't exist, the deepest
+        // existing ancestor is `base`, and the nonexistent leaf is appended
+        // verbatim ("library"), which does NOT collide with "Library" — which
+        // is exactly why a genuinely distinct dir is never over-matched.
+        let twisted = base.appendingPathComponent("library", isDirectory: true)
+        let canonicalTwisted = try #require(ProtectedRootPolicy.canonicalDiskCasePath(twisted.path))
+        if FileManager.default.fileExists(atPath: twisted.path) {
+            #expect(canonicalTwisted == canonicalReal)
+        } else {
+            #expect(URL(fileURLWithPath: canonicalTwisted).lastPathComponent == "library")
+            #expect(canonicalTwisted != canonicalReal)
+        }
+    }
+
+    @Test("canonicalDiskCasePath keeps nonexistent trailing components verbatim")
+    func canonicalDiskCasePathKeepsMissingComponents() throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("canonical-missing-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+
+        let missing = base.appendingPathComponent("Nope/Deeper", isDirectory: true)
+        let canonical = try #require(ProtectedRootPolicy.canonicalDiskCasePath(missing.path))
+        #expect(canonical.hasSuffix("/Nope/Deeper"))
+
+        // Even a path whose every named component is missing still rebuilds
+        // from the always-canonicalizable root, so the leaf is preserved.
+        let leaf = "ghost-\(UUID().uuidString)"
+        let underRoot = try #require(ProtectedRootPolicy.canonicalDiskCasePath("/\(leaf)/x"))
+        #expect(underRoot.hasSuffix("/\(leaf)/x"))
+    }
+
     @Test("user store adds and removes custom protected roots")
     func userStoreRoundTrip() throws {
         let suite = "gargantua-protected-root-store-\(UUID().uuidString)"

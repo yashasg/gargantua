@@ -187,8 +187,15 @@ public struct ProtectedRootPolicy: Sendable {
 
     /// The on-disk canonical spelling of `path` (real case, firmlinks and
     /// symlinks resolved), from the deepest existing ancestor; components that
-    /// don't exist are kept verbatim. `nil` when nothing on the path exists.
-    private static func canonicalDiskCasePath(_ path: String) -> String? {
+    /// don't exist are kept verbatim. Effectively always non-nil since `/`
+    /// itself canonicalizes; `nil` only if even the root query fails.
+    ///
+    /// This is the mechanism the case-fold confirmation depends on in both
+    /// directions: on a case-insensitive volume a twisted spelling resolves
+    /// to the real case so it matches; on a case-sensitive volume two
+    /// genuinely distinct fold-colliding directories canonicalize apart so
+    /// they don't. `internal` for direct test coverage of that guarantee.
+    static func canonicalDiskCasePath(_ path: String) -> String? {
         var url = URL(fileURLWithPath: path)
         var missing: [String] = []
         while true {
