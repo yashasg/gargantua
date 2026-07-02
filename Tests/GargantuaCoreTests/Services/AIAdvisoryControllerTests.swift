@@ -146,6 +146,68 @@ struct AIAdvisoryControllerTests {
         #expect(controller.isBusy == false)
     }
 
+    @Test("a cancelled request's provider error does not overwrite its successor")
+    func cancelledRequestErrorDoesNotOverwriteSuccessor() async throws {
+        let manager = makeNeverDownloadedManager()
+        let service = LocalAIService(downloadManager: manager)
+
+        // Observable seams: `firstThrew` flips right before the superseded
+        // request throws its non-CancellationError; `gate` holds the second
+        // request open so the first's failure has to land while the second
+        // is still .loading — the exact window the race corrupts.
+        @MainActor final class Flags {
+            var firstThrew = false
+            var gateOpen = false
+        }
+        let flags = Flags()
+
+        let controller = AIAdvisoryController(service: service, advise: { results, _, _ in
+            if results.first?.id == "first" {
+                // Simulate a CLI engine mapping cancellation to a generic
+                // provider failure instead of CancellationError.
+                while !Task.isCancelled { await Task.yield() }
+                flags.firstThrew = true
+                throw NSError(
+                    domain: "cli",
+                    code: 1,
+                    userInfo: [NSLocalizedDescriptionKey: "engine terminated"]
+                )
+            }
+            while !flags.gateOpen { await Task.yield() }
+            return [ScanResultAdvisory(
+                resultId: "second",
+                rationale: "ok",
+                suggestedSafety: .review,
+                source: .ai
+            )]
+        })
+
+        controller.request(for: [makeResult(id: "first")])
+        controller.request(for: [makeResult(id: "second")])
+
+        // Wait for the superseded request to throw, then drain the main
+        // actor so its catch block has definitely run.
+        let deadline = ContinuousClock.now.advanced(by: .seconds(30))
+        while !flags.firstThrew, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        for _ in 0..<20 { await Task.yield() }
+
+        // The stale failure must not have displaced the in-flight request.
+        #expect(controller.presentation == .loading)
+
+        flags.gateOpen = true
+        try await Self.waitForPresentation(controller, timeout: .seconds(30)) {
+            if case .loaded = $0 { return true }
+            return false
+        }
+        guard case .loaded(let advisories) = controller.presentation else {
+            Issue.record("did not reach .loaded: \(String(describing: controller.presentation))")
+            return
+        }
+        #expect(advisories.map(\.resultId) == ["second"])
+    }
+
     @Test("calling request twice keeps the latest call's result")
     func latestRequestWins() async throws {
         let manager = makeNeverDownloadedManager()

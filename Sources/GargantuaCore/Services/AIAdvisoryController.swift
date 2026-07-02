@@ -114,6 +114,11 @@ public final class AIAdvisoryController: ObservableObject {
             } catch is CancellationError {
                 return
             } catch {
+                // A cancelled request can surface as a provider error rather
+                // than CancellationError (a CLI engine terminates its
+                // subprocess, which maps to a CLI failure). Don't let that
+                // stale failure overwrite the request that superseded it.
+                guard !Task.isCancelled else { return }
                 guard let self else { return }
                 if case .loading = self.presentation {
                     self.presentation = .failed(message: error.localizedDescription)
