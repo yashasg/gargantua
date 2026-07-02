@@ -33,9 +33,12 @@ public final class ProcessInventorySession {
     /// detached find-pass ran — `Task.isCancelled` alone can't cover
     /// session-initiated re-runs like the post-stop refresh.
     private var searchGeneration = 0
-    /// Trimmed query of the most recent search pass, retained so a
-    /// successful stop can re-run the active search after its re-scan.
-    private var activeSearchQuery: String?
+    /// Trimmed query + metric of the most recent search pass, retained so a
+    /// successful stop can re-run the active search after its re-scan. The
+    /// metric is stored too: the stop captured its metric when the action
+    /// began, and replaying that against a search the user has since
+    /// re-sorted would overwrite the newer ordering.
+    private var activeSearch: (query: String, metric: ProcessSortMetric)?
 
     public init(
         scanner: any ProcessInventoryScanning = DefaultProcessInventoryScanner(),
@@ -74,7 +77,7 @@ public final class ProcessInventorySession {
 
         searchGeneration &+= 1
         let generation = searchGeneration
-        activeSearchQuery = trimmed
+        activeSearch = (trimmed, metric)
         isSearching = true
         defer {
             if generation == searchGeneration { isSearching = false }
@@ -97,7 +100,7 @@ public final class ProcessInventorySession {
     /// results it was computing.
     public func clearSearch() {
         searchGeneration &+= 1
-        activeSearchQuery = nil
+        activeSearch = nil
         searchResults = nil
         isSearching = false
     }
@@ -138,9 +141,10 @@ public final class ProcessInventorySession {
             // The visible list may be showing search results; re-run the
             // active search so the stopped row disappears instead of
             // lingering with a stale (possibly recycled) PID that a second
-            // Stop would signal.
-            if let query = activeSearchQuery {
-                await search(query: query, metric: metric)
+            // Stop would signal. Uses the stored query AND metric — the
+            // user may have re-sorted since this stop began.
+            if let active = activeSearch {
+                await search(query: active.query, metric: active.metric)
             }
         }
         return outcome

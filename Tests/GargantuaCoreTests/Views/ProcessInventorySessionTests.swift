@@ -40,12 +40,12 @@ struct ProcessInventorySessionTests {
     }
 
     /// Scripted scanner: pops queued scan/search results in order (holding
-    /// the last one), and records the queries it saw.
+    /// the last one), and records the query/metric of each search it saw.
     private final class ScriptedScanner: ProcessInventoryScanning, @unchecked Sendable {
         private let lock = NSLock()
         private var scans: [ProcessInventoryScan]
         private var searches: [ProcessInventoryScan]
-        private var queries: [String] = []
+        private var searchCalls: [(query: String, metric: ProcessSortMetric)] = []
 
         init(scans: [ProcessInventoryScan], searches: [ProcessInventoryScan]) {
             self.scans = scans
@@ -61,14 +61,20 @@ struct ProcessInventorySessionTests {
         func search(query: String, metric: ProcessSortMetric, limit: Int) async -> ProcessInventoryScan {
             lock.lock()
             defer { lock.unlock() }
-            queries.append(query)
+            searchCalls.append((query, metric))
             return searches.count > 1 ? searches.removeFirst() : searches[0]
         }
 
         func recordedQueries() -> [String] {
             lock.lock()
             defer { lock.unlock() }
-            return queries
+            return searchCalls.map(\.query)
+        }
+
+        func recordedMetrics() -> [ProcessSortMetric] {
+            lock.lock()
+            defer { lock.unlock() }
+            return searchCalls.map(\.metric)
         }
     }
 
@@ -138,6 +144,25 @@ struct ProcessInventorySessionTests {
         #expect(scanner.recordedQueries() == ["target", "target"])
         #expect(session.searchResults?.items.isEmpty == true)
         #expect(session.scan?.items.map(\.id) == ["other"])
+    }
+
+    @Test("post-stop refresh replays the latest search's metric, not the stop's")
+    func stopRefreshUsesLatestSearchMetric() async {
+        let target = Self.makeItem(id: "target", pid: 42)
+        let scanner = ScriptedScanner(
+            scans: [Self.makeScan(items: [target]), Self.makeScan(items: [])],
+            searches: [Self.makeScan(items: [target]), Self.makeScan(items: [])]
+        )
+        let session = ProcessInventorySession(scanner: scanner, actionExecutor: StubExecutor())
+
+        await session.scan(metric: .cpu, topN: nil)
+        // The user re-sorted the active search to rss after the stop's
+        // metric (cpu) was captured at action time.
+        await session.search(query: "target", metric: .rss)
+
+        _ = await session.perform(.stop, on: target, metric: .cpu, topN: nil)
+
+        #expect(scanner.recordedMetrics() == [.rss, .rss])
     }
 
     @Test("stop without an active search does not run one")

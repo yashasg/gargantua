@@ -20,6 +20,11 @@ public final class BackgroundItemsSession {
     /// the plist as enabled. Carry the in-session disable state forward so
     /// the Delete button reveals on the same row the user just disabled.
     public private(set) var sessionDisabledIDs: Set<String> = []
+    /// Plist path a Process-Inventory pre-selection already triggered its
+    /// one rescan for. Lives on the session (not view @State) so its
+    /// lifetime matches the scan cache it qualifies — navigating away
+    /// mid-rescan and back must not grant the same handoff a second rescan.
+    public var preSelectionRescanPath: String?
 
     private let scanner: any BackgroundItemScanning
     private let actionExecutor: (any BackgroundItemActionExecuting)?

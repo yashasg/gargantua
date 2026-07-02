@@ -125,23 +125,46 @@ struct DevArtifactSessionStateTests {
             duration: 0.5,
             estimates: ["node": 100]
         )
+        session.showConfirmation = true
 
         session.returnToIdle()
 
         #expect(session.phase == .idle)
         #expect(session.scanResults == nil)
+        // A stale confirmation flag would replay the modal over the next
+        // scan's fresh results.
+        #expect(!session.showConfirmation)
         #expect(session.detectionState == .complete)
         #expect(session.selectedBucketIDs == ["node", "logs"])
         #expect(session.bucketEstimates == ["node": 100])
 
         session.finishScan(results: [], duration: 0.1, estimates: [:])
+        session.showConfirmation = true
         session.finishCleanup(result: CleanupResult(itemResults: []))
         session.dismissSummary()
 
         #expect(session.phase == .idle)
         #expect(session.cleanupResult == nil)
+        #expect(!session.showConfirmation)
         #expect(session.detectedEcosystemIDs == ["node"])
         #expect(session.selectedBucketIDs == ["node", "logs"])
+    }
+
+    @Test("prepareForScan clears a lingering confirmation flag")
+    @MainActor
+    func prepareForScanClearsConfirmation() {
+        let session = DevArtifactSessionState()
+        session.finishScan(
+            results: [makeItem(id: "safe", safety: .safe)],
+            duration: 0.5,
+            estimates: [:]
+        )
+        session.showConfirmation = true
+
+        session.prepareForScan()
+
+        #expect(!session.showConfirmation)
+        #expect(session.phase == .scanning)
     }
 
     @Test("failScan records the error and returns to idle")

@@ -52,6 +52,7 @@ public final class DevArtifactSessionState {
         activeTask?.cancel()
         activeTask = nil
         isScanRequested = true
+        showConfirmation = false
         scanProgress = ScanProgress()
         pathStream.clear()
         phase = .scanning
@@ -118,6 +119,7 @@ public final class DevArtifactSessionState {
     public func dismissSummary() {
         cleanupResult = nil
         scanResults = nil
+        showConfirmation = false
         activeCleanupMethod = .trash
         pathStream.clear()
         phase = .idle
@@ -125,8 +127,11 @@ public final class DevArtifactSessionState {
 
     /// Back / cancel from the results view — drop results, keep bucket
     /// selection and estimates so the idle screen picks up where it was.
+    /// Clears `showConfirmation` too: leaving it set would replay a stale
+    /// confirmation modal the moment the next scan repopulates results.
     public func returnToIdle() {
         scanResults = nil
+        showConfirmation = false
         pathStream.clear()
         phase = .idle
     }

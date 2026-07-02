@@ -66,7 +66,7 @@ extension BackgroundItemsView {
         let match = scan.items.first { $0.plistPath == path }
         switch Self.preSelectionStep(
             matchFound: match != nil,
-            alreadyRescannedForPath: preSelectionRescanPath == path
+            alreadyRescannedForPath: session.preSelectionRescanPath == path
         ) {
         case .expand:
             guard let match else { return }
@@ -79,9 +79,9 @@ extension BackgroundItemsView {
                 expandedID = match.id
             }
             preSelectedPlistPath = nil
-            preSelectionRescanPath = nil
+            session.preSelectionRescanPath = nil
         case .rescanFirst:
-            preSelectionRescanPath = path
+            session.preSelectionRescanPath = path
             Task { await session.scan() }
         case .reportMissing:
             // A fresh scan didn't surface the path either — most likely a
@@ -90,7 +90,7 @@ extension BackgroundItemsView {
             // somewhere visible.
             lastError = "Could not locate that source in the Background Items list. It may require elevated enumeration."
             preSelectedPlistPath = nil
-            preSelectionRescanPath = nil
+            session.preSelectionRescanPath = nil
         }
     }
 
