@@ -261,6 +261,27 @@ struct LicenseStoreTests {
         #expect(marker.isDone())
     }
 
+    @Test("Failed keychain write during migration honors the receipt but retries next launch")
+    func legacyMigrationWriteFailureRetries() throws {
+        let url = tempFileURL()
+        defer { try? FileManager.default.removeItem(at: url) }
+        try writeLegacyReceipt(to: url)
+        let marker = InMemoryLicenseMigrationMarker()
+        let store = makeStore(
+            storage: FailingLicenseReceiptStorage(),
+            legacyFileURL: url,
+            migrationMarker: marker,
+            client: MockPolarClient()
+        )
+
+        // Receipt is honored for this session even though the keychain write failed.
+        #expect(store.loadCachedReceipt()?.key == "GARG-LEGACY")
+        // But the file survives and migration isn't marked done, so a later
+        // launch (with a working keychain) retries the migration.
+        #expect(!marker.isDone())
+        #expect(FileManager.default.fileExists(atPath: url.path))
+    }
+
     @Test("Keychain receipt wins over a lingering legacy file")
     func storageWinsOverLegacyFile() async throws {
         let url = tempFileURL()

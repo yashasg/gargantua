@@ -12,10 +12,11 @@ public enum LicenseKeyStatus: String, Sendable, Codable, Equatable {
     }
 }
 
-/// Locally persisted record of a Polar license activation. Cached at
-/// `~/Library/Application Support/Gargantua/license.json` after a successful
-/// `activate`, refreshed by background `validate` calls. `lastValidated`
-/// drives the offline grace window (see `LicensePolarConfig`).
+/// Locally persisted record of a Polar license activation. Cached in the
+/// keychain (see `KeychainLicenseReceiptStorage`) after a successful
+/// `activate`, refreshed by background `validate` calls; the legacy
+/// `license.json` is only a one-shot migration source. `lastValidated` drives
+/// the offline grace window (see `LicensePolarConfig`).
 public struct LicenseReceipt: Sendable, Equatable, Codable {
     public let key: String
     public let activationId: String

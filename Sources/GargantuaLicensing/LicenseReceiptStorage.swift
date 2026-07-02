@@ -19,21 +19,53 @@ public protocol LicenseMigrationMarker: Sendable {
     func markDone()
 }
 
-public final class UserDefaultsLicenseMigrationMarker: LicenseMigrationMarker, @unchecked Sendable {
-    public static let key = "com.gargantua.licensing.receiptMigrated"
+/// Keychain-backed marker. The marker MUST share the receipt's trust domain:
+/// if it lived in UserDefaults, `defaults delete <key>` would re-open the
+/// one-shot migration gate, and dropping a forged `license.json` back in would
+/// mint licensed status again — defeating the whole keychain hardening. A
+/// keychain item can't be flipped without the same-app signing identity, so
+/// the one-shot guarantee actually holds. Existence is checked with an
+/// attributes-only query (no `kSecReturnData`), which doesn't run the item ACL
+/// and so never raises a keychain prompt.
+public struct KeychainLicenseMigrationMarker: LicenseMigrationMarker {
+    private let service: String
+    private let account: String
 
-    private let defaults: UserDefaults
-
-    public init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    public init(
+        service: String = "com.gargantua.licensing",
+        account: String = "receipt-migration-done"
+    ) {
+        self.service = service
+        self.account = account
     }
 
     public func isDone() -> Bool {
-        defaults.bool(forKey: Self.key)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnAttributes as String: true,
+        ]
+        var result: CFTypeRef?
+        return SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess
     }
 
     public func markDone() {
-        defaults.set(true, forKey: Self.key)
+        let lookup: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+        let attributes: [String: Any] = [
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            kSecValueData as String: Data([1]),
+        ]
+        if SecItemUpdate(lookup as CFDictionary, attributes as CFDictionary) == errSecSuccess {
+            return
+        }
+        let query = lookup.merging(attributes) { _, new in new }
+        _ = SecItemAdd(query as CFDictionary, nil)
     }
 }
 
@@ -60,8 +92,10 @@ public final class InMemoryLicenseMigrationMarker: LicenseMigrationMarker, @unch
 
 /// Keychain-backed receipt storage, same shape as `KeychainCloudAPIKeyStore`
 /// in GargantuaCore. Items are device-only and never sync
-/// (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`); same-app access is
-/// silent, so migration from `license.json` never prompts.
+/// (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`). For a stable
+/// Developer-ID release reading its own item, same-app access is silent, so
+/// migration from `license.json` doesn't prompt; an unstable signing identity
+/// (dev builds, a cert change) can still trip the keychain ACL prompt on read.
 public struct KeychainLicenseReceiptStorage: LicenseReceiptStorage {
     private let service: String
     private let account: String

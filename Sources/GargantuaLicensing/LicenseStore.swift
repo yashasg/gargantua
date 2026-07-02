@@ -35,7 +35,7 @@ public final class LicenseStore: @unchecked Sendable {
     public init(
         storage: any LicenseReceiptStorage,
         legacyFileURL: URL? = LicenseStore.legacyFileURL,
-        migrationMarker: any LicenseMigrationMarker = UserDefaultsLicenseMigrationMarker(),
+        migrationMarker: any LicenseMigrationMarker = KeychainLicenseMigrationMarker(),
         client: any PolarLicenseValidating,
         graceInterval: TimeInterval = LicensePolarConfig.validationGraceInterval,
         now: @escaping @Sendable () -> Date = { Date() },

@@ -8,10 +8,19 @@ final class MockPolarClient: PolarLicenseValidating, @unchecked Sendable {
     var validateResult: Result<PolarValidation, PolarLicenseError>
     var deactivateError: PolarLicenseError?
 
-    private(set) var activateCount = 0
-    private(set) var validateCount = 0
-    private(set) var deactivateCount = 0
-    private(set) var lastValidatedActivationId: String?
+    // Counters are read from other executors while the client mutates them
+    // (e.g. the periodic-revalidation test polls from @MainActor). Guard them
+    // so TSan stays quiet.
+    private let lock = NSLock()
+    private var _activateCount = 0
+    private var _validateCount = 0
+    private var _deactivateCount = 0
+    private var _lastValidatedActivationId: String?
+
+    var activateCount: Int { lock.withLock { _activateCount } }
+    var validateCount: Int { lock.withLock { _validateCount } }
+    var deactivateCount: Int { lock.withLock { _deactivateCount } }
+    var lastValidatedActivationId: String? { lock.withLock { _lastValidatedActivationId } }
 
     init(
         activateResult: Result<PolarActivation, PolarLicenseError> = .success(
@@ -28,18 +37,20 @@ final class MockPolarClient: PolarLicenseValidating, @unchecked Sendable {
     }
 
     func activate(key: String, label: String, meta: [String: String]) async throws -> PolarActivation {
-        activateCount += 1
+        lock.withLock { _activateCount += 1 }
         return try activateResult.get()
     }
 
     func validate(key: String, activationId: String?) async throws -> PolarValidation {
-        validateCount += 1
-        lastValidatedActivationId = activationId
+        lock.withLock {
+            _validateCount += 1
+            _lastValidatedActivationId = activationId
+        }
         return try validateResult.get()
     }
 
     func deactivate(key: String, activationId: String) async throws {
-        deactivateCount += 1
+        lock.withLock { _deactivateCount += 1 }
         if let deactivateError {
             throw deactivateError
         }
