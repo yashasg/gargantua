@@ -46,6 +46,9 @@ public struct ScanBucketListView: View {
     @State var isResolvingFilter = false
     @State var showsRefineControls = false
     @State var showsHelpLegend = false
+    /// Memoizes the expensive grouping/sort so unrelated body re-evals (a
+    /// checkbox toggle, a focus move) on a large result set don't re-group.
+    @State private var groupMemo = ScanGroupMemo()
     @FocusState var isSearchFocused: Bool
 
     public init(
@@ -89,7 +92,7 @@ public struct ScanBucketListView: View {
     }
 
     var groups: [ScanGroup] {
-        ScanGrouper.group(displayedResults, mode: groupingMode)
+        groupMemo.groups(results: results, mode: groupingMode, filter: activeFilter)
     }
 
     var reclaimableBytes: Int64 {
@@ -202,5 +205,31 @@ public struct ScanBucketListView: View {
             let seconds = Int(scanDuration) % 60
             return "\(minutes)m \(seconds)s"
         }
+    }
+}
+
+/// Memoizes `ScanGrouper.group` (a `Dictionary(grouping:)` + per-group sort +
+/// O(n log n) top-level sort) for `ScanBucketListView`. `results` is immutable
+/// for the view's lifetime, so the grouping depends only on the grouping mode
+/// and the active filter — a per-keystroke selection toggle re-runs `body` but
+/// hits the cache instead of re-grouping a multi-thousand-item result set.
+@MainActor
+final class ScanGroupMemo {
+    private struct Key: Equatable {
+        let mode: ScanGroupingMode
+        let filter: ScanFilterSet?
+        let resultCount: Int
+    }
+
+    private var key: Key?
+    private var cached: [ScanGroup] = []
+
+    func groups(results: [ScanResult], mode: ScanGroupingMode, filter: ScanFilterSet?) -> [ScanGroup] {
+        let key = Key(mode: mode, filter: filter, resultCount: results.count)
+        if key == self.key { return cached }
+        let displayed = filter?.apply(to: results) ?? results
+        cached = ScanGrouper.group(displayed, mode: mode)
+        self.key = key
+        return cached
     }
 }

@@ -282,7 +282,15 @@ public final class CleanupEngine: Sendable {
         // confirmed. The executor writes its own kind: command audit entry
         // with the captured tool version, exit code, and arguments.
         if item.isCommandAction {
-            return commandActionRunner.run(item: item, confirmationMethod: confirmationTier(for: [item]))
+            // The runner shells out (executor.preview + execute) and can block
+            // for up to 2x the rule timeout. Run it off the main actor so a
+            // long-running command doesn't beach-ball the confirmation modal.
+            let runner = commandActionRunner
+            let tier = confirmationTier(for: [item])
+            let capturedItem = item
+            return await Task.detached(priority: .userInitiated) {
+                runner.run(item: capturedItem, confirmationMethod: tier)
+            }.value
         }
 
         // Ollama models are removed through Ollama's own delete (shared blobs are
@@ -460,14 +468,20 @@ public final class CleanupEngine: Sendable {
             return CleanupItemResult(item: item, succeeded: true)
         }
 
-        var failures: [(url: URL, message: String)] = []
-        for child in children {
-            do {
-                try fm.removeItem(at: child)
-            } catch {
-                failures.append((child, error.localizedDescription))
+        // Emptying a large Trash walks a deep tree per child and can take
+        // several seconds; run the removal loop off the main actor so the UI
+        // doesn't beach-ball, mirroring `deleteSingle`.
+        var failures = await Task.detached(priority: .userInitiated) {
+            var failures: [(url: URL, message: String)] = []
+            for child in children {
+                do {
+                    try FileManager.default.removeItem(at: child)
+                } catch {
+                    failures.append((child, error.localizedDescription))
+                }
             }
-        }
+            return failures
+        }.value
 
         failures = await escalateTrashFailures(failures)
 

@@ -83,14 +83,15 @@ public final class ProcessInventorySession {
             if generation == searchGeneration { isSearching = false }
         }
 
-        let scanner = self.scanner
-        let limit = Self.searchResultLimit
-        let result = await Task.detached(priority: .userInitiated) {
-            await scanner.search(query: trimmed, metric: metric, limit: limit)
-        }.value
+        // `scanner.search` is a nonisolated async method, so awaiting it
+        // directly runs it off the main actor (SE-0338) while keeping it a
+        // child of the caller's `.task(id:)`. A superseded query then cancels
+        // this pass instead of leaving a detached task to finish sampling and
+        // resolving signatures whose results are already moot.
+        let result = await scanner.search(query: trimmed, metric: metric, limit: Self.searchResultLimit)
 
-        // A newer query may have superseded this one while the detached find
-        // pass ran; don't let the stale result overwrite it.
+        // A newer query may have superseded this one while the find pass ran;
+        // don't let the stale result overwrite it.
         if Task.isCancelled || generation != searchGeneration { return }
         searchResults = result
     }

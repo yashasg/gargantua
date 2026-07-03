@@ -5,6 +5,9 @@ extension DefaultProcessInventoryScanner {
     /// `makeItem` stays a 3-arg call instead of threading each piece through.
     struct ItemConstructionContext {
         let launchdItems: [LaunchdItem]
+        /// Pre-built launch-source lookup tables, so matching each process is
+        /// O(1) instead of a fresh linear scan over `launchdItems`.
+        let launchdMatchIndex: LaunchdMatchIndex
         let foregroundPIDs: Set<Int32>
         let resolveUser: (UInt32) -> String?
         /// PID → spawner display name, built from the full pre-cap snapshot.
@@ -22,7 +25,7 @@ extension DefaultProcessInventoryScanner {
             executablePath: current.executablePath,
             command: current.command,
             parentPID: current.parentPID,
-            launchdItems: context.launchdItems
+            index: context.launchdMatchIndex
         )
 
         // Promote .userSession matches to .foregroundApp when the PID is

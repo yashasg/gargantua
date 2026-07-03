@@ -22,13 +22,21 @@ public enum ProcessInventoryFormat {
         return String(format: "%.2f%%", percent)
     }
 
-    /// Render a byte count using `ByteCountFormatter`'s memory style — KB / MB / GB.
-    public static func bytes(_ bytes: UInt64) -> String {
+    /// Shared memory-style formatter. Building a `ByteCountFormatter` per call
+    /// churned an allocation on every row body eval while scrolling the
+    /// inventory list; the formatter is only read from MainActor row bodies, so
+    /// one shared instance is safe.
+    private static let byteFormatter: ByteCountFormatter = {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useMB, .useGB, .useKB]
         formatter.countStyle = .memory
         formatter.includesUnit = true
         formatter.zeroPadsFractionDigits = false
-        return formatter.string(fromByteCount: Int64(min(bytes, UInt64(Int64.max))))
+        return formatter
+    }()
+
+    /// Render a byte count using `ByteCountFormatter`'s memory style — KB / MB / GB.
+    public static func bytes(_ bytes: UInt64) -> String {
+        byteFormatter.string(fromByteCount: Int64(min(bytes, UInt64(Int64.max))))
     }
 }

@@ -30,13 +30,52 @@ public final class PathStreamViewModel: ScanProgressObserving {
 
     public let bufferCap: Int
 
+    /// Nonisolated staging buffer so a scanner emitting thousands of events from
+    /// a background task batches them into one main-actor hop per runloop tick
+    /// instead of scheduling one `Task` per event.
+    private let pending = PendingEvents()
+
     public nonisolated init(bufferCap: Int = 200) {
         self.bufferCap = bufferCap
     }
 
     public nonisolated func didEmit(_ event: ScanProgressEvent) {
+        // Only the pass that transitions the buffer from idle schedules a flush;
+        // events emitted before it runs ride along in the same drain, preserving
+        // order and completeness.
+        guard pending.stage(event) else { return }
         Task { @MainActor [weak self] in
-            self?.append(event)
+            guard let self else { return }
+            for event in self.pending.drain() {
+                self.append(event)
+            }
+        }
+    }
+
+    /// Thread-safe FIFO staging area that also tracks whether a flush is already
+    /// scheduled, so bursts collapse to a single main-actor drain.
+    private final class PendingEvents: @unchecked Sendable {
+        private let lock = NSLock()
+        private var buffer: [ScanProgressEvent] = []
+        private var flushScheduled = false
+
+        /// Appends `event`; returns `true` when the caller should schedule a
+        /// flush (the buffer was idle), `false` when one is already pending.
+        func stage(_ event: ScanProgressEvent) -> Bool {
+            lock.lock(); defer { lock.unlock() }
+            buffer.append(event)
+            if flushScheduled { return false }
+            flushScheduled = true
+            return true
+        }
+
+        /// Returns the staged events in order and re-arms the scheduler.
+        func drain() -> [ScanProgressEvent] {
+            lock.lock(); defer { lock.unlock() }
+            let drained = buffer
+            buffer.removeAll(keepingCapacity: true)
+            flushScheduled = false
+            return drained
         }
     }
 
