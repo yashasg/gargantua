@@ -10,15 +10,17 @@ import Foundation
 /// 1. **Exact bundle ID**: receipt ID equals the app's `bundleID`.
 /// 2. **Bundle prefix**: receipt ID is the bundle ID followed by a dot
 ///    (e.g., `com.docker.docker` matches `com.docker.docker.helper`).
-/// 3. **Reverse-DNS prefix**: receipt ID shares the bundle's first two
-///    components (e.g., `com.docker.*` for `com.docker.docker`). Only
-///    applied when the prefix is at least two components long, to keep
-///    `com.*` from matching everything.
-/// 4. **App-name slug**: receipt ID contains a sanitized app-name slug
+/// 3. **App-name slug**: receipt ID contains a sanitized app-name slug
 ///    derived from `AppInfo.name` (lowercase, hyphenated). Tightened to
 ///    avoid matching slugs of trivial length (≤2 chars) which would
 ///    over-match, e.g. naming an app `Go` should not pull in
 ///    `com.golang.tools`.
+///
+/// A receipt is deliberately **not** matched on a shared reverse-DNS vendor
+/// prefix (`com.microsoft.*` for `com.microsoft.Word`): that attributes every
+/// sibling app's receipt to the one being uninstalled, so removing Word would
+/// surface — and bulk-accept would trash — Excel/Office remnants. Ownership is
+/// keyed to the app's own bundle ID or name, never to its vendor.
 ///
 /// System packages are filtered out before any matching happens — `com.apple.*`
 /// and `com.macports.*` will never reach the heuristic. Callers are still
@@ -49,7 +51,6 @@ public struct PackageMatcher: Sendable {
     public func matches(packageIDs: [String], for app: AppInfo) -> [String] {
         let bundleID = app.bundleID.lowercased()
         let bundlePrefix = bundleID + "."
-        let revDNSPrefix = reverseDNSPrefix(of: bundleID)
         let nameSlugs = nameSlugs(for: app)
 
         return packageIDs.filter { rawID in
@@ -58,7 +59,6 @@ public struct PackageMatcher: Sendable {
 
             if candidate == bundleID { return true }
             if candidate.hasPrefix(bundlePrefix) { return true }
-            if let revDNSPrefix, candidate.hasPrefix(revDNSPrefix) { return true }
 
             for slug in nameSlugs where containsSlug(candidate, slug: slug) {
                 return true
@@ -68,15 +68,6 @@ public struct PackageMatcher: Sendable {
     }
 
     // MARK: - Internal
-
-    /// Two-component reverse-DNS prefix (`com.docker.`) used to widen the
-    /// match. Returns `nil` when the bundle ID has fewer than two
-    /// components, which avoids the degenerate `com.*` case.
-    private func reverseDNSPrefix(of bundleID: String) -> String? {
-        let parts = bundleID.split(separator: ".", omittingEmptySubsequences: true)
-        guard parts.count >= 2 else { return nil }
-        return parts.prefix(2).joined(separator: ".") + "."
-    }
 
     /// Sanitized name slugs for matching against a package ID. Filters out
     /// short, ambiguous slugs (≤2 chars) and the team identifier path so
