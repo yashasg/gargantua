@@ -3,6 +3,7 @@ import Testing
 @testable import GargantuaCore
 
 @Suite("ScheduledScanService")
+// swiftlint:disable:next type_body_length
 struct ScheduledScanServiceTests {
     @Test("LaunchAgent plist uses SMAppService bundle program and polling interval")
     func launchAgentPlistGeneration() throws {
@@ -331,6 +332,78 @@ struct ScheduledScanServiceTests {
         #expect(afterSuccess.lastScanDate == success.date)
     }
 
+    @Test("a persistent identical failure notifies once, then suppresses the repeat")
+    @MainActor
+    func failedRunSuppressesRepeatNotification() async throws {
+        let persistence = try PersistenceController(inMemory: true)
+        try persistence.bootstrap()
+        try persistence.updateSettings { settings in
+            settings.autoScanEnabled = true
+            settings.scheduledScanIntervalRaw = "daily"
+            settings.scheduledScanProfileID = "light"
+            settings.scheduledScanLastRunDate = Date(timeIntervalSince1970: 0)
+        }
+
+        let notifier = SpyScheduledScanNotifier()
+        func runFailure(at seconds: TimeInterval) async -> ScheduledScanRunResult {
+            await ScheduledScanRunner(
+                persistence: persistence,
+                scanner: ThrowingScheduledScanScanner(),
+                notifier: notifier,
+                powerStateProvider: FixedScheduledScanPowerStateProvider(isOnBattery: false),
+                now: { Date(timeIntervalSince1970: seconds) }
+            ).runIfDue()
+        }
+
+        // First failure: user is notified, summary recorded, clock not advanced.
+        guard case .failed = await runFailure(at: 200_000) else {
+            Issue.record("expected failed result")
+            return
+        }
+        #expect(notifier.delivered.count == 1)
+        #expect(try persistence.fetchSettings().scheduledScanLastRunDate == Date(timeIntervalSince1970: 0))
+
+        // Same error on the next poll (clock never advanced, so it's still due):
+        // suppressed — no second notification — but the failure is still recorded.
+        guard case .failed = await runFailure(at: 201_000) else {
+            Issue.record("expected failed result")
+            return
+        }
+        #expect(notifier.delivered.count == 1)
+        #expect(try persistence.fetchPendingScheduledScanSummary()?.date == Date(timeIntervalSince1970: 201_000))
+    }
+
+    @Test("a failure with an empty error description is still treated as a failure")
+    @MainActor
+    func emptyErrorDescriptionStillCountsAsFailure() async throws {
+        let persistence = try PersistenceController(inMemory: true)
+        try persistence.bootstrap()
+        let baseline = Date(timeIntervalSince1970: 0)
+        try persistence.updateSettings { settings in
+            settings.autoScanEnabled = true
+            settings.scheduledScanIntervalRaw = "daily"
+            settings.scheduledScanProfileID = "light"
+            settings.scheduledScanLastRunDate = baseline
+        }
+
+        let result = await ScheduledScanRunner(
+            persistence: persistence,
+            scanner: EmptyMessageThrowingScanner(),
+            notifier: SpyScheduledScanNotifier(),
+            powerStateProvider: FixedScheduledScanPowerStateProvider(isOnBattery: false),
+            now: { Date(timeIntervalSince1970: 200_000) }
+        ).runIfDue()
+
+        guard case .failed = result else {
+            Issue.record("expected failed result")
+            return
+        }
+        // The clock must not advance and the recorded summary must read as a
+        // failure — never misclassified as success on an empty description.
+        #expect(try persistence.fetchSettings().scheduledScanLastRunDate == baseline)
+        #expect(try persistence.fetchPendingScheduledScanSummary()?.errorMessage?.isEmpty == false)
+    }
+
     private func makeResult(id: String, size: Int64, safety: SafetyLevel) -> ScanResult {
         ScanResult(
             id: id,
@@ -377,6 +450,26 @@ private struct StubScheduledScanScanner: ScheduledScanScanning {
 
     func scan(profile: CleanupProfile, scanRoots: [URL]?) async throws -> [ScanResult] {
         results
+    }
+}
+
+private struct ThrowingScheduledScanScanner: ScheduledScanScanning {
+    struct Failure: LocalizedError {
+        var errorDescription: String? { "scan failed" }
+    }
+
+    func scan(profile: CleanupProfile, scanRoots: [URL]?) async throws -> [ScanResult] {
+        throw Failure()
+    }
+}
+
+private struct EmptyMessageThrowingScanner: ScheduledScanScanning {
+    struct Failure: LocalizedError {
+        var errorDescription: String? { "" }
+    }
+
+    func scan(profile: CleanupProfile, scanRoots: [URL]?) async throws -> [ScanResult] {
+        throw Failure()
     }
 }
 

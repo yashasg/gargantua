@@ -79,19 +79,33 @@ public final class ScheduledScanRunner {
             return .completed(summary)
         } catch {
             let runDate = now()
+            // Read the previously-recorded error before overwriting it: a failed
+            // run no longer advances the schedule clock (so the next attempt
+            // isn't pushed a full interval out), which means a persistent
+            // failure — e.g. revoked Full Disk Access — is retried every poll
+            // interval. Notify only when the error changes so the user isn't
+            // alerted every ~15 minutes for the same unresolved problem.
+            let priorError = (try? persistence.fetchSettings())?.scheduledScanLastSummaryError
+            // Failure is signalled downstream by a non-empty errorMessage (the
+            // persistence clock-guard and the summary headline both key off it),
+            // so guarantee one even in the unlikely case localizedDescription is
+            // empty — otherwise this failure would be misread as a success.
+            let description = error.localizedDescription
             let summary = ScheduledScanSummary(
                 date: runDate,
                 profileID: "unknown",
                 itemCount: 0,
                 reclaimableBytes: 0,
-                errorMessage: error.localizedDescription
+                errorMessage: description.isEmpty ? "Scheduled scan failed" : description
             )
             do {
                 try persistence.recordScheduledScanSummary(summary)
             } catch {
                 PersistenceDiagnostics.logFailure("recordScheduledScanSummary", error: error)
             }
-            await notifier.deliver(summary: summary)
+            if summary.errorMessage != priorError {
+                await notifier.deliver(summary: summary)
+            }
             return .failed(summary)
         }
     }
