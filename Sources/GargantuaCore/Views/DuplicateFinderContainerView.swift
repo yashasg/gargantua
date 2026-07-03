@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import OSLog
 import SwiftUI
 
@@ -29,6 +30,7 @@ public struct DuplicateFinderContainerView: View {
 
     @State private var showConfirmation = false
     @State private var pendingTrashItems: [ScanResult] = []
+    @State private var blockedReason: BlockReason?
 
     public init(
         state: DuplicateFinderContainerState,
@@ -112,9 +114,16 @@ public struct DuplicateFinderContainerView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: showConfirmation)
+        .destructiveActionGate(reason: $blockedReason)
     }
 
     private func trashConfirmed(_ items: [ScanResult], method: CleanupMethod) async {
+        // License gate fronts the send-to-trash. On blocked, refuse the delete
+        // and present the Unlock sheet instead.
+        if let reason = await DestructiveActionGate.blockReason() {
+            blockedReason = reason
+            return
+        }
         let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
         let result = await engine.clean(items, method: method)
         do {

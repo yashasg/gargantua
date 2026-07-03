@@ -1,4 +1,5 @@
 import AppKit
+import GargantuaLicensing
 import OSLog
 import SwiftUI
 
@@ -33,6 +34,7 @@ public struct CleanupSummaryView: View {
     /// user retries. All sections render `shown`, so the summary updates live.
     @State var liveResult: CleanupResult?
     @State var isRetrying: Bool = false
+    @State private var blockedReason: BlockReason?
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.cleanupNarrator) var cleanupNarrator
     @Environment(\.aiEngineNeedsFirstWarmup) var needsFirstWarmup
@@ -103,8 +105,16 @@ public struct CleanupSummaryView: View {
     func retryFailed() async {
         let failed = shown.failedItems.map(\.item)
         guard !failed.isEmpty, !isRetrying else { return }
+        // Claim the retry synchronously (before the async gate) so a double-tap
+        // can't launch two privileged re-runs; `defer` releases it on every path.
         isRetrying = true
         defer { isRetrying = false }
+        // Retry re-runs the privileged helper against the failed items, so it is
+        // itself a destructive action — front it with the license gate.
+        if let reason = await DestructiveActionGate.blockReason() {
+            blockedReason = reason
+            return
+        }
 
         let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
         let retry = await engine.clean(failed, method: shown.cleanupMethod, observer: nil)
@@ -193,5 +203,6 @@ public struct CleanupSummaryView: View {
             let value = await narrator(result)
             if !Task.isCancelled { narrative = value }
         }
+        .destructiveActionGate(reason: $blockedReason)
     }
 }

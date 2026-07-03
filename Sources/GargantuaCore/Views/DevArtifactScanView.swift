@@ -1,3 +1,4 @@
+import GargantuaLicensing
 import OSLog
 import SwiftUI
 
@@ -31,6 +32,7 @@ public struct DevArtifactScanView: View {
     /// task, lose the summary, or allow a second overlapping clean.
     @Bindable var session: DevArtifactSessionState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var blockedReason: BlockReason?
 
     private let onExplain: ((ScanResult) -> Void)?
     private let onResolveFilter: ((String) async -> ScanFilterSet?)?
@@ -131,6 +133,7 @@ public struct DevArtifactScanView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: session.showConfirmation)
+        .destructiveActionGate(reason: $blockedReason)
     }
 
     /// Asymmetric phase transition matching SmartUninstaller / Deep Clean.
@@ -184,6 +187,13 @@ extension DevArtifactScanView {
     fileprivate func confirmCleanup(_ items: [ScanResult], method: CleanupMethod) {
         session.beginCleanup(method: method)
         session.activeTask = Task {
+            // License gate fronts every Dev Purge execute. On blocked, sever
+            // the cleanup phase and present the Unlock sheet instead.
+            if let reason = await DestructiveActionGate.blockReason() {
+                session.severTether()
+                blockedReason = reason
+                return
+            }
             let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
             let result = await engine.clean(items, method: method, observer: session.pathStream)
             do {

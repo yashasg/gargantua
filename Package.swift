@@ -117,6 +117,7 @@ let package = Package(
             name: "GargantuaCoreTests",
             dependencies: [
                 "GargantuaCore",
+                "GargantuaLicensing",
                 .product(name: "Tokenizers", package: "swift-transformers")
             ],
             path: "Tests/GargantuaCoreTests"
