@@ -247,7 +247,9 @@ public final class XPCPrivilegedUninstallHelper: PrivilegedUninstallHelping, @un
         from response: PrivilegedUninstallResponse,
         request: PrivilegedUninstallRequest
     ) -> [CleanupItemResult] {
-        let requestByID = Dictionary(uniqueKeysWithValues: request.items.map { ($0.id, $0) })
+        // A duplicate item id in the request must not trap the reply handler.
+        // Keep the first occurrence; the response is keyed by the same ids.
+        let requestByID = Dictionary(request.items.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return response.items.map { result in
             let item = requestByID[result.id] ?? PrivilegedUninstallItem(
                 id: result.id,
