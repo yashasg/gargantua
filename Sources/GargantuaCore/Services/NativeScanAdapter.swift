@@ -130,7 +130,6 @@ public struct NativeScanAdapter: ScanAdapter {
 
         var results: [ScanResult] = []
         var seenPaths: Set<String> = []
-        var reclaimableBytes: Int64 = 0
 
         // Fire-and-forget sizing updates so the UI ticks per child path during a
         // rule whose `directorySize` walk would otherwise sit silent for seconds.
@@ -172,7 +171,6 @@ public struct NativeScanAdapter: ScanAdapter {
             // bytes or trigger a second recycle attempt after the first succeeds.
             for result in evaluation.results where seenPaths.insert(result.path).inserted {
                 results.append(result)
-                reclaimableBytes += result.size
                 observerRef?.didEmit(ScanProgressEvent(
                     path: result.path,
                     outcome: .match,
