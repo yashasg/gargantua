@@ -145,9 +145,17 @@ public final class PersistenceController {
 
     /// Persist the latest background scheduled-scan summary for the next dashboard launch.
     public func recordScheduledScanSummary(_ summary: ScheduledScanSummary) throws {
+        let isFailure = summary.errorMessage?.isEmpty == false
         try updateSettings { settings in
-            settings.scheduledScanLastRunDate = summary.date
-            settings.lastScanDate = summary.date
+            // A failed run must not advance the schedule clock: doing so pushes
+            // the next attempt a full interval out and surfaces the failure as
+            // the menu bar's "Last Scan". Only a successful run moves these
+            // forward; the summary fields below still record the failure so the
+            // dashboard and notification can report it.
+            if !isFailure {
+                settings.scheduledScanLastRunDate = summary.date
+                settings.lastScanDate = summary.date
+            }
             settings.scheduledScanLastSummaryDate = summary.date
             settings.scheduledScanLastSummaryItemCount = summary.itemCount
             settings.scheduledScanLastSummaryReclaimableBytes = summary.reclaimableBytes

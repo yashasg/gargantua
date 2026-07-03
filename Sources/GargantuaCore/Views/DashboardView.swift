@@ -12,6 +12,12 @@ public struct DashboardView: View {
 
     @Bindable private var session: DashboardSessionState
     private let persistence: PersistenceController?
+    /// Opens a fresh store for reads the scheduler process writes. The app's
+    /// boot-time `persistence` caches settings in its long-lived context and
+    /// never sees another process's write, so — like the menu bar — the
+    /// scheduled-scan summary is read through a newly-opened controller to
+    /// avoid showing stale data until relaunch.
+    private let makeFreshPersistence: @MainActor () throws -> PersistenceController
 
     @State private var diskUsedGB: Int = 0
     @State private var diskTotalGB: Int = 0
@@ -38,11 +44,13 @@ public struct DashboardView: View {
     public init(
         sidebarSelection: Binding<String?>,
         session: DashboardSessionState,
-        persistence: PersistenceController? = nil
+        persistence: PersistenceController? = nil,
+        makeFreshPersistence: @escaping @MainActor () throws -> PersistenceController = { try PersistenceController() }
     ) {
         self._sidebarSelection = sidebarSelection
         self.session = session
         self.persistence = persistence
+        self.makeFreshPersistence = makeFreshPersistence
     }
 
     public var body: some View {
@@ -263,7 +271,7 @@ public struct DashboardView: View {
         diskTotalGB = Int(metrics.diskTotal / (1024 * 1024 * 1024))
         diskUsedGB = Int(metrics.diskUsed / (1024 * 1024 * 1024))
         diskUsage = metrics.diskUsage
-        scheduledScanSummary = try? persistence?.fetchPendingScheduledScanSummary()
+        scheduledScanSummary = try? makeFreshPersistence().fetchPendingScheduledScanSummary()
         installedAppCount = await Self.countInstalledApps()
         isLoading = false
     }
@@ -280,7 +288,7 @@ public struct DashboardView: View {
 
     private func acknowledgeScheduledScanSummary() {
         scheduledScanSummary = nil
-        try? persistence?.acknowledgeScheduledScanSummary()
+        try? makeFreshPersistence().acknowledgeScheduledScanSummary()
     }
 }
 
