@@ -29,37 +29,50 @@ extension BinaryIdentityResolving {
 /// is slow at scale (the launchd item index can easily walk hundreds of
 /// distinct binaries on a developer machine).
 ///
-/// The cache is unbounded — instances are intended to live for the duration
-/// of a single inventory pass, not across long-running app sessions. Call
-/// `clearCache()` between passes if reusing.
+/// Cache entries are keyed by path *and* the binary's modification date, so a
+/// binary swapped in at the same path (new mtime) misses the cache and
+/// re-resolves automatically. That makes the cache safe to keep across passes —
+/// callers no longer need to `clearCache()` between scans to avoid a replaced
+/// binary retaining its prior trusted classification. The cache is unbounded;
+/// instances may live for a long-running app session.
 public final class DefaultBinaryIdentityResolver: BinaryIdentityResolving, @unchecked Sendable {
     private let bundleReader: AppBundleReading
     private let signatureVerifier: any DetailedCodeSignatureVerifying
     private let registry: KnownVendorRegistry
+    private let modificationDate: @Sendable (String) -> Date?
+
+    private struct CacheEntry {
+        let mtime: Date?
+        let identity: BinaryIdentity
+    }
 
     private let cacheLock = NSLock()
-    private var cache: [String: BinaryIdentity] = [:]
+    private var cache: [String: CacheEntry] = [:]
 
     public init(
         bundleReader: AppBundleReading = DefaultAppBundleReader(),
         signatureVerifier: any DetailedCodeSignatureVerifying = DefaultCodeSignatureVerifier(),
-        registry: KnownVendorRegistry = .default
+        registry: KnownVendorRegistry = .default,
+        modificationDate: @escaping @Sendable (String) -> Date? = DefaultBinaryIdentityResolver.defaultModificationDate
     ) {
         self.bundleReader = bundleReader
         self.signatureVerifier = signatureVerifier
         self.registry = registry
+        self.modificationDate = modificationDate
     }
 
     public func resolve(binaryPath: String) -> BinaryIdentity {
-        if let cached = cachedIdentity(for: binaryPath) {
+        let mtime = modificationDate(binaryPath)
+        if let cached = cachedIdentity(for: binaryPath, mtime: mtime) {
             return cached
         }
         let identity = computeIdentity(for: binaryPath)
-        storeCachedIdentity(identity, for: binaryPath)
+        storeCachedIdentity(identity, for: binaryPath, mtime: mtime)
         return identity
     }
 
-    /// Drops the cache. Test helper.
+    /// Drops the cache. Test helper — the mtime keying makes per-pass clearing
+    /// unnecessary in production.
     public func clearCache() {
         cacheLock.lock()
         cache.removeAll()
@@ -68,15 +81,26 @@ public final class DefaultBinaryIdentityResolver: BinaryIdentityResolving, @unch
 
     // MARK: - Cache
 
-    private func cachedIdentity(for path: String) -> BinaryIdentity? {
-        cacheLock.lock()
-        defer { cacheLock.unlock() }
-        return cache[path]
+    /// The binary's on-disk modification date, used as a cheap cache-validity
+    /// stamp. A missing/unreadable path yields `nil`, which compares equal only
+    /// to another `nil` — so a still-missing binary keeps its cached verdict
+    /// while one that (re)appears on disk gets a fresh resolve.
+    @Sendable
+    public static func defaultModificationDate(_ path: String) -> Date? {
+        let attrs = try? FileManager.default.attributesOfItem(atPath: path)
+        return attrs?[.modificationDate] as? Date
     }
 
-    private func storeCachedIdentity(_ identity: BinaryIdentity, for path: String) {
+    private func cachedIdentity(for path: String, mtime: Date?) -> BinaryIdentity? {
         cacheLock.lock()
-        cache[path] = identity
+        defer { cacheLock.unlock() }
+        guard let entry = cache[path], entry.mtime == mtime else { return nil }
+        return entry.identity
+    }
+
+    private func storeCachedIdentity(_ identity: BinaryIdentity, for path: String, mtime: Date?) {
+        cacheLock.lock()
+        cache[path] = CacheEntry(mtime: mtime, identity: identity)
         cacheLock.unlock()
     }
 

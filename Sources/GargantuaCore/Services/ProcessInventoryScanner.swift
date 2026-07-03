@@ -126,11 +126,10 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
     }
 
     private func sampleEnvironment() async -> SampleEnvironment {
-        // Long-lived resolvers cache per binary path; without an explicit
-        // clear, a replaced binary at the same path could keep its prior
-        // trusted identity across rescans.
-        resolver.clearCache()
-
+        // The resolver caches by binary path + mtime, so a replaced binary at
+        // the same path re-resolves on its own. Keeping the cache warm across
+        // passes is what makes per-keystroke `search()` cheap — it no longer
+        // re-verifies signatures for binaries it already resolved this session.
         let firstSamples = snapshotProvider.snapshot()
         await sleep(sampleIntervalNanoseconds)
         let secondSamples = snapshotProvider.snapshot()

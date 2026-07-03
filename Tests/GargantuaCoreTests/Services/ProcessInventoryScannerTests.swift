@@ -201,8 +201,11 @@ struct ProcessInventoryScannerTests {
         #expect(resolver.resolved.count == 10)
     }
 
-    @Test("Resolver clearCache invoked at the start of every scan")
-    func resolverCacheCleared() async {
+    @Test("Scanner keeps the resolver cache warm across passes (no per-pass clear)")
+    func resolverCacheNotClearedPerPass() async {
+        // The resolver now self-invalidates by path + mtime, so the scanner must
+        // NOT wipe it each pass — keeping it warm is what makes per-keystroke
+        // search cheap. A replaced binary re-resolves on its own via mtime.
         final class CountingResolver: BinaryIdentityResolving, @unchecked Sendable {
             var clearCount = 0
             func resolve(binaryPath: String) -> BinaryIdentity {
@@ -227,7 +230,7 @@ struct ProcessInventoryScannerTests {
 
         _ = await scanner.scan(metric: .cpu, topN: nil)
         _ = await scanner.scan(metric: .cpu, topN: nil)
-        #expect(counting.clearCount == 2)
+        #expect(counting.clearCount == 0)
     }
 
     @Test("Launchd-matched process surfaces its plist path through launchSource")
