@@ -18,42 +18,52 @@ public struct ProcessLaunchSourceMatcher: Sendable {
 
     public init() {}
 
+    /// Back-compat entry point: builds a one-shot index and matches against it.
+    /// Callers that match many processes against the same launchd set should
+    /// build a `LaunchdMatchIndex` once and use `match(…, index:)` — this
+    /// overload rebuilds the index on every call.
     public func match(
         executablePath: String?,
         command: String,
         parentPID: Int32,
         launchdItems: [LaunchdItem]
     ) -> (source: ProcessLaunchSource, confidence: LaunchSourceConfidence) {
-        // 1. Path match — strongest signal. We try `Program` first then
-        //    `programArguments[0]`, and only treat absolute paths as
-        //    matchable; relative argv[0]s would create false positives across
-        //    every process whose binary happens to share a common name.
-        if let executablePath, !executablePath.isEmpty {
-            for item in launchdItems {
-                guard let plist = item.plist else { continue }
-                if pathMatches(executablePath, plist: plist) {
-                    let isLaunchdParent = (parentPID == 1)
-                    return (
-                        .launchd(domain: item.domain, label: plist.label, plistPath: item.plistPath),
-                        isLaunchdParent ? .exact : .path
-                    )
-                }
-            }
+        match(
+            executablePath: executablePath,
+            command: command,
+            parentPID: parentPID,
+            index: LaunchdMatchIndex(launchdItems)
+        )
+    }
+
+    /// Match against a pre-built `LaunchdMatchIndex`. The whole confidence
+    /// ladder is O(1) per process: two dictionary lookups instead of a linear
+    /// scan that re-lowercased every label for every process.
+    public func match(
+        executablePath: String?,
+        command: String,
+        parentPID: Int32,
+        index: LaunchdMatchIndex
+    ) -> (source: ProcessLaunchSource, confidence: LaunchSourceConfidence) {
+        // 1. Path match — strongest signal, keyed on the absolute `Program` /
+        //    `programArguments[0]` path.
+        if let executablePath, !executablePath.isEmpty,
+           let entry = index.pathEntry(for: executablePath) {
+            let isLaunchdParent = (parentPID == 1)
+            return (
+                .launchd(domain: entry.domain, label: entry.label, plistPath: entry.plistPath),
+                isLaunchdParent ? .exact : .path
+            )
         }
 
-        // 2. Heuristic match — process command name appears in a launchd
-        //    label. Only fires when nothing matched by path.
+        // 2. Heuristic match — process command name equals a launchd label or
+        //    its trailing reverse-DNS component. Only fires when path missed.
         let commandLower = command.lowercased()
-        if !commandLower.isEmpty {
-            for item in launchdItems {
-                guard let plist = item.plist else { continue }
-                if labelResembles(plist.label, command: commandLower) {
-                    return (
-                        .launchd(domain: item.domain, label: plist.label, plistPath: item.plistPath),
-                        .heuristic
-                    )
-                }
-            }
+        if !commandLower.isEmpty, let entry = index.labelEntry(for: commandLower) {
+            return (
+                .launchd(domain: entry.domain, label: entry.label, plistPath: entry.plistPath),
+                .heuristic
+            )
         }
 
         // 3. Parent-based fallback. Parented under launchd (PID 1) but no
@@ -67,34 +77,67 @@ public struct ProcessLaunchSourceMatcher: Sendable {
         }
         return (.unknown, .unknown)
     }
+}
 
-    // MARK: - Helpers
-
-    private func pathMatches(_ executablePath: String, plist: LaunchdPlist) -> Bool {
-        if let program = plist.program, !program.isEmpty, program == executablePath {
-            return true
-        }
-        if let argv0 = plist.programArguments.first,
-           argv0.hasPrefix("/"),
-           argv0 == executablePath {
-            return true
-        }
-        return false
+/// Pre-computed lookup tables over a launchd item set, so resolving each of the
+/// ~hundreds of running processes is O(1) rather than a fresh linear scan that
+/// re-lowercased every label for every process (the old O(P×L) cost). Build it
+/// once per scan and hand it to `ProcessLaunchSourceMatcher.match(…, index:)`.
+public struct LaunchdMatchIndex: Sendable {
+    /// The three fields `match` returns, resolved at build time so the lookups
+    /// never touch the (optional) `plist` again.
+    fileprivate struct Entry: Sendable {
+        let domain: LaunchdDomain
+        let label: String
+        let plistPath: String
     }
 
-    /// Returns `true` when the process command name and a launchd label share
-    /// a meaningful overlap. We require the label to either end with the
-    /// command (e.g. label `com.acme.helper` for command `helper`) or to
-    /// match it exactly. Substring-anywhere would over-match — `com.apple.security`
-    /// would tag every process named `security`.
-    private func labelResembles(_ label: String, command: String) -> Bool {
-        let labelLower = label.lowercased()
-        if labelLower == command { return true }
-        // Reverse-DNS labels: trailing component must match.
-        if let lastDot = labelLower.lastIndex(of: ".") {
-            let trailing = labelLower[labelLower.index(after: lastDot)...]
-            if trailing == command { return true }
+    /// Absolute `Program` / `programArguments[0]` path → first declaring item.
+    private let byExecutablePath: [String: Entry]
+    /// Lowercased full label AND trailing reverse-DNS component → first
+    /// declaring item. Both keys share one table so a lookup preserves the old
+    /// "first item in declaration order matching label OR trailing" semantics.
+    private let byLabel: [String: Entry]
+
+    public init(_ items: [LaunchdItem]) {
+        var byExecutablePath: [String: Entry] = [:]
+        var byLabel: [String: Entry] = [:]
+        for item in items {
+            guard let plist = item.plist else { continue }
+            let entry = Entry(domain: item.domain, label: plist.label, plistPath: item.plistPath)
+
+            // Only absolute paths are matchable; a relative argv[0] would
+            // false-positive across every job whose binary shares a name.
+            if let program = plist.program, !program.isEmpty, byExecutablePath[program] == nil {
+                byExecutablePath[program] = entry
+            }
+            if let argv0 = plist.programArguments.first, argv0.hasPrefix("/"), byExecutablePath[argv0] == nil {
+                byExecutablePath[argv0] = entry
+            }
+
+            // First declaration wins for either label key, matching the old
+            // linear scan that returned the first item satisfying the predicate.
+            let labelLower = plist.label.lowercased()
+            if !labelLower.isEmpty, byLabel[labelLower] == nil {
+                byLabel[labelLower] = entry
+            }
+            if let lastDot = labelLower.lastIndex(of: ".") {
+                let trailing = String(labelLower[labelLower.index(after: lastDot)...])
+                if !trailing.isEmpty, byLabel[trailing] == nil {
+                    byLabel[trailing] = entry
+                }
+            }
         }
-        return false
+        self.byExecutablePath = byExecutablePath
+        self.byLabel = byLabel
+    }
+
+    fileprivate func pathEntry(for executablePath: String) -> Entry? {
+        byExecutablePath[executablePath]
+    }
+
+    /// `commandLower` must already be lowercased by the caller.
+    fileprivate func labelEntry(for commandLower: String) -> Entry? {
+        byLabel[commandLower]
     }
 }

@@ -214,6 +214,7 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
 
         let context = ItemConstructionContext(
             launchdItems: env.launchdItems,
+            launchdMatchIndex: LaunchdMatchIndex(env.launchdItems),
             foregroundPIDs: env.foregroundSet,
             resolveUser: resolveUser,
             parentNames: env.parentNames
