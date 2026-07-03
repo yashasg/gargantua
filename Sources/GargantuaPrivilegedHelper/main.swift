@@ -38,7 +38,15 @@ private final class PrivilegedUninstallXPCService: NSObject, PrivilegedUninstall
                 PrivilegedUninstallRequest.self,
                 from: requestData
             )
-            let results = request.items.map { remove($0, invokingUserID: request.invokingUserID) }
+            // The target user is the connection's audit-token-derived effective
+            // uid, NOT `request.invokingUserID` — a client-supplied field a
+            // compromised (but validly signed) peer could set to any uid (e.g.
+            // 0) to redirect the Trash move + recursive chown onto root-owned
+            // or another user's paths. `effectiveUserIdentifier` is set by the
+            // kernel from the peer's audit token and cannot be spoofed. Falls
+            // back to `nil` (root Trash) only if the connection is unavailable.
+            let invokingUserID = NSXPCConnection.current()?.effectiveUserIdentifier
+            let results = request.items.map { remove($0, invokingUserID: invokingUserID) }
             let response = PrivilegedUninstallResponse(items: results)
             reply(try PrivilegedUninstallXPCCodec.encoder.encode(response))
         } catch {

@@ -17,7 +17,7 @@ public final class MCPSSETransport: @unchecked Sendable {
     public init(
         configuration: MCPSSEServerConfiguration,
         tokenProvider: @escaping TokenProvider,
-        handler: @escaping MCPMessageHandler,
+        handler: @escaping MCPConnectionMessageHandler,
         log: MCPTransportLog? = nil,
         queue: DispatchQueue = DispatchQueue(label: "com.gargantua.mcp.sse")
     ) {

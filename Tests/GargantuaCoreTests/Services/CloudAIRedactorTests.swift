@@ -185,11 +185,51 @@ struct CloudAIRedactorTests {
         #expect(items[0].regenerateCommand == "cmd arg")
     }
 
-    @Test("items() preserves path verbatim — not run through sanitizeContent")
-    func itemsKeepsPathVerbatim() throws {
+    @Test("items() passes a benign path through unchanged")
+    func itemsPreservesBenignPath() throws {
         let result = makeResult(id: "d", path: "/Users/jason/Library/Caches/foo bar/file.txt")
         let items = try CloudAIRedactor.items(from: [result], allowsFileContents: false)
         #expect(items[0].path == "/Users/jason/Library/Caches/foo bar/file.txt")
+    }
+
+    @Test("items() redacts a secret embedded in a path COMPONENT, not just the leaf")
+    func itemsRedactsSecretInPathComponent() throws {
+        // The token is an interior directory component, not the file name —
+        // the exact gap the pre-fix verbatim path left open.
+        let result = makeResult(
+            id: "d",
+            path: "/Users/jason/creds/ghp_abcdefghijklmnopqrstuvwxyz012345/project/config"
+        )
+        let items = try CloudAIRedactor.items(from: [result], allowsFileContents: false)
+        #expect(items[0].path.contains("[REDACTED_GITHUB_TOKEN]"))
+        #expect(!items[0].path.contains("ghp_abcdefghijklmnopqrstuvwxyz012345"))
+        // Surrounding, non-secret components are left intact.
+        #expect(items[0].path.hasPrefix("/Users/jason/creds/"))
+        #expect(items[0].path.hasSuffix("/project/config"))
+    }
+
+    @Test("items() redacts a secret embedded in the bundle ID before send")
+    func itemsRedactsSecretInBundleID() throws {
+        let raw = ScanResult(
+            id: "e",
+            name: "App",
+            path: "/Applications/App.app",
+            size: 100,
+            safety: .safe,
+            confidence: 90,
+            explanation: "An app.",
+            source: SourceAttribution(
+                name: "App",
+                bundleID: "com.example.sk-abcdefghijklmnopqrstuvwxyz123456"
+            ),
+            lastAccessed: nil,
+            category: "test_cache",
+            tags: [],
+            regenerates: false,
+            regenerateCommand: nil
+        )
+        let items = try CloudAIRedactor.items(from: [raw], allowsFileContents: false)
+        #expect(items[0].bundleID == "com.example.[REDACTED_API_KEY]")
     }
 
     @Test("items() preserves count and order")

@@ -24,7 +24,11 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
     private let statusReporter: MCPServerStatusReporting?
     private let lock = NSLock()
     private var handlers: [MCPToolName: MCPToolHandler] = [:]
-    private var capturedClientIdentity: MCPClientIdentity?
+    /// Client identity captured per connection. Keyed by `MCPConnectionID` so a
+    /// concurrent second transport's `initialize` cannot overwrite the first
+    /// transport's attribution (the dual-transport `.both` last-initialize-wins
+    /// bug). Guarded by `lock`.
+    private var clientIdentities: [MCPConnectionID: MCPClientIdentity] = [:]
 
     public init(
         serverInfo: MCPServerInfo,
@@ -48,15 +52,32 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         handlers[name] = handler
     }
 
-    /// Client identity captured from the most recent `initialize` handshake,
-    /// or nil if the client has not completed `initialize` yet. Stdio
-    /// transport is single-session, so this is "the client" for the
-    /// process's lifetime. Intended for destructive-tool handlers that need
-    /// to stamp audit entries / shard rate limits.
-    public func currentClientIdentity() -> MCPClientIdentity? {
+    /// Client identity captured for a specific connection's `initialize`
+    /// handshake, or nil if that connection has not completed `initialize`
+    /// (or sent no `clientInfo.name`). Intended for destructive-tool handlers
+    /// that stamp audit entries / shard rate limits.
+    public func currentClientIdentity(for connection: MCPConnectionID) -> MCPClientIdentity? {
         lock.lock()
         defer { lock.unlock() }
-        return capturedClientIdentity
+        return clientIdentities[connection]
+    }
+
+    /// Back-compat accessor for the stdio connection's captured identity.
+    /// Stdio is single-session for the process lifetime, so this is "the
+    /// stdio client".
+    public func currentClientIdentity() -> MCPClientIdentity? {
+        currentClientIdentity(for: .stdio)
+    }
+
+    /// Identity of the connection whose `tools/call` is executing on the
+    /// current thread, or nil outside a tool call. Destructive-tool wiring
+    /// that is registered once and shared across connections (e.g. the
+    /// `clean` handler's `clientIDProvider`) reads this so it attributes the
+    /// call to the connection that actually made it — not to whichever
+    /// connection happened to `initialize` most recently. Valid only for the
+    /// synchronous span of the handler invocation.
+    public func currentCallClientIdentity() -> MCPClientIdentity? {
+        Self.currentCallIdentity()
     }
 
     /// Normalize a caller-supplied client name. Trims whitespace; returns
@@ -67,10 +88,36 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    // MARK: - Current-call identity (thread-local)
+
+    // The handler runs synchronously on the dispatching thread; stdio and SSE
+    // dispatch on separate threads, so a thread-local cleanly isolates the two
+    // even though the `clean` handler is registered once and shared. A boxed
+    // value keeps the identity out of any shared mutable dispatcher state.
+    private final class IdentityBox {
+        let identity: MCPClientIdentity?
+        init(_ identity: MCPClientIdentity?) { self.identity = identity }
+    }
+
+    private static let currentCallIdentityKey = "com.inceptyon.gargantua.mcp.currentCallClientIdentity"
+
+    private static func setCurrentCallIdentity(_ identity: MCPClientIdentity?) {
+        let dict = Thread.current.threadDictionary
+        if let identity {
+            dict[currentCallIdentityKey] = IdentityBox(identity)
+        } else {
+            dict.removeObject(forKey: currentCallIdentityKey)
+        }
+    }
+
+    private static func currentCallIdentity() -> MCPClientIdentity? {
+        (Thread.current.threadDictionary[currentCallIdentityKey] as? IdentityBox)?.identity
+    }
+
     /// Main entry point, designed to be passed as an `MCPMessageHandler` to
     /// `MCPStdioTransport`. Returns `nil` for notifications so the transport
     /// suppresses output, and always returns a response for requests.
-    public func dispatch(_ request: MCPRequest) -> MCPResponse? {
+    public func dispatch(_ request: MCPRequest, connection: MCPConnectionID = .stdio) -> MCPResponse? {
         if request.isNotification {
             // MCP has notifications like `notifications/initialized` that
             // carry no response. We accept them silently; future side-effect
@@ -81,7 +128,7 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         guard let requestID = request.id else { return nil }
 
         do {
-            let result = try handle(method: request.method, params: request.params)
+            let result = try handle(method: request.method, params: request.params, connection: connection)
             return .success(id: requestID, result: result)
         } catch let err as MCPDispatchError {
             return .failure(id: requestID, code: err.code, message: err.message)
@@ -100,20 +147,20 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
 
     // MARK: - Method routing
 
-    private func handle(method: String, params: MCPJSONAny?) throws -> MCPJSONAny {
+    private func handle(method: String, params: MCPJSONAny?, connection: MCPConnectionID) throws -> MCPJSONAny {
         switch method {
         case "initialize":
-            return try handleInitialize(params: params)
+            return try handleInitialize(params: params, connection: connection)
         case "tools/list":
             return try handleToolsList()
         case "tools/call":
-            return try handleToolsCall(params: params)
+            return try handleToolsCall(params: params, connection: connection)
         default:
             throw MCPDispatchError.methodNotFound(method)
         }
     }
 
-    private func handleInitialize(params: MCPJSONAny?) throws -> MCPJSONAny {
+    private func handleInitialize(params: MCPJSONAny?, connection: MCPConnectionID) throws -> MCPJSONAny {
         guard let params else {
             throw MCPDispatchError.invalidParams(
                 "initialize requires params with protocolVersion"
@@ -132,25 +179,29 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
             )
         }
         // Capture client identity for downstream destructive tools (audit,
-        // rate limit). Every `initialize` call resets the captured identity
-        // first — a re-initialize that omits `clientInfo` (or sends it
-        // malformed) MUST clear the prior client rather than keep a stale
-        // attribution. Missing/malformed `clientInfo` is tolerated so minimal
-        // clients keep working; handlers that query see `nil` and fall back
-        // to the `"unknown"` sentinel. Empty or whitespace-only names are
-        // normalized to `nil` so an adversarial client can't slip past
-        // per-client isolation by sending a blank name.
+        // rate limit), keyed by the connection it arrived on. Every
+        // `initialize` resets THIS connection's captured identity first — a
+        // re-initialize that omits `clientInfo` (or sends it malformed) MUST
+        // clear the prior client rather than keep a stale attribution, but it
+        // only affects its own connection, never the other transport's.
+        // Missing/malformed `clientInfo` is tolerated so minimal clients keep
+        // working; handlers that query see `nil` and fall back to the
+        // `"unknown"` sentinel. Empty or whitespace-only names are normalized
+        // to `nil` so an adversarial client can't slip past per-client
+        // isolation by sending a blank name.
         let capturedIdentity: MCPClientIdentity?
         lock.lock()
-        capturedClientIdentity = nil
         if let client = parsed.clientInfo,
            let normalizedName = Self.normalizedClientName(client.name) {
-            capturedClientIdentity = MCPClientIdentity(
+            capturedIdentity = MCPClientIdentity(
                 name: normalizedName,
                 version: client.version
             )
+            clientIdentities[connection] = capturedIdentity
+        } else {
+            capturedIdentity = nil
+            clientIdentities.removeValue(forKey: connection)
         }
-        capturedIdentity = capturedClientIdentity
         lock.unlock()
         statusReporter?.replaceCurrentClient(capturedIdentity)
         // We advertise the `tools` capability with no extra flags; we do not
@@ -177,7 +228,7 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         return .object(["tools": encoded])
     }
 
-    private func handleToolsCall(params: MCPJSONAny?) throws -> MCPJSONAny {
+    private func handleToolsCall(params: MCPJSONAny?, connection: MCPConnectionID) throws -> MCPJSONAny {
         guard let params else {
             throw MCPDispatchError.invalidParams("tools/call requires a params object")
         }
@@ -216,7 +267,14 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
                 "Tool not implemented: \(toolName.rawValue)"
             )
         }
-        let currentClient = currentClientIdentity()
+        // Resolve THIS connection's captured identity and publish it as the
+        // current-call identity for the synchronous span of the handler, so a
+        // handler that reads back through `currentCallClientIdentity()` (e.g.
+        // the `clean` tool's `clientIDProvider`) attributes to the connection
+        // that made the call, not to whichever connection last initialized.
+        let currentClient = currentClientIdentity(for: connection)
+        Self.setCurrentCallIdentity(currentClient)
+        defer { Self.setCurrentCallIdentity(nil) }
         let toolResult: MCPToolCallResult
         do {
             toolResult = try handler(arguments)

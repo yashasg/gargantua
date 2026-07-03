@@ -87,6 +87,67 @@ public struct CommandActionToolResolver: Sendable {
         self.environment = environment
     }
 
+    /// Sub-tools `xcrun` is permitted to front. `xcrun` is a general-purpose
+    /// launcher — `xcrun --run <path>` and `xcrun <abs-path>` will exec an
+    /// arbitrary binary — so an allowlisted `xcrun` in `defaultCandidates` is
+    /// only safe if its first argument is pinned to a known sub-tool. The one
+    /// bundled rule that uses it (`simctl_delete_unavailable`) runs
+    /// `xcrun simctl delete unavailable`, so `simctl` is the sole entry.
+    public static let xcrunAllowedSubcommands: Set<String> = ["simctl"]
+
+    /// Rejected when a command rule tries to turn an allowlisted general
+    /// launcher into arbitrary execution.
+    public enum ArgumentPolicyError: Error, Equatable, LocalizedError {
+        case disallowedInvocation(tool: String, reason: String)
+
+        public var errorDescription: String? {
+            switch self {
+            case .disallowedInvocation(let tool, let reason):
+                "Command rule invocation of \"\(tool)\" is not permitted: \(reason)"
+            }
+        }
+    }
+
+    /// Constrains the arguments a rule may pass to launcher-class tools before
+    /// they run. Currently only `xcrun` is constrained; every other tool is a
+    /// no-op. Applies to both the dry-run and destructive argument vectors —
+    /// a tampered dry-run is just as dangerous as a tampered destructive run.
+    ///
+    /// Not called for the resolver's own internal `--version` capture, which
+    /// uses fixed, non-rule-controlled arguments.
+    public static func validateArguments(tool: String, arguments: [String]) throws {
+        guard tool == "xcrun" else { return }
+        guard let sub = arguments.first else {
+            throw ArgumentPolicyError.disallowedInvocation(
+                tool: tool,
+                reason: "no sub-tool given; expected one of \(xcrunAllowedSubcommands.sorted().joined(separator: ", "))"
+            )
+        }
+        // Reject the launcher flags outright so the error is specific, even
+        // though the allowlist check below would also catch them.
+        let lowered = sub.lowercased()
+        if lowered == "--run" || lowered == "-r" || lowered.hasPrefix("--run=") {
+            throw ArgumentPolicyError.disallowedInvocation(
+                tool: tool,
+                reason: "`\(sub)` runs an arbitrary binary"
+            )
+        }
+        // A path (absolute or relative) as the first argument is executed
+        // directly by xcrun — never a legitimate sub-tool name.
+        if sub.contains("/") {
+            throw ArgumentPolicyError.disallowedInvocation(
+                tool: tool,
+                reason: "sub-tool must be a bare name, not a path (`\(sub)`)"
+            )
+        }
+        guard xcrunAllowedSubcommands.contains(sub) else {
+            throw ArgumentPolicyError.disallowedInvocation(
+                tool: tool,
+                reason: "sub-tool `\(sub)` is not allowlisted"
+            )
+        }
+    }
+
     public static func envVarName(for tool: String) -> String {
         // Restrict to alphanumerics so a malformed tool name can't reach
         // through to invent unexpected env-var names. Anything else gets
@@ -96,13 +157,20 @@ public struct CommandActionToolResolver: Sendable {
     }
 
     public func resolve(tool: String) -> URL? {
-        let envVar = Self.envVarName(for: tool)
-        if let override = environment[envVar], !override.isEmpty {
-            let expanded = (override as NSString).expandingTildeInPath
-            if FileManager.default.isExecutableFile(atPath: expanded) {
-                return URL(fileURLWithPath: expanded)
+        // `GARGANTUA_TOOL_<NAME>` overrides let a caller point the resolver at
+        // any absolute binary. That is a developer/test convenience, not a
+        // release capability — in a signed release build it would be an
+        // arbitrary-exec foothold, so it is DEBUG-only. Mirrors the
+        // `GARGANTUA_RULES_DIR` / `GARGANTUA_COMMAND_RULES_DIR` treatment.
+        #if DEBUG
+            let envVar = Self.envVarName(for: tool)
+            if let override = environment[envVar], !override.isEmpty {
+                let expanded = (override as NSString).expandingTildeInPath
+                if FileManager.default.isExecutableFile(atPath: expanded) {
+                    return URL(fileURLWithPath: expanded)
+                }
             }
-        }
+        #endif
 
         guard var paths = candidates[tool] else { return nil }
         if ["pnpm", "npm", "yarn"].contains(tool) {

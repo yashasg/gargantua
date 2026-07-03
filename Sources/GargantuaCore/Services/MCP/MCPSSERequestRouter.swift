@@ -13,7 +13,7 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
     /// Callback invoked when an SSE event should be emitted on a session's connection.
     public typealias EventSink = @Sendable (_ event: String, _ data: String) -> Void
 
-    private let handler: MCPMessageHandler
+    private let handler: MCPConnectionMessageHandler
     private let log: MCPTransportLog?
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
@@ -22,7 +22,7 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
 
     /// Creates a router with the supplied JSON-RPC handler and optional log sink.
     public init(
-        handler: @escaping MCPMessageHandler,
+        handler: @escaping MCPConnectionMessageHandler,
         log: MCPTransportLog? = nil
     ) {
         self.handler = handler
@@ -111,7 +111,7 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
             return .text(400, "Bad Request", "Invalid JSON-RPC request.")
         }
 
-        if let response = handler(rpcRequest) {
+        if let response = handler(rpcRequest, .sse(sessionID)) {
             sink("message", encodedResponseLine(response, fallbackID: rpcRequest.id ?? .null))
         }
         return MCPHTTPResponse(statusCode: 202, reasonPhrase: "Accepted")

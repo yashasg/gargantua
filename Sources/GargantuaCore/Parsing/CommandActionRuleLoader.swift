@@ -142,17 +142,22 @@ public struct CommandActionRuleLoadResult: Sendable {
 /// Resolves the directory containing YAML command-action rule files.
 ///
 /// Search order mirrors `RuleDirectoryResolver`:
-/// 1. `GARGANTUA_COMMAND_RULES_DIR` env override
+/// 1. `GARGANTUA_COMMAND_RULES_DIR` env override — DEBUG builds only. Letting an
+///    env var point a release app at arbitrary command rules would bypass the
+///    Trust Layer (a rule can shell out), so release builds always use the
+///    bundled, signed snapshot. Mirrors `RuleDirectoryResolver`.
 /// 2. `Bundle.gargantuaCoreResources.resourceURL/command_rules`
 /// 3. `Bundle.main.resourceURL/command_rules`
 public enum CommandActionRuleDirectoryResolver {
     public static func resolve() -> URL? {
         let fm = FileManager.default
 
-        if let envPath = ProcessInfo.processInfo.environment["GARGANTUA_COMMAND_RULES_DIR"], !envPath.isEmpty {
-            let url = URL(fileURLWithPath: envPath, isDirectory: true)
-            if fm.fileExists(atPath: url.path) { return url }
-        }
+        #if DEBUG
+            if let envPath = ProcessInfo.processInfo.environment["GARGANTUA_COMMAND_RULES_DIR"], !envPath.isEmpty {
+                let url = URL(fileURLWithPath: envPath, isDirectory: true)
+                if fm.fileExists(atPath: url.path) { return url }
+            }
+        #endif
 
         if let resourceURL = Bundle.gargantuaCoreResources.resourceURL {
             let candidate = resourceURL.appendingPathComponent("command_rules", isDirectory: true)

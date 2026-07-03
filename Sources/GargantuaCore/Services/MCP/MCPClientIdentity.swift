@@ -36,6 +36,33 @@ public struct MCPClientIdentity: Sendable, Equatable {
     }
 }
 
+/// Identifies the transport connection a request arrived on, so the
+/// dispatcher can key captured client identity per connection instead of in a
+/// single process-wide slot.
+///
+/// The stdio transport is single-session for the process lifetime, so it uses
+/// the shared `.stdio` key. Each SSE session gets its own key derived from the
+/// per-connection session id. In dual-transport (`.both`) mode both run at
+/// once; without per-connection keying, a later `initialize` on one transport
+/// would overwrite the other's captured identity and mis-attribute the next
+/// destructive tool call's audit entry and rate-limit shard.
+public struct MCPConnectionID: Hashable, Sendable {
+    public let rawValue: String
+
+    public init(_ rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    /// The single stdio session shared by the whole process.
+    public static let stdio = MCPConnectionID("stdio")
+
+    /// A distinct SSE session, namespaced by its session id so it can never
+    /// collide with `.stdio` or another session.
+    public static func sse(_ sessionID: String) -> MCPConnectionID {
+        MCPConnectionID("sse:\(sessionID)")
+    }
+}
+
 /// Optional diagnostic log sink for dispatcher-side events (unexpected
 /// handler errors, etc.). stderr-bound in production; swallowed in tests.
 public typealias MCPDispatcherLog = @Sendable (String) -> Void
