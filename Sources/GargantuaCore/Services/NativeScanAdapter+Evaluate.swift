@@ -17,6 +17,11 @@ extension NativeScanAdapter {
         let processChecker: any RunningProcessChecking
         let availableEcosystems: Set<RuleEcosystem>
         let sizeCache: DirectorySizeCache
+        /// A single wall-clock reference captured once at scan start. Every rule's
+        /// age/mtime filter and safety override resolves against this same instant,
+        /// so a concurrent scan and a serial scan of the same tree classify a
+        /// threshold-edge file identically — evaluation order can't shift "now".
+        let referenceDate: Date
     }
 
     /// Memoizes recursive directory sizes for the span of a single scan.
@@ -114,6 +119,7 @@ extension NativeScanAdapter {
                         fileManager: fileManager,
                         onSizing: onSizing,
                         sizeCache: context.sizeCache,
+                        now: context.referenceDate,
                         into: &out
                     )
                 } else {
@@ -128,7 +134,8 @@ extension NativeScanAdapter {
                         counter: &counter,
                         classifier: context.classifier,
                         profile: context.profile,
-                        sizeCache: context.sizeCache
+                        sizeCache: context.sizeCache,
+                        now: context.referenceDate
                     ) {
                         out.append(result)
                     }
@@ -152,6 +159,7 @@ extension NativeScanAdapter {
         fileManager: FileManager,
         onSizing: @Sendable (String) -> Void,
         sizeCache: DirectorySizeCache,
+        now: Date,
         into out: inout [ScanResult]
     ) {
         let url = URL(fileURLWithPath: path)
@@ -174,7 +182,8 @@ extension NativeScanAdapter {
                 counter: &counter,
                 classifier: classifier,
                 profile: profile,
-                sizeCache: sizeCache
+                sizeCache: sizeCache,
+                now: now
             ) {
                 out.append(result)
             }
@@ -187,7 +196,8 @@ extension NativeScanAdapter {
         counter: inout Int,
         classifier: SafetyClassifier,
         profile: CleanupProfile,
-        sizeCache: DirectorySizeCache = DirectorySizeCache()
+        sizeCache: DirectorySizeCache = DirectorySizeCache(),
+        now: Date = Date()
     ) -> ScanResult? {
         let fileManager = FileManager.default
         let url = URL(fileURLWithPath: path)
@@ -210,7 +220,8 @@ extension NativeScanAdapter {
         guard NativeRuleGuardEvaluator.matchesRuleFilters(
             rule: rule,
             lastAccessed: lastAccessed,
-            modifiedAt: modifiedAt
+            modifiedAt: modifiedAt,
+            now: now
         ),
             !NativeRuleGuardEvaluator.isGuardedCandidate(rule: rule, candidatePath: path) else {
             return nil
@@ -249,7 +260,7 @@ extension NativeScanAdapter {
         )
         counter += 1
 
-        let classified = classifier.classify(result: base, rule: rule, profile: profile)
+        let classified = classifier.classify(result: base, rule: rule, profile: profile, now: now)
         // Record the parent-chain resolution here, at the moment the item is
         // confirmed on disk, not at the pipeline tail. Recording later would
         // capture a symlink swap that happened *during* the scan as if it

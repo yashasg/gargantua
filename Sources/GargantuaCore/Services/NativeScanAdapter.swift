@@ -131,7 +131,6 @@ public struct NativeScanAdapter: ScanAdapter {
         var results: [ScanResult] = []
         var seenPaths: Set<String> = []
         var reclaimableBytes: Int64 = 0
-        let total = max(applicable.count, 1)
 
         // Fire-and-forget sizing updates so the UI ticks per child path during a
         // rule whose `directorySize` walk would otherwise sit silent for seconds.
@@ -156,7 +155,7 @@ public struct NativeScanAdapter: ScanAdapter {
             availableEcosystems: availableEcosystems,
             onSizing: onSizing,
             progress: progress,
-            total: total
+            referenceDate: Date()
         )
 
         for (idx, evaluation) in evaluations.enumerated() {
@@ -199,9 +198,10 @@ public struct NativeScanAdapter: ScanAdapter {
         availableEcosystems: Set<RuleEcosystem>,
         onSizing: @escaping @Sendable (String) -> Void,
         progress: ScanProgress?,
-        total: Int
+        referenceDate: Date
     ) async -> [RuleEvaluation?] {
         let sizeCache = DirectorySizeCache()
+        let total = max(applicable.count, 1)
         let maxConcurrent = max(1, min(applicable.count, ProcessInfo.processInfo.activeProcessorCount))
         var evaluations = [RuleEvaluation?](repeating: nil, count: applicable.count)
 
@@ -218,7 +218,8 @@ public struct NativeScanAdapter: ScanAdapter {
                     scanRoots: scanRoots,
                     processChecker: processChecker,
                     availableEcosystems: availableEcosystems,
-                    sizeCache: sizeCache
+                    sizeCache: sizeCache,
+                    referenceDate: referenceDate
                 )
                 group.addTask {
                     (idx, Self.evaluate(rule: rule, context: context, onSizing: onSizing))

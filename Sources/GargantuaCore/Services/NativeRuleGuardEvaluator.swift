@@ -24,11 +24,12 @@ enum NativeRuleGuardEvaluator {
     static func matchesRuleFilters(
         rule: ScanRule,
         lastAccessed: Date?,
-        modifiedAt: Date?
+        modifiedAt: Date?,
+        now: Date = Date()
     ) -> Bool {
         let evaluator = ConditionEvaluator()
         return rule.matchFilters.allSatisfy {
-            evaluator.evaluate(condition: $0, lastAccessed: lastAccessed, modifiedAt: modifiedAt)
+            evaluator.evaluate(condition: $0, lastAccessed: lastAccessed, modifiedAt: modifiedAt, now: now)
         }
     }
 
