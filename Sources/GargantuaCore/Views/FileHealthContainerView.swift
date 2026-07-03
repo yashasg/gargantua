@@ -1,4 +1,5 @@
 import Foundation
+import GargantuaLicensing
 import SwiftUI
 
 // MARK: - File Health Container View
@@ -19,6 +20,9 @@ public struct FileHealthContainerView: View {
     public let onSuggestClusters: ClusterSuggestionHandler?
 
     @State private var scanCoordinator = FileHealthScanCoordinator()
+    // Non-private: `confirmCleanup` lives in a same-type extension in another
+    // file (FileHealthContainerCleanupFlow) and drives this on a blocked gate.
+    @State var blockedReason: BlockReason?
 
     public init(
         state: FileHealthContainerState,
@@ -94,6 +98,7 @@ public struct FileHealthContainerView: View {
         }
         .onDisappear(perform: cancelActiveScan)
         .animation(.easeOut(duration: 0.15), value: state.showConfirmation)
+        .destructiveActionGate(reason: $blockedReason)
     }
 
     // MARK: - Scan wiring

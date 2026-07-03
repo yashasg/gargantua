@@ -1,3 +1,4 @@
+import GargantuaLicensing
 import OSLog
 import SwiftUI
 
@@ -86,9 +87,19 @@ extension FileHealthContainerView {
         let currentWarnings = state.scanWarnings
         let confirmationMethod = confirmationTier(for: items)
 
-        state.beginCleanup()
+        // Dismiss the confirmation modal synchronously so a double-tap can't
+        // schedule a second cleanup while the async license gate is in flight.
+        state.showConfirmation = false
 
         Task { @MainActor in
+            // License gate fronts the send-to-trash. On blocked, stay on the
+            // results phase and present the Unlock sheet instead.
+            if let reason = await DestructiveActionGate.blockReason() {
+                blockedReason = reason
+                return
+            }
+            state.beginCleanup()
+
             let result = await CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
                 .clean(items, method: .trash)
             do {

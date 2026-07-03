@@ -1,4 +1,3 @@
-import AppKit
 import GargantuaLicensing
 import OSLog
 import SwiftUI
@@ -97,31 +96,7 @@ public struct DeepCleanView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: session.showConfirmation)
-        .sheet(item: $blockedReason) { reason in
-            UnlockGargantuaSheet(
-                reason: reason,
-                onDismiss: { blockedReason = nil },
-                onBuy: {
-                    openBuyURL()
-                    blockedReason = nil
-                },
-                onActivate: { key in await attemptActivate(key: key) }
-            )
-        }
-    }
-
-    private func attemptActivate(key: String) async -> UnlockGargantuaSheet.ActivationOutcome {
-        let result = await LicenseStateModel.shared.activate(key: key)
-        switch result {
-        case .success:
-            return .ok
-        case .failure(let error):
-            return .error(LicenseErrorCopy.message(for: error))
-        }
-    }
-
-    private func openBuyURL() {
-        NSWorkspace.shared.open(LicensePolarConfig.checkoutURL)
+        .destructiveActionGate(reason: $blockedReason)
     }
 
     /// Asymmetric phase transition matching SmartUninstallerView so the
@@ -275,12 +250,9 @@ public struct DeepCleanView: View {
         session.activeTask = Task {
             // License gate fronts every Deep Clean execute. On blocked, sever
             // the cleanup phase and present the Unlock sheet instead.
-            if case .blocked(let reason) = await LicenseGate.shared.canExecuteDestructiveAction() {
-                logger.info("Deep Clean blocked by license gate: \(String(describing: reason))")
-                await MainActor.run {
-                    session.severTether()
-                    blockedReason = reason
-                }
+            if let reason = await DestructiveActionGate.blockReason() {
+                session.severTether()
+                blockedReason = reason
                 return
             }
             let engine = CleanupEngine(privilegedHelper: XPCPrivilegedUninstallHelper())
