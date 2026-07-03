@@ -373,6 +373,37 @@ struct ScheduledScanServiceTests {
         #expect(try persistence.fetchPendingScheduledScanSummary()?.date == Date(timeIntervalSince1970: 201_000))
     }
 
+    @Test("a failure with an empty error description is still treated as a failure")
+    @MainActor
+    func emptyErrorDescriptionStillCountsAsFailure() async throws {
+        let persistence = try PersistenceController(inMemory: true)
+        try persistence.bootstrap()
+        let baseline = Date(timeIntervalSince1970: 0)
+        try persistence.updateSettings { settings in
+            settings.autoScanEnabled = true
+            settings.scheduledScanIntervalRaw = "daily"
+            settings.scheduledScanProfileID = "light"
+            settings.scheduledScanLastRunDate = baseline
+        }
+
+        let result = await ScheduledScanRunner(
+            persistence: persistence,
+            scanner: EmptyMessageThrowingScanner(),
+            notifier: SpyScheduledScanNotifier(),
+            powerStateProvider: FixedScheduledScanPowerStateProvider(isOnBattery: false),
+            now: { Date(timeIntervalSince1970: 200_000) }
+        ).runIfDue()
+
+        guard case .failed = result else {
+            Issue.record("expected failed result")
+            return
+        }
+        // The clock must not advance and the recorded summary must read as a
+        // failure — never misclassified as success on an empty description.
+        #expect(try persistence.fetchSettings().scheduledScanLastRunDate == baseline)
+        #expect(try persistence.fetchPendingScheduledScanSummary()?.errorMessage?.isEmpty == false)
+    }
+
     private func makeResult(id: String, size: Int64, safety: SafetyLevel) -> ScanResult {
         ScanResult(
             id: id,
@@ -425,6 +456,16 @@ private struct StubScheduledScanScanner: ScheduledScanScanning {
 private struct ThrowingScheduledScanScanner: ScheduledScanScanning {
     struct Failure: LocalizedError {
         var errorDescription: String? { "scan failed" }
+    }
+
+    func scan(profile: CleanupProfile, scanRoots: [URL]?) async throws -> [ScanResult] {
+        throw Failure()
+    }
+}
+
+private struct EmptyMessageThrowingScanner: ScheduledScanScanning {
+    struct Failure: LocalizedError {
+        var errorDescription: String? { "" }
     }
 
     func scan(profile: CleanupProfile, scanRoots: [URL]?) async throws -> [ScanResult] {
