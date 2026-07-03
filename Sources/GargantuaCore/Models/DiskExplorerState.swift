@@ -51,6 +51,11 @@ public final class DiskExplorerState {
     ]
     public var items: [DirectoryItem] = []
     public var expandedItems: [String: [DirectoryItem]] = [:]
+    /// Scanned children retained across a collapse so re-expanding a row reuses
+    /// the prior subtree walk instead of paying for another sizing pass. Scoped
+    /// to the current directory — every navigation/refresh clears it alongside
+    /// `expandedItems` via `clearExpansion()`.
+    public var expandedChildrenCache: [String: [DirectoryItem]] = [:]
     public var isLoading: Bool = false
     public var maxSize: Int64 = 1
     public var displayMode: DiskExplorerDisplayMode = .treemap
@@ -86,11 +91,19 @@ public final class DiskExplorerState {
 
     // MARK: - Transitions
 
+    /// Collapse every row and drop the retained subtree cache. Called by every
+    /// entry point that changes which directory is shown, so a re-expand cache
+    /// never bleeds stale children across a navigation or refresh.
+    private func clearExpansion() {
+        expandedItems = [:]
+        expandedChildrenCache = [:]
+    }
+
     public func startScan() {
         pathCache = [:]
         pathStack = [DiskExplorerCrumb(path: NSHomeDirectory(), name: "Home")]
         items = []
-        expandedItems = [:]
+        clearExpansion()
         maxSize = 1
         displayModeIsExplicit = false
         isLoading = true
@@ -101,7 +114,7 @@ public final class DiskExplorerState {
     public func refreshCurrent() {
         pathCache.removeValue(forKey: currentPath)
         items = []
-        expandedItems = [:]
+        clearExpansion()
         maxSize = 1
         displayModeIsExplicit = false
         isLoading = true
@@ -112,7 +125,7 @@ public final class DiskExplorerState {
         pathCache = [:]
         pathStack = [DiskExplorerCrumb(path: NSHomeDirectory(), name: "Home")]
         items = []
-        expandedItems = [:]
+        clearExpansion()
         maxSize = 1
         displayModeIsExplicit = false
         isLoading = true
@@ -122,7 +135,7 @@ public final class DiskExplorerState {
     public func exitToIdle() {
         pathCache = [:]
         items = []
-        expandedItems = [:]
+        clearExpansion()
         maxSize = 1
         displayModeIsExplicit = false
         pathStack = [DiskExplorerCrumb(path: NSHomeDirectory(), name: "Home")]
@@ -142,7 +155,7 @@ public final class DiskExplorerState {
     /// every navigation entry point so the user never sees a scanning flash
     /// when stepping back to a directory we've already mapped.
     public func applyCachedItemsIfPresent() {
-        expandedItems = [:]
+        clearExpansion()
         // Each new directory gets its own auto-promote chance; users who
         // overrode the mode for the previous folder shouldn't have that pick
         // bleed into a sibling that would benefit from focus mode (or vice

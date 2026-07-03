@@ -325,9 +325,14 @@ public struct DiskExplorerView: View {
 
     private func toggleExpand(_ item: DirectoryItem) async {
         if state.expandedItems[item.path] != nil {
+            // Collapse: hide the rows but keep the scanned children cached so a
+            // re-expand doesn't re-walk the subtree.
             state.expandedItems.removeValue(forKey: item.path)
+        } else if let cached = state.expandedChildrenCache[item.path] {
+            state.expandedItems[item.path] = cached
         } else {
             let children = await DirectorySizeScanner.scanChildren(of: item.path)
+            state.expandedChildrenCache[item.path] = children
             state.expandedItems[item.path] = children
         }
     }
