@@ -130,8 +130,6 @@ public struct NativeScanAdapter: ScanAdapter {
 
         var results: [ScanResult] = []
         var seenPaths: Set<String> = []
-        var reclaimableBytes: Int64 = 0
-        let total = max(applicable.count, 1)
 
         // Fire-and-forget sizing updates so the UI ticks per child path during a
         // rule whose `directorySize` walk would otherwise sit silent for seconds.
@@ -145,26 +143,23 @@ public struct NativeScanAdapter: ScanAdapter {
             observerRef?.didEmit(ScanProgressEvent(path: path, outcome: .checked))
         }
 
-        for (idx, rule) in applicable.enumerated() {
-            await progress?.update(
-                fractionCompleted: Double(idx) / Double(total),
-                currentCategory: rule.category,
-                itemsFound: results.count,
-                reclaimableBytes: reclaimableBytes
-            )
+        // Evaluate rules concurrently, then fold results in rule order. Fanning
+        // the independent glob walks across cores turns a serial re-enumeration
+        // of the same roots (once per `**` rule) into a parallel sweep, while
+        // rule-ordered folding keeps cross-rule "first rule wins" dedup — and
+        // every id, size, and safety level — byte-for-byte identical to a serial
+        // scan; only wall-clock changes.
+        let evaluations = await evaluateConcurrently(
+            applicable,
+            availableEcosystems: availableEcosystems,
+            onSizing: onSizing,
+            progress: progress,
+            referenceDate: Date()
+        )
 
-            let context = EvaluationContext(
-                classifier: classifier,
-                profile: profile,
-                expander: expander,
-                scanRoots: scanRoots,
-                processChecker: processChecker,
-                availableEcosystems: availableEcosystems
-            )
-            let evaluation = await Task.detached {
-                Self.evaluate(rule: rule, context: context, onSizing: onSizing)
-            }.value
-
+        for (idx, evaluation) in evaluations.enumerated() {
+            guard let evaluation else { continue }
+            let rule = applicable[idx]
             for warning in evaluation.warnings {
                 await progress?.recordError(warning)
                 observerRef?.didEmit(ScanProgressEvent(
@@ -176,7 +171,6 @@ public struct NativeScanAdapter: ScanAdapter {
             // bytes or trigger a second recycle attempt after the first succeeds.
             for result in evaluation.results where seenPaths.insert(result.path).inserted {
                 results.append(result)
-                reclaimableBytes += result.size
                 observerRef?.didEmit(ScanProgressEvent(
                     path: result.path,
                     outcome: .match,
@@ -188,5 +182,76 @@ public struct NativeScanAdapter: ScanAdapter {
         await progress?.finish(itemsFound: results.count)
         logger.info("NativeScanAdapter: produced \(results.count) items")
         return results
+    }
+
+    /// Evaluate every applicable rule concurrently, returning each rule's
+    /// `RuleEvaluation` slotted at its original index so the caller can fold and
+    /// deduplicate in deterministic rule order.
+    ///
+    /// Concurrency is bounded to the core count; a single `DirectorySizeCache` is
+    /// shared across all rules so a directory resolved by more than one rule is
+    /// sized exactly once.
+    private func evaluateConcurrently(
+        _ applicable: [ScanRule],
+        availableEcosystems: Set<RuleEcosystem>,
+        onSizing: @escaping @Sendable (String) -> Void,
+        progress: ScanProgress?,
+        referenceDate: Date
+    ) async -> [RuleEvaluation?] {
+        let sizeCache = DirectorySizeCache()
+        let total = max(applicable.count, 1)
+        let maxConcurrent = max(1, min(applicable.count, ProcessInfo.processInfo.activeProcessorCount))
+        var evaluations = [RuleEvaluation?](repeating: nil, count: applicable.count)
+
+        await withTaskGroup(of: (Int, RuleEvaluation).self) { group in
+            var next = 0
+            func enqueue() {
+                guard next < applicable.count else { return }
+                let idx = next
+                let rule = applicable[idx]
+                let context = EvaluationContext(
+                    classifier: classifier,
+                    profile: profile,
+                    expander: expander,
+                    scanRoots: scanRoots,
+                    processChecker: processChecker,
+                    availableEcosystems: availableEcosystems,
+                    sizeCache: sizeCache,
+                    referenceDate: referenceDate
+                )
+                group.addTask {
+                    (idx, Self.evaluate(rule: rule, context: context, onSizing: onSizing))
+                }
+                next += 1
+            }
+            for _ in 0 ..< maxConcurrent { enqueue() }
+
+            // A display-only running dedup keeps the "items found" / reclaimable
+            // ticker rising as rules complete. It folds in completion order rather
+            // than rule order, but dedup-by-path is order-independent for the count
+            // and each path's size is rule-independent, so it converges to exactly
+            // the authoritative totals the post-group fold posts at `finish` — the
+            // live number never overshoots or disagrees with the final one.
+            var seenForDisplay: Set<String> = []
+            var displayItems = 0
+            var displayBytes: Int64 = 0
+            var completed = 0
+            while let (idx, evaluation) = await group.next() {
+                evaluations[idx] = evaluation
+                completed += 1
+                for result in evaluation.results where seenForDisplay.insert(result.path).inserted {
+                    displayItems += 1
+                    displayBytes += result.size
+                }
+                await progress?.update(
+                    fractionCompleted: Double(completed) / Double(total),
+                    currentCategory: applicable[idx].category,
+                    itemsFound: displayItems,
+                    reclaimableBytes: displayBytes
+                )
+                enqueue()
+            }
+        }
+        return evaluations
     }
 }

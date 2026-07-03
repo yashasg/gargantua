@@ -16,6 +16,42 @@ extension NativeScanAdapter {
         let scanRoots: [URL]
         let processChecker: any RunningProcessChecking
         let availableEcosystems: Set<RuleEcosystem>
+        let sizeCache: DirectorySizeCache
+        /// A single wall-clock reference captured once at scan start. Every rule's
+        /// age/mtime filter and safety override resolves against this same instant,
+        /// so a concurrent scan and a serial scan of the same tree classify a
+        /// threshold-edge file identically — evaluation order can't shift "now".
+        let referenceDate: Date
+    }
+
+    /// Memoizes recursive directory sizes for the span of a single scan.
+    ///
+    /// Overlapping rules (and, within a rule, two patterns) can resolve to the
+    /// *same* path. Sizing is the expensive part of a match — a full recursive
+    /// walk of that subtree — so pricing it once and serving cached bytes to the
+    /// later consumers removes the double-walk without changing any byte count.
+    ///
+    /// Thread-safe: concurrent rule evaluation shares one instance. The compute
+    /// runs outside the lock so sizing of *different* paths stays parallel; a
+    /// rare race sizes one path twice, but both walks yield the same total, so
+    /// the memoized value is unchanged.
+    final class DirectorySizeCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var sizes: [String: Int64] = [:]
+
+        func size(at path: String, compute: () -> Int64) -> Int64 {
+            lock.lock()
+            if let cached = sizes[path] {
+                lock.unlock()
+                return cached
+            }
+            lock.unlock()
+            let value = compute()
+            lock.lock()
+            sizes[path] = value
+            lock.unlock()
+            return value
+        }
     }
 
     static func evaluate(
@@ -82,6 +118,8 @@ extension NativeScanAdapter {
                         counter: &counter,
                         fileManager: fileManager,
                         onSizing: onSizing,
+                        sizeCache: context.sizeCache,
+                        now: context.referenceDate,
                         into: &out
                     )
                 } else {
@@ -95,7 +133,9 @@ extension NativeScanAdapter {
                         path: path,
                         counter: &counter,
                         classifier: context.classifier,
-                        profile: context.profile
+                        profile: context.profile,
+                        sizeCache: context.sizeCache,
+                        now: context.referenceDate
                     ) {
                         out.append(result)
                     }
@@ -118,6 +158,8 @@ extension NativeScanAdapter {
         counter: inout Int,
         fileManager: FileManager,
         onSizing: @Sendable (String) -> Void,
+        sizeCache: DirectorySizeCache,
+        now: Date,
         into out: inout [ScanResult]
     ) {
         let url = URL(fileURLWithPath: path)
@@ -139,7 +181,9 @@ extension NativeScanAdapter {
                 path: child.path,
                 counter: &counter,
                 classifier: classifier,
-                profile: profile
+                profile: profile,
+                sizeCache: sizeCache,
+                now: now
             ) {
                 out.append(result)
             }
@@ -151,7 +195,9 @@ extension NativeScanAdapter {
         path: String,
         counter: inout Int,
         classifier: SafetyClassifier,
-        profile: CleanupProfile
+        profile: CleanupProfile,
+        sizeCache: DirectorySizeCache = DirectorySizeCache(),
+        now: Date = Date()
     ) -> ScanResult? {
         let fileManager = FileManager.default
         let url = URL(fileURLWithPath: path)
@@ -174,7 +220,8 @@ extension NativeScanAdapter {
         guard NativeRuleGuardEvaluator.matchesRuleFilters(
             rule: rule,
             lastAccessed: lastAccessed,
-            modifiedAt: modifiedAt
+            modifiedAt: modifiedAt,
+            now: now
         ),
             !NativeRuleGuardEvaluator.isGuardedCandidate(rule: rule, candidatePath: path) else {
             return nil
@@ -182,7 +229,11 @@ extension NativeScanAdapter {
 
         let size: Int64
         if isDirectory {
-            size = DirectorySizeScanner.directorySize(at: path).totalSize
+            // Memoize per unique path so overlapping rules that resolve the same
+            // directory don't each re-walk the subtree to size it.
+            size = sizeCache.size(at: path) {
+                DirectorySizeScanner.directorySize(at: path).totalSize
+            }
         } else {
             let attrs = try? fileManager.attributesOfItem(atPath: path)
             size = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
@@ -209,7 +260,7 @@ extension NativeScanAdapter {
         )
         counter += 1
 
-        let classified = classifier.classify(result: base, rule: rule, profile: profile)
+        let classified = classifier.classify(result: base, rule: rule, profile: profile, now: now)
         // Record the parent-chain resolution here, at the moment the item is
         // confirmed on disk, not at the pipeline tail. Recording later would
         // capture a symlink swap that happened *during* the scan as if it
