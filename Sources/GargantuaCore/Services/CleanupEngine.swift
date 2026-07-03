@@ -11,12 +11,24 @@ public struct CleanupItemResult: Sendable {
     public let trashURL: URL?
     /// Error description if the cleanup failed.
     public let error: String?
+    /// Bytes this operation actually reclaimed. Defaults to the scan-time
+    /// `item.size` for a normal success and `0` for a failure, but callers pass
+    /// `0` explicitly when the item was already gone (nothing was freed by us)
+    /// so aggregate accounting doesn't credit space the app never reclaimed.
+    public let bytesFreed: Int64
 
-    public init(item: ScanResult, succeeded: Bool, trashURL: URL? = nil, error: String? = nil) {
+    public init(
+        item: ScanResult,
+        succeeded: Bool,
+        trashURL: URL? = nil,
+        error: String? = nil,
+        bytesFreed: Int64? = nil
+    ) {
         self.item = item
         self.succeeded = succeeded
         self.trashURL = trashURL
         self.error = error
+        self.bytesFreed = bytesFreed ?? (succeeded ? item.size : 0)
     }
 }
 
@@ -38,7 +50,40 @@ public struct CleanupResult: Sendable {
     }
 
     public var totalFreed: Int64 {
-        succeededItems.reduce(Int64(0)) { $0 + $1.item.size }
+        // Count each freed byte once. Two things would otherwise inflate this:
+        // already-gone items (credited via `bytesFreed == 0`, not `item.size`),
+        // and overlapping selections — a Hugging Face whole-repo removal plus a
+        // stale-revision prune of the same repo dir, or a parent dir selected
+        // alongside a child. Collapse identical paths to their largest estimate,
+        // then drop any path nested under another selected path (the ancestor's
+        // removal already reclaimed it).
+        let succeeded = succeededItems
+        guard !succeeded.isEmpty else { return 0 }
+
+        var largestByPath: [String: Int64] = [:]
+        for result in succeeded {
+            let key = Self.normalizedFreedPath(result.item.path)
+            largestByPath[key] = Swift.max(largestByPath[key] ?? 0, result.bytesFreed)
+        }
+
+        let paths = Array(largestByPath.keys)
+        return paths.reduce(Int64(0)) { running, path in
+            let nestedUnderAnother = paths.contains { other in
+                other != path && path.hasPrefix(other + "/")
+            }
+            return nestedUnderAnother ? running : running + (largestByPath[path] ?? 0)
+        }
+    }
+
+    /// Trailing-slash-normalized path used to de-duplicate overlapping freed
+    /// selections. Pure string work — no symlink resolution or disk access, so
+    /// the scan-time path compares identically to itself.
+    private static func normalizedFreedPath(_ path: String) -> String {
+        var normalized = path
+        while normalized.count > 1, normalized.hasSuffix("/") {
+            normalized.removeLast()
+        }
+        return normalized
     }
 
     public var allSucceeded: Bool {
@@ -142,7 +187,7 @@ public final class CleanupEngine: Sendable {
                     observer.didEmit(ScanProgressEvent(
                         path: item.path,
                         outcome: .match,
-                        bytes: item.size
+                        bytes: result.bytesFreed
                     ))
                 } else {
                     observer.didEmit(ScanProgressEvent(
@@ -255,9 +300,11 @@ public final class CleanupEngine: Sendable {
         // Already gone. Apps like browsers wipe and recreate their cache on quit,
         // and a path can vanish between scan and clean, so the directory the scan
         // recorded may no longer exist. The user wanted it gone and it is — count
-        // it as removed instead of reporting a confusing "couldn't be removed".
+        // it as removed instead of reporting a confusing "couldn't be removed",
+        // but credit zero bytes: we didn't reclaim the scan-time size, something
+        // else already did.
         if !fileExists(url.path) {
-            return CleanupItemResult(item: item, succeeded: true)
+            return CleanupItemResult(item: item, succeeded: true, bytesFreed: 0)
         }
 
         if let protectedRoot = protectedRootPolicy.protectionReason(for: url, homeDirectory: homeDirectory) {
@@ -330,9 +377,10 @@ public final class CleanupEngine: Sendable {
                 let trashURL = try await trashMover.moveToTrash(url)
                 return CleanupItemResult(item: item, succeeded: true, trashURL: trashURL)
             } catch {
-                // Vanished mid-attempt (e.g. the app cleared it) — goal met.
+                // Vanished mid-attempt (e.g. the app cleared it) — goal met, but
+                // we reclaimed nothing ourselves, so credit zero bytes.
                 if !fileExists(url.path) {
-                    return CleanupItemResult(item: item, succeeded: true)
+                    return CleanupItemResult(item: item, succeeded: true, bytesFreed: 0)
                 }
                 lastError = error.localizedDescription
                 if attempt < Self.maxRemovalAttempts, isTransientRemovalFailure(lastError) {
@@ -361,7 +409,7 @@ public final class CleanupEngine: Sendable {
                 return CleanupItemResult(item: item, succeeded: true)
             } catch {
                 if !fileExists(pathToRemove.path) {
-                    return CleanupItemResult(item: item, succeeded: true)
+                    return CleanupItemResult(item: item, succeeded: true, bytesFreed: 0)
                 }
                 lastError = error.localizedDescription
                 if attempt < Self.maxRemovalAttempts, isTransientRemovalFailure(lastError) {

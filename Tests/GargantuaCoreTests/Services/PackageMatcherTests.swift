@@ -39,28 +39,23 @@ struct PackageMatcherTests {
         ])
     }
 
-    @Test("matches reverse-DNS two-component prefix")
-    func matchesReverseDNSPrefix() {
-        let xcode = app(bundleID: "com.apple.dt.Xcode", name: "Xcode")
-        // Apple-prefixed packages would be filtered, so use a hypothetical vendor.
-        let vendor = app(bundleID: "com.jetbrains.toolbox", name: "Toolbox")
+    @Test("does not attribute sibling-vendor receipts to the app")
+    func ignoresSharedVendorPrefix() {
+        // Uninstalling Microsoft Word must not pull in Excel/Office receipts
+        // just because they share the `com.microsoft.` vendor prefix — that is
+        // the over-attribution that made bulk-accept trash a sibling app.
+        let word = app(bundleID: "com.microsoft.Word", name: "Microsoft Word")
         let pkgs = [
-            "com.jetbrains.intellij",
-            "com.jetbrains.toolbox",
-            "com.jetbrains.pycharm.cache",
-            "com.example.unrelated",
+            "com.microsoft.word",
+            "com.microsoft.word.helper",
+            "com.microsoft.excel",
+            "com.microsoft.office.licensing",
         ]
 
-        let matched = matcher.matches(packageIDs: pkgs, for: vendor)
+        let matched = matcher.matches(packageIDs: pkgs, for: word)
 
-        #expect(matched == [
-            "com.jetbrains.intellij",
-            "com.jetbrains.toolbox",
-            "com.jetbrains.pycharm.cache",
-        ])
-        // Sanity: Xcode's reverse-DNS prefix is `com.apple.` which is hard-blocked,
-        // so it should never match anything.
-        #expect(matcher.matches(packageIDs: pkgs, for: xcode) == [])
+        // Exact + bundle-prefix only; the vendor siblings are left alone.
+        #expect(matched == ["com.microsoft.word", "com.microsoft.word.helper"])
     }
 
     @Test("does not collapse to com.* when bundle ID is a single component")

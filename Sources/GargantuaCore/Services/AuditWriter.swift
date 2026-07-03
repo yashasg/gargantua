@@ -4,15 +4,19 @@ import os
 /// Appends audit entries to a JSONL log file.
 ///
 /// Each entry is written as a single JSON line to
-/// `~/Library/Logs/Gargantua/audit.json`. Writes are serialized
-/// via `OSAllocatedUnfairLock` to ensure thread safety.
+/// `~/Library/Logs/Gargantua/audit.json`. Appends use an `O_APPEND` file
+/// descriptor so writes are atomic at the kernel level: multiple `AuditWriter`
+/// instances — and separate processes like the app and the MCP server — can
+/// append to the same file without interleaving or clobbering each other. The
+/// in-process lock only orders this instance's own callers.
 public final class AuditWriter: Sendable {
     /// Directory containing the audit log.
     public let logDirectory: URL
     /// Full path to the audit log file.
     public let logFile: URL
 
-    /// Serializes file writes to prevent interleaved output from concurrent callers.
+    /// Orders writes from *this* instance's callers. Cross-instance and
+    /// cross-process safety comes from `O_APPEND`, not this lock.
     private let lock = OSAllocatedUnfairLock()
 
     private static let encoder: JSONEncoder = {
@@ -52,13 +56,26 @@ public final class AuditWriter: Sendable {
                 withIntermediateDirectories: true
             )
 
-            if FileManager.default.fileExists(atPath: logFile.path) {
-                let handle = try FileHandle(forWritingTo: logFile)
-                defer { try? handle.close() }
-                handle.seekToEndOfFile()
-                handle.write(lineData)
-            } else {
-                try lineData.write(to: logFile, options: .atomic)
+            // O_APPEND has the kernel seek to EOF and write as one atomic step,
+            // so a concurrent writer (another instance, or another process) can't
+            // land its bytes between our seek and our write and tear a line.
+            let fd = Darwin.open(logFile.path, O_WRONLY | O_APPEND | O_CREAT, 0o644)
+            guard fd >= 0 else {
+                throw AuditWriteError.openFailed(code: errno)
+            }
+            defer { Darwin.close(fd) }
+
+            try lineData.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) in
+                guard let base = buffer.baseAddress else { return }
+                var offset = 0
+                while offset < buffer.count {
+                    let written = Darwin.write(fd, base + offset, buffer.count - offset)
+                    if written < 0 {
+                        if errno == EINTR { continue }
+                        throw AuditWriteError.writeFailed(code: errno)
+                    }
+                    offset += written
+                }
             }
         }
     }
@@ -221,10 +238,14 @@ public final class AuditWriter: Sendable {
 /// Errors that can occur during audit writing.
 public enum AuditWriteError: Error, LocalizedError {
     case encodingFailed
+    case openFailed(code: Int32)
+    case writeFailed(code: Int32)
 
     public var errorDescription: String? {
         switch self {
         case .encodingFailed: "Failed to encode audit entry as UTF-8"
+        case let .openFailed(code): "Failed to open audit log for appending (errno \(code))"
+        case let .writeFailed(code): "Failed to append to audit log (errno \(code))"
         }
     }
 }

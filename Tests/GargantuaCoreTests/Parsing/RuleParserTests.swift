@@ -177,10 +177,12 @@ struct RuleParserTests {
     @Test("min_size accepts human-readable suffixes")
     func minSizeAcceptsSuffixes() throws {
         let cases: [(String, Int64)] = [
-            ("100MB", 100 * 1024 * 1024),
-            ("100 MB", 100 * 1024 * 1024),
-            ("1.5GB", Int64(1.5 * 1024 * 1024 * 1024)),
-            ("512KB", 512 * 1024),
+            // SI suffixes are 1000-based to match the UI's displayed sizes.
+            ("100MB", 100 * 1000 * 1000),
+            ("100 MB", 100 * 1000 * 1000),
+            ("1.5GB", Int64(1.5 * 1000 * 1000 * 1000)),
+            ("512KB", 512 * 1000),
+            // IEC suffixes stay 1024-based.
             ("2GiB", 2 * 1024 * 1024 * 1024),
             ("1024", 1024),
             ("0", 0),

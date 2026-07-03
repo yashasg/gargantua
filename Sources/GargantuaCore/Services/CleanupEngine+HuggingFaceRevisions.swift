@@ -10,23 +10,33 @@ extension CleanupEngine {
         guard let stale = HuggingFaceCacheInventory.staleRevisions(forRepoAt: URL(fileURLWithPath: item.path)),
               !stale.removablePaths.isEmpty else {
             // Nothing detached anymore (already pruned, or ref moved) — the
-            // user's intent is satisfied.
-            return CleanupItemResult(item: item, succeeded: true)
+            // user's intent is satisfied, but we reclaimed nothing.
+            return CleanupItemResult(item: item, succeeded: true, bytesFreed: 0)
         }
 
         var allSucceeded = true
         var firstError: String?
+        var removedAny = false
         for path in stale.removablePaths {
             let url = URL(fileURLWithPath: path)
             guard fileExists(url.path) else { continue }
             let outcome = method == .delete
                 ? await deleteSingle(url: url, item: item)
                 : await recycleSingle(url: url, item: item)
-            if !outcome.succeeded {
+            if outcome.succeeded {
+                removedAny = true
+            } else {
                 allSucceeded = false
                 firstError = firstError ?? outcome.error
             }
         }
-        return CleanupItemResult(item: item, succeeded: allSucceeded, error: allSucceeded ? nil : firstError)
+        // Credit the scan-time reclaimable estimate only if we actually removed a
+        // detached revision; if every path was already gone, we freed nothing.
+        return CleanupItemResult(
+            item: item,
+            succeeded: allSucceeded,
+            error: allSucceeded ? nil : firstError,
+            bytesFreed: removedAny ? item.size : 0
+        )
     }
 }

@@ -164,6 +164,47 @@ extension AuditWriterTests {
             _ = index // suppress unused warning
         }
     }
+
+    @Test("Separate instances appending the same file don't interleave lines")
+    func concurrentWritesAcrossInstances() async throws {
+        let dir = try makeTempDir()
+        defer { cleanup(dir) }
+
+        // The real hazard: the per-instance lock can't serialize distinct
+        // instances (or processes). Each task gets its own AuditWriter on the
+        // same file; O_APPEND must keep every line whole and accounted for.
+        let count = 60
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for i in 0 ..< count {
+                group.addTask {
+                    let writer = AuditWriter(logDirectory: dir)
+                    let entry = AuditEntry(
+                        tool: "native",
+                        command: "clean",
+                        files: [AuditFile(path: "/tmp/inst\(i).txt", size: Int64(i))],
+                        safetyLevel: .safe,
+                        confirmationMethod: .singleButton,
+                        bytesFreed: Int64(i)
+                    )
+                    try writer.write(entry)
+                }
+            }
+            try await group.waitForAll()
+        }
+
+        let logFile = dir.appendingPathComponent("audit.json")
+        let content = try String(contentsOf: logFile, encoding: .utf8)
+        let lines = content.split(separator: "\n").filter { !$0.isEmpty }
+        #expect(lines.count == count, "Expected \(count) whole lines, got \(lines.count)")
+
+        // No line was torn: every one decodes cleanly.
+        for line in lines {
+            #expect(throws: Never.self) {
+                _ = try JSONDecoder.auditDecoder.decode(AuditEntry.self, from: Data(line.utf8))
+            }
+        }
+    }
 }
 
 // MARK: - JSONDecoder helper for tests

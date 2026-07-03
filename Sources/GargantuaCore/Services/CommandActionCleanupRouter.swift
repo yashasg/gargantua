@@ -28,7 +28,10 @@ public struct CommandActionCleanupRouter: Sendable {
         rules: [CommandActionRule],
         executor: any CommandActionExecuting = CommandActionExecutor()
     ) {
-        self.ruleIndex = Dictionary(uniqueKeysWithValues: rules.map { ($0.id, $0) })
+        // Dedup rather than trap: a duplicate rule id across bundled command
+        // files is bad data, not a reason to crash the whole launch path. First
+        // definition wins, deterministically by input order.
+        self.ruleIndex = Dictionary(rules.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         self.executor = executor
     }
 

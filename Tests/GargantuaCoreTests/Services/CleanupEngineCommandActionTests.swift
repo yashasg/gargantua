@@ -100,6 +100,36 @@ struct CleanupEngineCommandActionTests {
         #expect(item?.error?.contains("boom") == true)
     }
 
+    @Test("Duplicate rule ids are deduped at load instead of trapping")
+    @MainActor
+    func duplicateRuleIDsAreDeduped() async {
+        // A duplicate rule id across bundled command files is bad data, not a
+        // crash: building the router must not trap, and the first definition wins.
+        let first = sampleRule()
+        let shadow = CommandActionRule(
+            id: "sample",
+            name: "Shadow",
+            tool: "npm",
+            arguments: ["cache", "clean"],
+            safety: .safe,
+            confidence: 90,
+            explanation: "Colliding id from a second bundled file.",
+            category: "developer_tool_command",
+            affectedRoots: ["~/Library/other"],
+            source: SourceAttribution(name: "npm")
+        )
+        let stub = StubExecutor()
+        let router = CommandActionCleanupRouter(rules: [first, shadow], executor: stub)
+        let engine = CleanupEngine(
+            homeDirectoryForTesting: FileManager.default.homeDirectoryForCurrentUser,
+            commandActionRunner: router
+        )
+
+        let result = await engine.clean([commandScanResult()], method: .trash)
+        #expect(result.allSucceeded)
+        #expect(stub.executedRules == ["sample"])
+    }
+
     @Test("Unknown rule ID surfaces as a clear per-item error")
     @MainActor
     func unknownRuleProducesItemError() async {

@@ -398,17 +398,22 @@ private extension Node.Mapping {
 
 /// Parses byte-count strings like "100MB", "1.5 GiB", "512KB" into Int64 bytes.
 ///
-/// Bare suffixes (`MB`) and IEC suffixes (`MiB`) both use 1024^n to match how
-/// macOS Finder typically displays sizes. Returns `nil` for nonsense input,
-/// negative values, NaN/infinity, or values that overflow `Int64`.
+/// SI suffixes (`KB`, `MB`, `GB`, `TB` and their bare forms) use 1000^n; IEC
+/// suffixes (`KiB`, `MiB`, …) use 1024^n. This matches how the app displays
+/// sizes — `ByteCountFormatter` with `.file`, which is 1000-based on modern
+/// macOS — so `min_size: "100MB"` filters at 100,000,000, the same figure the
+/// UI labels "100 MB", instead of silently dropping items shown as 103 MB.
+/// Returns `nil` for nonsense input, negative values, NaN/infinity, or values
+/// that overflow `Int64`.
 enum SizeStringParser {
-    /// Multipliers for known byte-count unit suffixes (uppercased).
+    /// Multipliers for known byte-count unit suffixes (uppercased). SI units are
+    /// powers of 1000; IEC (`*IB`) units are powers of 1024.
     private static let multipliers: [String: Int64] = [
         "": 1, "B": 1,
-        "K": 1024, "KB": 1024, "KIB": 1024,
-        "M": 1024 * 1024, "MB": 1024 * 1024, "MIB": 1024 * 1024,
-        "G": 1024 * 1024 * 1024, "GB": 1024 * 1024 * 1024, "GIB": 1024 * 1024 * 1024,
-        "T": 1024 * 1024 * 1024 * 1024, "TB": 1024 * 1024 * 1024 * 1024, "TIB": 1024 * 1024 * 1024 * 1024,
+        "K": 1000, "KB": 1000, "KIB": 1024,
+        "M": 1000 * 1000, "MB": 1000 * 1000, "MIB": 1024 * 1024,
+        "G": 1000 * 1000 * 1000, "GB": 1000 * 1000 * 1000, "GIB": 1024 * 1024 * 1024,
+        "T": 1000 * 1000 * 1000 * 1000, "TB": 1000 * 1000 * 1000 * 1000, "TIB": 1024 * 1024 * 1024 * 1024,
     ]
 
     static func parse(_ raw: String) -> Int64? {
