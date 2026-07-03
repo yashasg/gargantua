@@ -3,10 +3,13 @@ import Testing
 @testable import GargantuaCore
 
 /// Cross-app shared-receipt cases: one installer drops files used by multiple
-/// still-installed apps (Adobe Creative Cloud, MS Office shapes). Receipts are
-/// evidence, not permission — receipt-derived items must classify as `.review`
-/// or `.protected_` regardless of ownership claim, and provenance must point
-/// at the *receipt's* package ID, not the uninstall target's bundle ID.
+/// still-installed apps (Adobe Creative Cloud, MS Office shapes). A receipt is
+/// attributed to the uninstall target only when it is the target's *own*
+/// receipt (exact bundle id or a dotted-child subpackage) — never on a shared
+/// reverse-DNS vendor prefix, which would misattribute a sibling app's or a
+/// shared installer's files to the target and let bulk-accept trash them.
+/// Genuinely-owned receipt items still classify as `.review`/`.protected_`
+/// (never `.safe`), with provenance pinned to the receipt's package ID.
 @Suite("Cross-app shared-receipt evidence")
 struct CrossAppSharedReceiptTests {
 
@@ -108,19 +111,26 @@ struct CrossAppSharedReceiptTests {
 
     // MARK: - Adobe Creative Cloud shape
 
-    @Test("Adobe shape: shared user-library path classifies as .review across sibling apps")
-    func adobeSharedSupportPathStaysReview() throws {
+    @Test("Adobe shape: a shared-installer receipt is not attributed to the uninstall target")
+    func adobeSharedInstallerReceiptNotAttributed() throws {
         let fixture = try Fixture()
-        // Adobe Creative Cloud drops a shared support file that both Photoshop
-        // and Illustrator depend on. The user is uninstalling Photoshop, but
-        // the file is owned (per receipt) by `com.adobe.acc.installer`.
+        // Adobe Creative Cloud's shared installer (`com.adobe.acc.installer`)
+        // drops a support file used across Adobe apps. The user is uninstalling
+        // Photoshop, whose own receipt owns its own settings. The shared
+        // installer's file must NOT be pulled in as a Photoshop remnant just
+        // because it shares the `com.adobe.` vendor prefix — that misattribution
+        // is what let bulk-accept trash files another Adobe app still needs.
+        let ownedFile = try fixture.makeFile(
+            "Library/Application Support/Adobe/Adobe Photoshop 2024/settings.dat",
+            contents: "photoshop"
+        )
         let sharedFile = try fixture.makeFile(
             "Library/Application Support/Adobe/AdobeApplicationManager/shared.bin",
             contents: "shared adobe state"
         )
 
         let runner = Self.stubRunner([
-            PkgStub(id: "com.adobe.Photoshop", version: "25.0.0", paths: []),
+            PkgStub(id: "com.adobe.Photoshop", version: "25.0.0", paths: [ownedFile.path]),
             PkgStub(id: "com.adobe.acc.installer", version: "5.10", paths: [sharedFile.path]),
         ])
         let plan = Self.scanner(runner: runner).plan(
@@ -128,15 +138,14 @@ struct CrossAppSharedReceiptTests {
             includeAppBundle: false
         )
 
-        let item = try #require(plan.remnants.first { $0.path == sharedFile.path })
-        // Trust Layer: receipt-derived shared paths are NEVER `.safe`. Default
-        // is `.review` regardless of ownership claim. Provenance points at the
-        // receipt's package id (the shared installer) — not Photoshop's bundle
-        // id — so the user can see this came from the shared installer.
-        #expect(item.safety == .review)
-        #expect(item.ruleID == "pkgutil-bom:com.adobe.acc.installer")
-        #expect(item.explanation.contains("com.adobe.acc.installer"))
-        #expect(item.tags.contains("pkgutil-bom"))
+        // Photoshop's own receipt file still surfaces as `.review` evidence,
+        // with provenance pinned to Photoshop's own package id...
+        let owned = try #require(plan.remnants.first { $0.path == ownedFile.path })
+        #expect(owned.safety == .review)
+        #expect(owned.ruleID == "pkgutil-bom:com.adobe.Photoshop")
+        #expect(owned.tags.contains("pkgutil-bom"))
+        // ...but the shared installer's file is never attributed to Photoshop.
+        #expect(plan.remnants.contains { $0.path == sharedFile.path } == false)
     }
 
     @Test("Adobe shape: same path listed in two sibling receipts dedupes to a single row")
@@ -163,14 +172,13 @@ struct CrossAppSharedReceiptTests {
         #expect(hits.first?.ruleID == "pkgutil-bom:com.adobe.Photoshop")
     }
 
-    @Test("Adobe shape: reverse-DNS over-match surfaces sibling-app files but never as .safe")
-    func adobeReverseDNSOverMatchStaysReview() throws {
+    @Test("Adobe shape: a sibling app's receipt is not attributed to the uninstall target")
+    func adobeSiblingAppReceiptNotAttributed() throws {
         let fixture = try Fixture()
-        // `com.adobe.illustrator` is the only receipt and ships its own owned
-        // file. Photoshop's bundle id shares the `com.adobe.` reverse-DNS
-        // prefix, so the matcher pulls in this sibling receipt. Trust Layer
-        // must keep the row at `.review` and pin provenance to the *real*
-        // owning pkgID — making the cross-app source visible.
+        // Illustrator is a still-installed sibling. Its receipt shares
+        // Photoshop's `com.adobe.` vendor prefix but owns Illustrator's own
+        // files. Uninstalling Photoshop must not surface — and so must not let
+        // bulk-accept trash — a sibling app's files.
         let illustratorFile = try fixture.makeFile(
             "Library/Application Support/Adobe/Illustrator 2024/illustrator.dat",
             contents: "illustrator"
@@ -184,10 +192,7 @@ struct CrossAppSharedReceiptTests {
             includeAppBundle: false
         )
 
-        let item = try #require(plan.remnants.first { $0.path == illustratorFile.path })
-        #expect(item.safety == .review)
-        #expect(item.ruleID == "pkgutil-bom:com.adobe.illustrator")
-        #expect(item.explanation.contains("com.adobe.illustrator"))
+        #expect(plan.remnants.contains { $0.path == illustratorFile.path } == false)
     }
 
     // MARK: - MS Office shape
@@ -223,11 +228,13 @@ struct CrossAppSharedReceiptTests {
         }
     }
 
-    @Test("MS Office shape: shared user-library path classifies as .review across sibling apps")
-    func msOfficeSharedFontCacheStaysReview() throws {
+    @Test("MS Office shape: the shared licensing receipt is not attributed to the uninstall target")
+    func msOfficeSharedLicensingReceiptNotAttributed() throws {
         let fixture = try Fixture()
-        // Shared Office font cache used by Word, Excel, PowerPoint. User is
-        // uninstalling Word; the cache is owned by the licensing receipt.
+        // The Office licensing receipt owns a font cache shared by Word, Excel,
+        // and PowerPoint. Uninstalling Word must not surface it as a Word
+        // remnant — this is the bean's exact example of the over-attribution
+        // that endangered still-installed sibling apps.
         let sharedCache = try fixture.makeFile(
             "Library/Group Containers/UBF8T346G9.Office/FontCache.dat",
             contents: "font cache"
@@ -242,10 +249,7 @@ struct CrossAppSharedReceiptTests {
             includeAppBundle: false
         )
 
-        let item = try #require(plan.remnants.first { $0.path == sharedCache.path })
-        #expect(item.safety == .review)
-        #expect(item.ruleID == "pkgutil-bom:com.microsoft.office.licensing")
-        #expect(item.explanation.contains("com.microsoft.office.licensing"))
+        #expect(plan.remnants.contains { $0.path == sharedCache.path } == false)
     }
 
     // MARK: - YAML rule precedence over receipt for shared paths
