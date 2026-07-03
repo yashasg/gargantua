@@ -291,10 +291,15 @@ public struct PathExpander: Sendable {
             if values?.isSymbolicLink == true {
                 continue
             }
+            // Default an unreadable/racing entry to "directory" so the recursive
+            // walk still descends it, exactly as the pre-prefetch code did. Files
+            // are the only thing the descent skip drops, and descending a
+            // non-directory is a cheap dead end — so `?? true` keeps the file-skip
+            // strictly parity-preserving even under a TOCTOU delete.
             out.append(ChildEntry(
                 path: child.path,
                 name: child.lastPathComponent,
-                isDirectory: values?.isDirectory ?? false
+                isDirectory: values?.isDirectory ?? true
             ))
         }
         return out

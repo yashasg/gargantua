@@ -227,19 +227,28 @@ public struct NativeScanAdapter: ScanAdapter {
             }
             for _ in 0 ..< maxConcurrent { enqueue() }
 
+            // A display-only running dedup keeps the "items found" / reclaimable
+            // ticker rising as rules complete. It folds in completion order rather
+            // than rule order, but dedup-by-path is order-independent for the count
+            // and each path's size is rule-independent, so it converges to exactly
+            // the authoritative totals the post-group fold posts at `finish` — the
+            // live number never overshoots or disagrees with the final one.
+            var seenForDisplay: Set<String> = []
+            var displayItems = 0
+            var displayBytes: Int64 = 0
             var completed = 0
             while let (idx, evaluation) = await group.next() {
                 evaluations[idx] = evaluation
                 completed += 1
-                // Dedup/accumulate happens after the group, so the deduped item
-                // count and byte total aren't known mid-scan — advance the bar via
-                // `fractionCompleted` (and the live `currentPath` from `onSizing`)
-                // and let `finish` post the authoritative totals.
+                for result in evaluation.results where seenForDisplay.insert(result.path).inserted {
+                    displayItems += 1
+                    displayBytes += result.size
+                }
                 await progress?.update(
                     fractionCompleted: Double(completed) / Double(total),
                     currentCategory: applicable[idx].category,
-                    itemsFound: 0,
-                    reclaimableBytes: 0
+                    itemsFound: displayItems,
+                    reclaimableBytes: displayBytes
                 )
                 enqueue()
             }
