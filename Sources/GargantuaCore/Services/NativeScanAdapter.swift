@@ -136,9 +136,17 @@ public struct NativeScanAdapter: ScanAdapter {
         // The same callback also feeds path-level events to the EventHorizon
         // console when an observer is attached.
         let observerRef = observer
+        // `noteSizing` only ever shows the latest path, so a per-path main-actor
+        // Task is pure churn during a deep `directorySize` walk. Coalesce to at
+        // most one hop per runloop tick, always publishing the newest path.
+        let sizingLatch = SizingLatch()
         let onSizing: @Sendable (String) -> Void = { path in
-            Task { @MainActor [weak progress] in
-                progress?.noteSizing(path: path)
+            if sizingLatch.stage(path) {
+                Task { @MainActor [weak progress] in
+                    if let latest = sizingLatch.takeLatest() {
+                        progress?.noteSizing(path: latest)
+                    }
+                }
             }
             observerRef?.didEmit(ScanProgressEvent(path: path, outcome: .checked))
         }
@@ -253,5 +261,33 @@ public struct NativeScanAdapter: ScanAdapter {
             }
         }
         return evaluations
+    }
+}
+
+/// Coalesces a burst of sizing-path pings into at most one main-actor hop per
+/// runloop tick. Only the newest path matters (it overwrites `currentPath`), so
+/// intermediate values are dropped rather than each scheduling its own `Task`.
+private final class SizingLatch: @unchecked Sendable {
+    private let lock = NSLock()
+    private var latest: String?
+    private var scheduled = false
+
+    /// Records `path` as the newest; returns `true` when the caller should
+    /// schedule a flush (none is pending), `false` otherwise.
+    func stage(_ path: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        latest = path
+        if scheduled { return false }
+        scheduled = true
+        return true
+    }
+
+    /// Returns the newest staged path and re-arms the scheduler.
+    func takeLatest() -> String? {
+        lock.lock(); defer { lock.unlock() }
+        scheduled = false
+        let value = latest
+        latest = nil
+        return value
     }
 }
