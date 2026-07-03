@@ -97,7 +97,8 @@ public struct ScheduledScanConfiguration: Equatable, Sendable {
     public func isDue(
         now: Date,
         calendar: Calendar = .current,
-        customScheduleLookbackSeconds: TimeInterval = TimeInterval(ScheduledScanLaunchAgentConfiguration.checkIntervalSeconds)
+        customScheduleLookbackSeconds: TimeInterval = TimeInterval(ScheduledScanLaunchAgentConfiguration.checkIntervalSeconds),
+        customScheduleMaxCatchUpSeconds: TimeInterval = ScheduledScanCronExpression.defaultMaxCatchUpSeconds
     ) -> Bool {
         guard isEnabled else { return false }
 
@@ -114,6 +115,7 @@ public struct ScheduledScanConfiguration: Equatable, Sendable {
                 now: now,
                 lastRunDate: lastRunDate,
                 lookbackSeconds: customScheduleLookbackSeconds,
+                maxCatchUpSeconds: customScheduleMaxCatchUpSeconds,
                 calendar: calendar
             )
         }
@@ -127,6 +129,12 @@ public struct ScheduledScanConfiguration: Equatable, Sendable {
 
 /// Minimal five-field cron-like expression used by scheduled scans.
 public struct ScheduledScanCronExpression: Equatable, Sendable {
+    /// Upper bound on how far `matchesSinceLastRun` walks back from the last
+    /// run when catching up occurrences missed while the Mac slept. Wide
+    /// enough to cover a monthly schedule and a multi-week sleep, yet bounded
+    /// so a never-matching expression can't walk indefinitely each poll.
+    public static let defaultMaxCatchUpSeconds: TimeInterval = 31 * 86_400
+
     private let minute: Int?
     private let hour: Int?
     private let dayOfMonth: Int?
@@ -169,15 +177,24 @@ public struct ScheduledScanCronExpression: Equatable, Sendable {
         now: Date,
         lastRunDate: Date?,
         lookbackSeconds: TimeInterval,
+        maxCatchUpSeconds: TimeInterval = defaultMaxCatchUpSeconds,
         calendar: Calendar = .current
     ) -> Bool {
         let nowMinute = calendar.dateInterval(of: .minute, for: now)?.start ?? now
-        let lookbackStart = nowMinute.addingTimeInterval(-max(lookbackSeconds, 60))
         let earliestStart: Date
         if let lastRunDate {
-            earliestStart = max(lastRunDate.addingTimeInterval(60), lookbackStart)
+            // Anchor the search at the last run, not the recent poll window:
+            // when the Mac sleeps across a scheduled minute, launchd coalesces
+            // the wake and fires the check well past its `lookbackSeconds`
+            // interval, so a fixed lookback would step over the missed minute.
+            // Bounded by `maxCatchUpSeconds` so a rarely-matching expression
+            // can't walk unboundedly far back on every poll.
+            let catchUpFloor = nowMinute.addingTimeInterval(-max(maxCatchUpSeconds, 60))
+            earliestStart = max(lastRunDate.addingTimeInterval(60), catchUpFloor)
         } else {
-            earliestStart = lookbackStart
+            // Never run before: only consider the recent poll window so a
+            // freshly-enabled schedule doesn't back-fire for past occurrences.
+            earliestStart = nowMinute.addingTimeInterval(-max(lookbackSeconds, 60))
         }
 
         var cursor = calendar.dateInterval(of: .minute, for: earliestStart)?.start ?? earliestStart

@@ -259,6 +259,78 @@ struct ScheduledScanServiceTests {
         #expect(hook.summaries == [summary])
     }
 
+    @Test("custom schedule still fires after the Mac sleeps across the scheduled minute")
+    func customScheduleSurvivesLongSleep() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        func at(day: Int, hour: Int, minute: Int) throws -> Date {
+            try #require(calendar.date(from: DateComponents(
+                timeZone: calendar.timeZone,
+                year: 2026, month: 4, day: day, hour: hour, minute: minute
+            )))
+        }
+
+        // Ran yesterday at 09:00. Today the Mac woke at 09:30 — 30 min past the
+        // 900s poll interval — so launchd's coalesced fire is the only check
+        // covering today's 09:00 occurrence. It must still be due.
+        let lastRun = try at(day: 26, hour: 9, minute: 0)
+        let wokeLate = try at(day: 27, hour: 9, minute: 30)
+        #expect(ScheduledScanConfiguration(
+            isEnabled: true,
+            interval: .custom,
+            customSchedule: "0 9 * * *",
+            lastRunDate: lastRun
+        ).isDue(now: wokeLate, calendar: calendar, customScheduleLookbackSeconds: 900))
+
+        // Once today's run is recorded, the next poll must not re-fire it.
+        let ranToday = try at(day: 27, hour: 9, minute: 30)
+        #expect(!ScheduledScanConfiguration(
+            isEnabled: true,
+            interval: .custom,
+            customSchedule: "0 9 * * *",
+            lastRunDate: ranToday
+        ).isDue(now: try at(day: 27, hour: 9, minute: 45), calendar: calendar, customScheduleLookbackSeconds: 900))
+    }
+
+    @Test("failed scheduled summary records the error without advancing the schedule clock")
+    @MainActor
+    func failedSummaryDoesNotAdvanceLastRun() throws {
+        let persistence = try PersistenceController(inMemory: true)
+        try persistence.bootstrap()
+        let baseline = Date(timeIntervalSince1970: 0)
+        try persistence.updateSettings { settings in
+            settings.scheduledScanLastRunDate = baseline
+            settings.lastScanDate = baseline
+        }
+
+        let failure = ScheduledScanSummary(
+            date: Date(timeIntervalSince1970: 200_000),
+            profileID: "light",
+            itemCount: 0,
+            reclaimableBytes: 0,
+            errorMessage: "disk unavailable"
+        )
+        try persistence.recordScheduledScanSummary(failure)
+
+        let afterFailure = try persistence.fetchSettings()
+        #expect(afterFailure.scheduledScanLastRunDate == baseline)
+        #expect(afterFailure.lastScanDate == baseline)
+        // The failure is still surfaced to the dashboard / notification.
+        #expect(try persistence.fetchPendingScheduledScanSummary() == failure)
+
+        // A subsequent successful run does advance the clock.
+        let success = ScheduledScanSummary(
+            date: Date(timeIntervalSince1970: 300_000),
+            profileID: "light",
+            itemCount: 3,
+            reclaimableBytes: 4_096
+        )
+        try persistence.recordScheduledScanSummary(success)
+        let afterSuccess = try persistence.fetchSettings()
+        #expect(afterSuccess.scheduledScanLastRunDate == success.date)
+        #expect(afterSuccess.lastScanDate == success.date)
+    }
+
     private func makeResult(id: String, size: Int64, safety: SafetyLevel) -> ScanResult {
         ScanResult(
             id: id,
