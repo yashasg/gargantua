@@ -72,12 +72,9 @@ public struct DefaultBackgroundItemScanner: BackgroundItemScanning {
     }
 
     public func scan() -> BackgroundItemScan {
-        // The default resolver caches per binary path across resolve() calls
-        // and is held as a stored property; without an explicit clear, a
-        // replaced binary at the same path could keep its prior trusted
-        // identity across rescans and silently reclassify as `safe`.
-        resolver.clearCache()
-
+        // The resolver caches by binary path + mtime, so a binary replaced at
+        // the same path re-resolves on its own — no per-pass clear needed for a
+        // replaced binary to lose its prior (possibly `safe`) classification.
         let launchdItems = launchdIndex.enumerate()
         var items: [BackgroundItem] = []
         var unparseable = 0

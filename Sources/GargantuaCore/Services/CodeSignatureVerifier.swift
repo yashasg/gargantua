@@ -83,6 +83,19 @@ public protocol DetailedCodeSignatureVerifying: CodeSignatureVerifying {
 public struct DefaultCodeSignatureVerifier: DetailedCodeSignatureVerifying {
     private let includeNotarization: Bool
 
+    /// Validation flags for every `SecStaticCodeCheckValidity` call.
+    ///
+    /// `kSecCSDoNotValidateResources` skips the full resource-envelope hashing
+    /// of the bundle — the multi-minute "Verifying Xcode…" stall on large
+    /// bundles — while still validating the CodeDirectory, the main
+    /// executable's page hashes, the certificate chain, and any embedded
+    /// requirement passed in (the `anchor apple` / `notarized` checks). Team ID
+    /// and signing identity come from `SecCodeCopySigningInformation`, which
+    /// needs no validation at all, so identity survives unchanged. The accepted
+    /// trade-off: tampering confined to a sealed *resource* (not the executable
+    /// or signature) is no longer surfaced as an invalid signature.
+    private static let validationFlags = SecCSFlags(rawValue: kSecCSDoNotValidateResources)
+
     public init(includeNotarization: Bool = true) {
         self.includeNotarization = includeNotarization
     }
@@ -90,7 +103,7 @@ public struct DefaultCodeSignatureVerifier: DetailedCodeSignatureVerifying {
     public func verify(bundleURL: URL) -> CodeSignatureInfo {
         guard let code = staticCode(for: bundleURL) else { return .unknown }
 
-        let valid = SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: 0), nil) == errSecSuccess
+        let valid = SecStaticCodeCheckValidity(code, Self.validationFlags, nil) == errSecSuccess
         let teamID = signingDictionary(for: code)?[kSecCodeInfoTeamIdentifier as String] as? String
         return CodeSignatureInfo(valid: valid, teamIdentifier: teamID)
     }
@@ -98,7 +111,7 @@ public struct DefaultCodeSignatureVerifier: DetailedCodeSignatureVerifying {
     public func verifyDetails(bundleURL: URL) -> CodeSignatureDetails {
         guard let code = staticCode(for: bundleURL) else { return .unknown }
 
-        let valid = SecStaticCodeCheckValidity(code, SecCSFlags(rawValue: 0), nil) == errSecSuccess
+        let valid = SecStaticCodeCheckValidity(code, Self.validationFlags, nil) == errSecSuccess
         let info = signingDictionary(for: code)
         let teamID = info?[kSecCodeInfoTeamIdentifier as String] as? String
 
@@ -174,7 +187,7 @@ public struct DefaultCodeSignatureVerifier: DetailedCodeSignatureVerifying {
         guard createStatus == errSecSuccess, let requirement = req else { return nil }
         let status = SecStaticCodeCheckValidity(
             code,
-            SecCSFlags(rawValue: 0),
+            Self.validationFlags,
             requirement
         )
         return status == errSecSuccess

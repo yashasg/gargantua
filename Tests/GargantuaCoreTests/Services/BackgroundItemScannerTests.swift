@@ -182,8 +182,11 @@ struct BackgroundItemScannerTests {
         #expect(ids.count == 2)
     }
 
-    @Test("Resolver clearCache is invoked at the start of every scan")
-    func resolverCacheCleared() {
+    @Test("Scanner keeps the resolver cache warm across passes (no per-pass clear)")
+    func resolverCacheNotClearedPerPass() {
+        // The resolver self-invalidates by path + mtime, so the scanner no
+        // longer wipes it each pass — a replaced binary at the same path
+        // re-resolves via its changed mtime instead of a blanket clear.
         final class CountingResolver: BinaryIdentityResolving, @unchecked Sendable {
             var clearCount = 0
             func resolve(binaryPath: String) -> BinaryIdentity {
@@ -204,7 +207,7 @@ struct BackgroundItemScannerTests {
         )
         _ = scanner.scan()
         _ = scanner.scan()
-        #expect(counting.clearCount == 2)
+        #expect(counting.clearCount == 0)
     }
 
     @Test("ID is stable across rescans for the same source/label/path")

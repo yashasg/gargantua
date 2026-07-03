@@ -325,4 +325,95 @@ struct BinaryIdentityResolverCachingTests {
 
         #expect(verifier.detailsCallCount[path] == 2)
     }
+
+    @Test("Unchanged mtime reuses the cached identity across passes")
+    func stableMtimeHitsCacheWithoutClear() {
+        let path = "/Applications/Foo.app"
+        let verifier = signedVerifier(for: path)
+        let resolver = DefaultBinaryIdentityResolver(
+            bundleReader: StubBundleReader(metadata: [:]),
+            signatureVerifier: verifier,
+            registry: .default,
+            modificationDate: { _ in Date(timeIntervalSince1970: 1_000) }
+        )
+
+        // Three passes, no clearCache() — the mtime is stable so the signature
+        // is evaluated exactly once. This is the per-keystroke search win.
+        _ = resolver.resolve(binaryPath: path + "/Contents/MacOS/Foo")
+        _ = resolver.resolve(binaryPath: path + "/Contents/MacOS/Foo")
+        _ = resolver.resolve(binaryPath: path + "/Contents/MacOS/Foo")
+
+        #expect(verifier.detailsCallCount[path] == 1)
+    }
+
+    @Test("Changed mtime invalidates the cache and re-resolves")
+    func changedMtimeReEvaluates() {
+        let path = "/Applications/Foo.app"
+        let verifier = signedVerifier(for: path)
+        let mtimes = MTimeSequence([
+            Date(timeIntervalSince1970: 1_000),
+            Date(timeIntervalSince1970: 2_000),
+        ])
+        let resolver = DefaultBinaryIdentityResolver(
+            bundleReader: StubBundleReader(metadata: [:]),
+            signatureVerifier: verifier,
+            registry: .default,
+            modificationDate: { mtimes.next($0) }
+        )
+
+        // A binary swapped in at the same path (new mtime) must re-resolve even
+        // though nothing called clearCache().
+        _ = resolver.resolve(binaryPath: path + "/Contents/MacOS/Foo")
+        _ = resolver.resolve(binaryPath: path + "/Contents/MacOS/Foo")
+
+        #expect(verifier.detailsCallCount[path] == 2)
+    }
+
+    @Test("Missing binary (nil mtime) stays cached")
+    func nilMtimeStaysCached() {
+        let path = "/Applications/Gone.app"
+        let verifier = signedVerifier(for: path)
+        let resolver = DefaultBinaryIdentityResolver(
+            bundleReader: StubBundleReader(metadata: [:]),
+            signatureVerifier: verifier,
+            registry: .default,
+            modificationDate: { _ in nil }
+        )
+
+        _ = resolver.resolve(binaryPath: path + "/Contents/MacOS/Gone")
+        _ = resolver.resolve(binaryPath: path + "/Contents/MacOS/Gone")
+
+        #expect(verifier.detailsCallCount[path] == 1)
+    }
+
+    private func signedVerifier(for path: String) -> StubDetailedVerifier {
+        StubDetailedVerifier(details: [
+            path: CodeSignatureDetails(
+                valid: true,
+                teamIdentifier: "TEAM1",
+                signingIdentity: nil,
+                isNotarized: true,
+                isAppleAnchor: false,
+                isAppleGenericAnchor: true
+            ),
+        ])
+    }
+}
+
+/// Hands out a scripted sequence of modification dates, one per `next(_:)`
+/// call, clamping to the last element so an over-long test can't trap.
+private final class MTimeSequence: @unchecked Sendable {
+    private let lock = NSLock()
+    private let dates: [Date?]
+    private var index = 0
+
+    init(_ dates: [Date?]) { self.dates = dates }
+
+    func next(_: String) -> Date? {
+        lock.lock()
+        defer { lock.unlock() }
+        let date = dates[min(index, dates.count - 1)]
+        index += 1
+        return date
+    }
 }
