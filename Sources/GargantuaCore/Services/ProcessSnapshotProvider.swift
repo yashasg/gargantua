@@ -69,6 +69,12 @@ public protocol ProcessSnapshotProviding: Sendable {
 public struct DefaultProcessSnapshotProvider: ProcessSnapshotProviding {
     private let now: @Sendable () -> Date
     private let userNameForUID: @Sendable (UInt32) -> String?
+    /// Host Mach timebase. `proc_taskinfo` reports CPU time in Mach absolute
+    /// ticks, not nanoseconds — ticks must be scaled by numer/denom to read as
+    /// ns. Intel reports 1/1 (a no-op); Apple Silicon reports 125/3 (~41.7×).
+    /// Captured once at construction since the timebase is fixed per boot.
+    private let timebaseNumer: UInt32
+    private let timebaseDenom: UInt32
 
     public init(
         now: @escaping @Sendable () -> Date = { Date() },
@@ -76,6 +82,18 @@ public struct DefaultProcessSnapshotProvider: ProcessSnapshotProviding {
     ) {
         self.now = now
         self.userNameForUID = userNameForUID
+        #if canImport(Darwin)
+            var info = mach_timebase_info()
+            mach_timebase_info(&info)
+            // Fall back to 1/1 if the kernel ever hands back a degenerate
+            // timebase, so conversion stays a safe no-op rather than dividing
+            // by zero.
+            timebaseNumer = info.numer == 0 ? 1 : info.numer
+            timebaseDenom = info.denom == 0 ? 1 : info.denom
+        #else
+            timebaseNumer = 1
+            timebaseDenom = 1
+        #endif
     }
 
     public func snapshot() -> [RawProcessSample] {
@@ -125,7 +143,10 @@ public struct DefaultProcessSnapshotProvider: ProcessSnapshotProviding {
 
             let executablePath = Self.executablePath(for: pid)
             let command = Self.commandName(from: bsd)
-            let cpuTime = task.pti_total_user &+ task.pti_total_system
+            let cpuTicks = task.pti_total_user &+ task.pti_total_system
+            let cpuTime = Self.machTicksToNanoseconds(
+                cpuTicks, numer: timebaseNumer, denom: timebaseDenom
+            )
 
             return RawProcessSample(
                 pid: pid,
@@ -186,6 +207,26 @@ public struct DefaultProcessSnapshotProvider: ProcessSnapshotProviding {
             }
         }
     #endif
+
+    // MARK: - CPU-time conversion
+
+    /// Converts raw Mach absolute-time ticks (the units `proc_taskinfo`
+    /// reports in `pti_total_user`/`pti_total_system`) into real nanoseconds
+    /// via the host timebase `numer`/`denom`. On Intel the timebase is 1/1 so
+    /// this is an identity; on Apple Silicon it's 125/3, so the raw ticks are
+    /// ~41.7× smaller than the true nanosecond count and must be scaled up.
+    ///
+    /// The scaling is split into whole and remainder halves so the
+    /// intermediate `ticks * numer` can't overflow `UInt64` for any realistic
+    /// process uptime.
+    static func machTicksToNanoseconds(_ ticks: UInt64, numer: UInt32, denom: UInt32) -> UInt64 {
+        guard denom != 0 else { return ticks }
+        let n = UInt64(numer)
+        let d = UInt64(denom)
+        let whole = ticks / d
+        let remainder = ticks % d
+        return whole &* n &+ (remainder &* n) / d
+    }
 
     // MARK: - User-name lookup
 
