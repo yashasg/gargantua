@@ -197,6 +197,27 @@ struct DirectorySizeScannerTests {
         #expect(partialFinalCount == 2)
     }
 
+    @Test("directorySize counts hidden content so all-hidden remnants aren't sized to zero")
+    func directorySizeCountsHiddenContent() throws {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("dss-hidden-\(UUID().uuidString)", isDirectory: true)
+        let hiddenDir = root.appendingPathComponent(".cache", isDirectory: true)
+        try fm.createDirectory(at: hiddenDir, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        // A remnant whose contents are entirely hidden: a dotfile at the top and
+        // a file inside a hidden subdirectory. A delete would remove all of it.
+        try Data(count: 8_000).write(to: root.appendingPathComponent(".DS_Store"))
+        try Data(count: 16_000).write(to: hiddenDir.appendingPathComponent("blob.bin"))
+
+        let result = DirectorySizeScanner.directorySize(at: root.path, timeout: nil)
+
+        #expect(!result.isPartial)
+        // Both hidden files must be counted; previously this sized to 0 and the
+        // remnant was silently dropped by size > 0 guards.
+        #expect(result.totalSize > 0)
+    }
+
     @Test("streamChildren returns empty stream for non-existent path")
     func streamNonExistentPath() async throws {
         let fakePath = "/nonexistent-\(UUID().uuidString)"

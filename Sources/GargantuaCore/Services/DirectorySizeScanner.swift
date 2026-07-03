@@ -279,10 +279,14 @@ public enum DirectorySizeScanner: Sendable {
             return false
         }
 
+        // Count hidden files: removal deletes dot-content too, so excluding it
+        // undercounts "space freed" and, worse, sizes an all-hidden remnant dir
+        // to 0 — where `size > 0` guards silently drop it and leave the leftover
+        // behind. Honest sizing includes everything a delete would remove.
         guard let enumerator = fm.enumerator(
             at: url,
             includingPropertiesForKeys: [.totalFileAllocatedSizeKey, .isSymbolicLinkKey],
-            options: [.skipsHiddenFiles],
+            options: [],
             errorHandler: nil
         ) else {
             return DirectorySizeResult(totalSize: 0, isPartial: false)
