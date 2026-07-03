@@ -73,13 +73,17 @@ public enum CloudAIRedactor {
             return CloudAIInputItem(
                 id: result.id,
                 name: sanitizeContent(result.name),
-                path: result.path,
+                // Paths and bundle IDs leave the machine too, so they get the
+                // same secret scrub as free-text fields. A token embedded in a
+                // path COMPONENT (e.g. `~/creds/ghp_…/config`), not just the
+                // leaf name, must not survive to the wire.
+                path: sanitizeContent(result.path),
                 size: result.size,
                 safety: result.safety,
                 confidence: result.confidence,
                 explanation: sanitizeContent(result.explanation),
                 sourceName: sanitizeContent(result.source.name),
-                bundleID: result.source.bundleID,
+                bundleID: result.source.bundleID.map(sanitizeContent),
                 lastAccessed: result.lastAccessed,
                 category: result.category,
                 tags: result.tags.map(sanitizeContent),

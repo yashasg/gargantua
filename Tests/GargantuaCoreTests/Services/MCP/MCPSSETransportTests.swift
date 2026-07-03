@@ -196,7 +196,7 @@ struct MCPSSETransportTests {
         #expect(rpcResponse.result == .object(["ok": .bool(true)]))
     }
 
-    private static let echoHandler: MCPMessageHandler = { request in
+    private static let echoHandler: MCPConnectionMessageHandler = { request, _ in
         guard !request.isNotification else { return nil }
         return .success(
             id: request.id ?? .null,

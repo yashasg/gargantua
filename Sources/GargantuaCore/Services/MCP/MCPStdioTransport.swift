@@ -23,6 +23,12 @@ public protocol MCPMessageSink: AnyObject {
 /// use; notification responses are suppressed by the transport regardless.
 public typealias MCPMessageHandler = @Sendable (MCPRequest) -> MCPResponse?
 
+/// Connection-aware handler contract. Same as `MCPMessageHandler` but carries
+/// the `MCPConnectionID` the request arrived on, so multi-session transports
+/// (SSE) can hand the dispatcher a per-connection key for client-identity
+/// attribution. Stdio, being single-session, keeps using `MCPMessageHandler`.
+public typealias MCPConnectionMessageHandler = @Sendable (MCPRequest, MCPConnectionID) -> MCPResponse?
+
 /// Diagnostic log sink. stderr-bound in production; swallowed in tests.
 public typealias MCPTransportLog = @Sendable (String) -> Void
 

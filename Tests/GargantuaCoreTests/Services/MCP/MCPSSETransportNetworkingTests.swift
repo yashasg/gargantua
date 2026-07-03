@@ -208,7 +208,7 @@ struct MCPSSETransportNetworkingTests {
         #expect(rotated != first)
     }
 
-    private static let echoHandler: MCPMessageHandler = { request in
+    private static let echoHandler: MCPConnectionMessageHandler = { request, _ in
         guard !request.isNotification else { return nil }
         return .success(
             id: request.id ?? .null,

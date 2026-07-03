@@ -118,6 +118,8 @@ public struct CommandActionExecutor: CommandActionExecuting {
         let toolVersion = resolver.captureVersion(tool: rule.tool, executable: executable, runner: runner)
 
         guard let dryRunArgs = rule.dryRunArguments else {
+            // A rule with no dry-run still has its destructive args vetted at
+            // `execute` time; nothing to constrain here.
             // No dry-run path declared — bytes estimate unavailable, safety
             // downgrades to review per the Trust Layer rule.
             return CommandActionPreview(
@@ -129,6 +131,7 @@ public struct CommandActionExecutor: CommandActionExecuting {
             )
         }
 
+        try CommandActionToolResolver.validateArguments(tool: rule.tool, arguments: dryRunArgs)
         let output = try runner.run(
             executable: executable,
             arguments: dryRunArgs,
@@ -170,6 +173,7 @@ public struct CommandActionExecutor: CommandActionExecuting {
             throw CommandActionExecutionError.toolNotInstalled(tool: rule.tool)
         }
 
+        try CommandActionToolResolver.validateArguments(tool: rule.tool, arguments: rule.arguments)
         let output = try runner.run(
             executable: executable,
             arguments: rule.arguments,

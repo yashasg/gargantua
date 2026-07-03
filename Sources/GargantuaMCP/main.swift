@@ -246,7 +246,7 @@ private let cleaner: MCPCleanToolHandler.Cleaner = { items, method in
     let decision = cleanNotificationService.request(
         items: items,
         method: method,
-        clientID: dispatcher.currentClientIdentity()?.name
+        clientID: dispatcher.currentCallClientIdentity()?.name
             ?? MCPCleanToolHandler.unknownClientSentinel
     )
     switch decision {
@@ -271,7 +271,7 @@ let cleanHandler = MCPCleanToolHandler(
     cleaner: cleaner,
     auditRecorder: { try auditWriter.write($0) },
     rateLimiter: cleanRateLimiter,
-    clientIDProvider: { dispatcher.currentClientIdentity()?.name },
+    clientIDProvider: { dispatcher.currentCallClientIdentity()?.name },
     log: stderrLog
 )
 dispatcher.register(tool: .clean, handler: cleanHandler.toolHandler)
@@ -299,7 +299,7 @@ if effectiveTransportMode.includesSSE {
     let transport = MCPSSETransport(
         configuration: sseConfiguration,
         tokenProvider: tokenProvider,
-        handler: { request in dispatcher.dispatch(request) },
+        handler: { request, connection in dispatcher.dispatch(request, connection: connection) },
         log: stderrLog,
         queue: DispatchQueue(label: "com.gargantua.mcp.sse", qos: .userInitiated)
     )
@@ -320,7 +320,7 @@ if effectiveTransportMode.includesSSE {
 let stdioTransport = MCPStdioTransport(
     source: StandardInputMessageSource(),
     sink: StandardOutputMessageSink(),
-    handler: { request in dispatcher.dispatch(request) },
+    handler: { request in dispatcher.dispatch(request, connection: .stdio) },
     log: stderrLog
 )
 
