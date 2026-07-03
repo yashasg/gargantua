@@ -145,26 +145,23 @@ public struct NativeScanAdapter: ScanAdapter {
             observerRef?.didEmit(ScanProgressEvent(path: path, outcome: .checked))
         }
 
-        for (idx, rule) in applicable.enumerated() {
-            await progress?.update(
-                fractionCompleted: Double(idx) / Double(total),
-                currentCategory: rule.category,
-                itemsFound: results.count,
-                reclaimableBytes: reclaimableBytes
-            )
+        // Evaluate rules concurrently, then fold results in rule order. Fanning
+        // the independent glob walks across cores turns a serial re-enumeration
+        // of the same roots (once per `**` rule) into a parallel sweep, while
+        // rule-ordered folding keeps cross-rule "first rule wins" dedup — and
+        // every id, size, and safety level — byte-for-byte identical to a serial
+        // scan; only wall-clock changes.
+        let evaluations = await evaluateConcurrently(
+            applicable,
+            availableEcosystems: availableEcosystems,
+            onSizing: onSizing,
+            progress: progress,
+            total: total
+        )
 
-            let context = EvaluationContext(
-                classifier: classifier,
-                profile: profile,
-                expander: expander,
-                scanRoots: scanRoots,
-                processChecker: processChecker,
-                availableEcosystems: availableEcosystems
-            )
-            let evaluation = await Task.detached {
-                Self.evaluate(rule: rule, context: context, onSizing: onSizing)
-            }.value
-
+        for (idx, evaluation) in evaluations.enumerated() {
+            guard let evaluation else { continue }
+            let rule = applicable[idx]
             for warning in evaluation.warnings {
                 await progress?.recordError(warning)
                 observerRef?.didEmit(ScanProgressEvent(
@@ -188,5 +185,65 @@ public struct NativeScanAdapter: ScanAdapter {
         await progress?.finish(itemsFound: results.count)
         logger.info("NativeScanAdapter: produced \(results.count) items")
         return results
+    }
+
+    /// Evaluate every applicable rule concurrently, returning each rule's
+    /// `RuleEvaluation` slotted at its original index so the caller can fold and
+    /// deduplicate in deterministic rule order.
+    ///
+    /// Concurrency is bounded to the core count; a single `DirectorySizeCache` is
+    /// shared across all rules so a directory resolved by more than one rule is
+    /// sized exactly once.
+    private func evaluateConcurrently(
+        _ applicable: [ScanRule],
+        availableEcosystems: Set<RuleEcosystem>,
+        onSizing: @escaping @Sendable (String) -> Void,
+        progress: ScanProgress?,
+        total: Int
+    ) async -> [RuleEvaluation?] {
+        let sizeCache = DirectorySizeCache()
+        let maxConcurrent = max(1, min(applicable.count, ProcessInfo.processInfo.activeProcessorCount))
+        var evaluations = [RuleEvaluation?](repeating: nil, count: applicable.count)
+
+        await withTaskGroup(of: (Int, RuleEvaluation).self) { group in
+            var next = 0
+            func enqueue() {
+                guard next < applicable.count else { return }
+                let idx = next
+                let rule = applicable[idx]
+                let context = EvaluationContext(
+                    classifier: classifier,
+                    profile: profile,
+                    expander: expander,
+                    scanRoots: scanRoots,
+                    processChecker: processChecker,
+                    availableEcosystems: availableEcosystems,
+                    sizeCache: sizeCache
+                )
+                group.addTask {
+                    (idx, Self.evaluate(rule: rule, context: context, onSizing: onSizing))
+                }
+                next += 1
+            }
+            for _ in 0 ..< maxConcurrent { enqueue() }
+
+            var completed = 0
+            while let (idx, evaluation) = await group.next() {
+                evaluations[idx] = evaluation
+                completed += 1
+                // Dedup/accumulate happens after the group, so the deduped item
+                // count and byte total aren't known mid-scan — advance the bar via
+                // `fractionCompleted` (and the live `currentPath` from `onSizing`)
+                // and let `finish` post the authoritative totals.
+                await progress?.update(
+                    fractionCompleted: Double(completed) / Double(total),
+                    currentCategory: applicable[idx].category,
+                    itemsFound: 0,
+                    reclaimableBytes: 0
+                )
+                enqueue()
+            }
+        }
+        return evaluations
     }
 }

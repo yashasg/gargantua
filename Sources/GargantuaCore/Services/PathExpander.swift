@@ -151,22 +151,31 @@ public struct PathExpander: Sendable {
         // Match zero directories: proceed with the remaining segments here.
         walk(atPath: path, remaining: rest, depth: depth, results: &results, state: state)
         // Match one or more directories: descend, keep `**` in remaining.
-        for (childPath, childName) in enumerateChildren(
+        for child in enumerateChildren(
             atPath: path,
             includeHidden: Self.requiresHiddenEnumeration(remaining),
             state: state
         ) {
             if state.shouldStop { return }
+            // A regular file is never a productive descent target: it has no
+            // children to recurse through, and can only itself match when the
+            // pattern ends at `**` (`rest` empty) — which the match-zero branch
+            // above already covers. Skipping files when segments remain avoids a
+            // failed `contentsOfDirectory` syscall per file and stops `**` from
+            // burning its entries cap descending into leaves.
+            if !rest.isEmpty, !child.isDirectory {
+                continue
+            }
             // Don't descend into well-known dependency / artifact dirs unless the
             // pattern itself names that dir. For a pattern like `**/.next/cache`,
             // walking into every `node_modules` tree burns through the entries
             // cap and never reaches sibling projects with shallower matches. For
             // a pattern like `**/node_modules/.vite`, the dir IS named in the
             // pattern, so we keep descending.
-            if Self.shouldSkipRecursiveDescent(into: childName, pattern: remaining) {
+            if Self.shouldSkipRecursiveDescent(into: child.name, pattern: remaining) {
                 continue
             }
-            walk(atPath: childPath, remaining: remaining, depth: depth + 1, results: &results, state: state)
+            walk(atPath: child.path, remaining: remaining, depth: depth + 1, results: &results, state: state)
         }
     }
 
@@ -217,14 +226,14 @@ public struct PathExpander: Sendable {
         results: inout Set<String>,
         state: WalkState
     ) {
-        for (childPath, childName) in enumerateChildren(
+        for child in enumerateChildren(
             atPath: path,
             includeHidden: Self.requiresHiddenEnumeration([segment]),
             state: state
         ) {
             if state.shouldStop { return }
-            if Self.fnmatch(pattern: segment, name: childName) {
-                walk(atPath: childPath, remaining: rest, depth: depth + 1, results: &results, state: state)
+            if Self.fnmatch(pattern: segment, name: child.name) {
+                walk(atPath: child.path, remaining: rest, depth: depth + 1, results: &results, state: state)
             }
         }
     }
@@ -244,34 +253,49 @@ public struct PathExpander: Sendable {
         }
     }
 
+    /// One enumerated child of a directory, tagged with whether it is itself a
+    /// directory so the recursive walk can skip files without a second `stat`.
+    private struct ChildEntry {
+        let path: String
+        let name: String
+        let isDirectory: Bool
+    }
+
     private func enumerateChildren(
         atPath path: String,
         includeHidden: Bool = false,
         state: WalkState
-    ) -> [(path: String, name: String)] {
+    ) -> [ChildEntry] {
         if state.shouldStop { return [] }
         let fm = FileManager.default
         let url = URL(fileURLWithPath: path)
         let options: FileManager.DirectoryEnumerationOptions = includeHidden ? [] : [.skipsHiddenFiles]
+        // Prefetch `.isDirectoryKey` alongside the symlink flag so callers can
+        // tell files from directories without paying a separate `stat` per child.
         guard let contents = try? fm.contentsOfDirectory(
             at: url,
-            includingPropertiesForKeys: [.isSymbolicLinkKey],
+            includingPropertiesForKeys: [.isSymbolicLinkKey, .isDirectoryKey],
             options: options
         ) else {
             return []
         }
 
-        var out: [(path: String, name: String)] = []
+        var out: [ChildEntry] = []
         out.reserveCapacity(contents.count)
         for child in contents {
             if state.shouldStop { break }
             state.incrementEntries()
             if state.shouldStop { break }
 
-            if (try? child.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true {
+            let values = try? child.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey])
+            if values?.isSymbolicLink == true {
                 continue
             }
-            out.append((child.path, child.lastPathComponent))
+            out.append(ChildEntry(
+                path: child.path,
+                name: child.lastPathComponent,
+                isDirectory: values?.isDirectory ?? false
+            ))
         }
         return out
     }
