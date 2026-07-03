@@ -27,6 +27,11 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
     private let now: @Sendable () -> Date
     private let sleep: @Sendable (UInt64) async -> Void
 
+    /// Holds the last full-scan environment for `search` to reuse. Not an init
+    /// parameter — an internal per-instance cache shared across all copies of
+    /// this value type via its reference identity.
+    private let searchEnvironmentCache = SearchEnvironmentCache()
+
     public init(
         snapshotProvider: any ProcessSnapshotProviding = DefaultProcessSnapshotProvider(),
         launchdIndex: any LaunchdItemIndexing = DefaultLaunchdItemIndex(),
@@ -73,7 +78,10 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
     }
 
     public func scan(metric: ProcessSortMetric, topN: Int?) async -> ProcessInventoryScan {
-        let env = await sampleEnvironment()
+        let env = await sampleEnvironment(delayNanoseconds: sampleIntervalNanoseconds)
+        // Cache the freshly-sampled environment so a subsequent `search` reuses
+        // its snapshot / launchd parse / CPU baseline instead of re-sampling.
+        searchEnvironmentCache.store(env)
         let rankedSamples = rankSamples(
             env.secondSamples,
             firstByPID: env.firstByPID,
@@ -95,7 +103,16 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
         limit: Int
     ) async -> ProcessInventoryScan {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let env = await sampleEnvironment()
+        // Reuse the environment captured by the last full scan — its snapshot,
+        // launchd parse, and CPU baseline are everything matching needs, so a
+        // keystroke pays neither the 500 ms delta window nor a launchd re-parse.
+        // Fall back to a fresh, delay-free sample only if no scan has run yet.
+        let env: SampleEnvironment
+        if let cached = searchEnvironmentCache.load() {
+            env = cached
+        } else {
+            env = await sampleEnvironment(delayNanoseconds: 0)
+        }
         guard !needle.isEmpty else {
             return ProcessInventoryScan(
                 items: [],
@@ -117,7 +134,7 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
     /// Two CPU snapshots plus the launchd / foreground / parent-name context
     /// every item build needs. Shared by `scan` and `search` so both see the
     /// same process table and CPU baseline.
-    private struct SampleEnvironment {
+    private struct SampleEnvironment: Sendable {
         let firstByPID: [Int32: RawProcessSample]
         let secondSamples: [RawProcessSample]
         let launchdItems: [LaunchdItem]
@@ -125,13 +142,35 @@ public struct DefaultProcessInventoryScanner: ProcessInventoryScanning {
         let parentNames: [Int32: String]
     }
 
-    private func sampleEnvironment() async -> SampleEnvironment {
+    /// Thread-safe holder for the most recent full-scan environment so a
+    /// per-keystroke `search` can reuse its snapshot, launchd parse, and CPU
+    /// baseline instead of re-sampling. A full `scan()` refreshes it.
+    private final class SearchEnvironmentCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stored: SampleEnvironment?
+        func store(_ env: SampleEnvironment) {
+            lock.lock(); stored = env; lock.unlock()
+        }
+
+        func load() -> SampleEnvironment? {
+            lock.lock(); defer { lock.unlock() }
+            return stored
+        }
+    }
+
+    /// Samples the process table plus the launchd / foreground / parent-name
+    /// context an item build needs. `delayNanoseconds` is the gap between the
+    /// two CPU snapshots: the full scan uses the configured window; `search`
+    /// passes 0 so its matching pass isn't stalled by an artificial delay.
+    private func sampleEnvironment(delayNanoseconds: UInt64) async -> SampleEnvironment {
         // The resolver caches by binary path + mtime, so a replaced binary at
         // the same path re-resolves on its own. Keeping the cache warm across
         // passes is what makes per-keystroke `search()` cheap — it no longer
         // re-verifies signatures for binaries it already resolved this session.
         let firstSamples = snapshotProvider.snapshot()
-        await sleep(sampleIntervalNanoseconds)
+        if delayNanoseconds > 0 {
+            await sleep(delayNanoseconds)
+        }
         let secondSamples = snapshotProvider.snapshot()
 
         // Build a quick lookup from PID → first sample so we can compute the
