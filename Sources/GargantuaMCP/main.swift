@@ -57,12 +57,11 @@ let dispatcher = MCPRequestDispatcher(
     statusReporter: serverStatusStore
 )
 
-// Shared scan session cache: `scan` populates it on every successful scan,
-// `clean` reads it to resolve `item_ids` back into `ScanResult` values. A
-// single cache instance per process keeps the handlers decoupled from each
-// other — they communicate only through the cache's `replace(with:)` /
-// `lookupAll(ids:)` surface.
-let scanSessionCache = MCPScanSessionCache()
+// Per-connection scan-session caches: `scan` populates the calling
+// connection's cache, `clean`/`explain` resolve item_ids only against that
+// same connection's cache. In dual-transport (`.both`) mode this keeps client
+// A's item_ids unresolvable by client B.
+let scanSessionCacheRegistry = MCPScanSessionCacheRegistry()
 
 private func loadProfileCatalog() throws -> MCPProfileCatalog {
     do {
@@ -127,7 +126,7 @@ private let scanRunner: MCPScanToolHandler.Scanner = { profile in
 let scanHandler = MCPScanToolHandler(
     scanner: scanRunner,
     profileResolver: scanProfileResolver,
-    sessionCache: scanSessionCache,
+    sessionCacheProvider: { scanSessionCacheRegistry.cache(for: dispatcher.currentCallConnection()) },
     log: stderrLog
 )
 dispatcher.register(tool: .scan, handler: scanHandler.toolHandler)
@@ -203,7 +202,9 @@ private let explainPathClassify: MCPExplainToolHandler.PathClassify = { path in
 let explainHandler = MCPExplainToolHandler(
     explainProvider: MCPExplainToolHandler.defaultFilesystemProvider(
         receiptLookup: explainReceiptLookup,
-        itemLookup: { id in scanSessionCache.lookup(id: id) },
+        itemLookup: { id in
+            scanSessionCacheRegistry.cache(for: dispatcher.currentCallConnection()).lookup(id: id)
+        },
         pathClassify: explainPathClassify
     ),
     log: stderrLog
@@ -267,7 +268,7 @@ private let cleaner: MCPCleanToolHandler.Cleaner = { items, method in
 }
 
 let cleanHandler = MCPCleanToolHandler(
-    sessionCache: scanSessionCache,
+    sessionCacheProvider: { scanSessionCacheRegistry.cache(for: dispatcher.currentCallConnection()) },
     cleaner: cleaner,
     auditRecorder: { try auditWriter.write($0) },
     rateLimiter: cleanRateLimiter,

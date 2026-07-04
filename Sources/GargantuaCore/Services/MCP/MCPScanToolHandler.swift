@@ -29,9 +29,16 @@ public struct MCPScanToolHandler: Sendable {
     /// should resolve to the server's default profile.
     public typealias ProfileResolver = @Sendable (_ requestedID: String?) throws -> CleanupProfile
 
+    /// Resolves the scan-session cache to populate for the current call.
+    /// Indirected through a provider (rather than a single stored cache) so a
+    /// handler registered once and shared across connections can still write
+    /// into the calling connection's own cache — see
+    /// `MCPScanSessionCacheRegistry` and `MCPRequestDispatcher.currentCallConnection()`.
+    public typealias SessionCacheProvider = @Sendable () -> MCPScanSessionCache?
+
     private let scanner: Scanner
     private let profileResolver: ProfileResolver
-    private let sessionCache: MCPScanSessionCache?
+    private let sessionCacheProvider: SessionCacheProvider
     private let log: MCPDispatcherLog?
 
     public init(
@@ -40,9 +47,23 @@ public struct MCPScanToolHandler: Sendable {
         sessionCache: MCPScanSessionCache? = nil,
         log: MCPDispatcherLog? = nil
     ) {
+        self.init(
+            scanner: scanner,
+            profileResolver: profileResolver,
+            sessionCacheProvider: { sessionCache },
+            log: log
+        )
+    }
+
+    public init(
+        scanner: @escaping Scanner,
+        profileResolver: @escaping ProfileResolver,
+        sessionCacheProvider: @escaping SessionCacheProvider,
+        log: MCPDispatcherLog? = nil
+    ) {
         self.scanner = scanner
         self.profileResolver = profileResolver
-        self.sessionCache = sessionCache
+        self.sessionCacheProvider = sessionCacheProvider
         self.log = log
     }
 
@@ -104,7 +125,7 @@ public struct MCPScanToolHandler: Sendable {
         // a fresh scan always replaces any prior session state. Failures
         // above threw before reaching here, so the cache is never polluted
         // with a half-finished scan's results.
-        sessionCache?.replace(with: results)
+        sessionCacheProvider()?.replace(with: results)
 
         let output = Self.makeOutput(from: results)
         let payload = try MCPEncoding.encodeAsJSONAny(output)

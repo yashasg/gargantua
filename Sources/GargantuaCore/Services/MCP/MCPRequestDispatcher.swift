@@ -114,6 +114,43 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         (Thread.current.threadDictionary[currentCallIdentityKey] as? IdentityBox)?.identity
     }
 
+    // MARK: - Current-call connection (thread-local)
+
+    // Mirrors the identity thread-local above: tool handlers registered once
+    // and shared across connections (e.g. `scan`/`clean` resolving the
+    // scan-session cache) read this to scope per-connection state to the
+    // connection that actually made the call.
+    private final class ConnectionBox {
+        let connection: MCPConnectionID
+        init(_ connection: MCPConnectionID) { self.connection = connection }
+    }
+
+    private static let currentCallConnectionKey =
+        "com.inceptyon.gargantua.mcp.currentCallConnection"
+
+    private static func setCurrentCallConnection(_ connection: MCPConnectionID?) {
+        let dict = Thread.current.threadDictionary
+        if let connection {
+            dict[currentCallConnectionKey] = ConnectionBox(connection)
+        } else {
+            dict.removeObject(forKey: currentCallConnectionKey)
+        }
+    }
+
+    private static func currentCallConnection() -> MCPConnectionID? {
+        (Thread.current.threadDictionary[currentCallConnectionKey] as? ConnectionBox)?.connection
+    }
+
+    /// The connection whose `tools/call` is executing on the current thread,
+    /// or `.stdio` outside a tool call. Tool handlers registered once and
+    /// shared across connections (e.g. `scan`/`clean` resolving the
+    /// scan-session cache) read this to scope per-connection state to the
+    /// connection that actually made the call. Valid only for the
+    /// synchronous span of the handler invocation.
+    public func currentCallConnection() -> MCPConnectionID {
+        Self.currentCallConnection() ?? .stdio
+    }
+
     /// Main entry point, designed to be passed as an `MCPMessageHandler` to
     /// `MCPStdioTransport`. Returns `nil` for notifications so the transport
     /// suppresses output, and always returns a response for requests.
@@ -274,7 +311,11 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         // that made the call, not to whichever connection last initialized.
         let currentClient = currentClientIdentity(for: connection)
         Self.setCurrentCallIdentity(currentClient)
-        defer { Self.setCurrentCallIdentity(nil) }
+        Self.setCurrentCallConnection(connection)
+        defer {
+            Self.setCurrentCallIdentity(nil)
+            Self.setCurrentCallConnection(nil)
+        }
         let toolResult: MCPToolCallResult
         do {
             toolResult = try handler(arguments)

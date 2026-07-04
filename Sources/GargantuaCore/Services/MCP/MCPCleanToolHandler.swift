@@ -79,7 +79,15 @@ public struct MCPCleanToolHandler: Sendable {
     /// flakiness cannot mask a successful destructive operation.
     public typealias AuditRecorder = @Sendable (_ entry: AuditEntry) throws -> Void
 
-    private let sessionCache: MCPScanSessionCache
+    /// Resolves the scan-session cache to look up `item_ids` against for the
+    /// current call. Indirected through a provider (rather than a single
+    /// stored cache) so a handler registered once and shared across
+    /// connections still resolves against the calling connection's own
+    /// cache — see `MCPScanSessionCacheRegistry` and
+    /// `MCPRequestDispatcher.currentCallConnection()`.
+    public typealias SessionCacheProvider = @Sendable () -> MCPScanSessionCache
+
+    private let sessionCacheProvider: SessionCacheProvider
     private let cleaner: Cleaner
     private let auditIDGenerator: AuditIDGenerator
     private let auditRecorder: AuditRecorder?
@@ -96,7 +104,27 @@ public struct MCPCleanToolHandler: Sendable {
         clientIDProvider: @escaping ClientIDProvider = { nil },
         log: MCPDispatcherLog? = nil
     ) {
-        self.sessionCache = sessionCache
+        self.init(
+            sessionCacheProvider: { sessionCache },
+            cleaner: cleaner,
+            auditIDGenerator: auditIDGenerator,
+            auditRecorder: auditRecorder,
+            rateLimiter: rateLimiter,
+            clientIDProvider: clientIDProvider,
+            log: log
+        )
+    }
+
+    public init(
+        sessionCacheProvider: @escaping SessionCacheProvider,
+        cleaner: @escaping Cleaner,
+        auditIDGenerator: @escaping AuditIDGenerator = { UUID() },
+        auditRecorder: AuditRecorder? = nil,
+        rateLimiter: MCPRateLimiter? = nil,
+        clientIDProvider: @escaping ClientIDProvider = { nil },
+        log: MCPDispatcherLog? = nil
+    ) {
+        self.sessionCacheProvider = sessionCacheProvider
         self.cleaner = cleaner
         self.auditIDGenerator = auditIDGenerator
         self.auditRecorder = auditRecorder
@@ -166,7 +194,7 @@ public struct MCPCleanToolHandler: Sendable {
             )
         }
 
-        let (found, unknown) = sessionCache.lookupAll(ids: input.itemIDs)
+        let (found, unknown) = sessionCacheProvider().lookupAll(ids: input.itemIDs)
         if !unknown.isEmpty {
             throw MCPToolError.invalidParams(Self.unknownIDsMessage(unknown))
         }
