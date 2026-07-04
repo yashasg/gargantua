@@ -16,7 +16,8 @@ extension RemnantItem {
             lastAccessed: lastAccessed,
             category: category.rawValue,
             tags: tags,
-            regenerates: regenerates
+            regenerates: regenerates,
+            scanTimeResolvedParent: scanTimeResolvedParent
         )
     }
 }

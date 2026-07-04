@@ -138,6 +138,10 @@ public struct RemnantScanner: UninstallPlanning, Sendable {
                 bytes: bundle.size
             ))
         }
-        return UninstallPlan(app: app, appBundle: bundle, remnants: remnants)
+        return UninstallPlan(
+            app: app,
+            appBundle: bundle?.recordingScanTimeAncestry(),
+            remnants: remnants.map { $0.recordingScanTimeAncestry() }
+        )
     }
 }

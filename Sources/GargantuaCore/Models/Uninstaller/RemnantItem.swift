@@ -48,6 +48,15 @@ public struct RemnantItem: Codable, Sendable, Identifiable {
     /// Free-form tags copied from the matching rule plus any the scanner adds.
     public let tags: [String]
 
+    /// Where `path`'s parent directory chain resolved at *discovery*
+    /// (uninstall-scan) time, recorded by `RemnantScanner.plan` so the
+    /// pre-delete `SymlinkSwapGuard` can tell a symlink ancestor that
+    /// already existed when the remnant was found (e.g. a relocated
+    /// `~/Library/Caches` → `/Volumes/Ext/Caches`) from one swapped in
+    /// after the scan. Threaded into `toScanResult()`. `nil` until
+    /// recorded; the guard then rejects any symlink ancestor fail-safe.
+    public var scanTimeResolvedParent: String?
+
     public init(
         id: String,
         appBundleID: String,
@@ -61,7 +70,8 @@ public struct RemnantItem: Codable, Sendable, Identifiable {
         ruleID: String,
         lastAccessed: Date? = nil,
         regenerates: Bool = false,
-        tags: [String] = []
+        tags: [String] = [],
+        scanTimeResolvedParent: String? = nil
     ) {
         self.id = id
         self.appBundleID = appBundleID
@@ -76,5 +86,22 @@ public struct RemnantItem: Codable, Sendable, Identifiable {
         self.lastAccessed = lastAccessed
         self.regenerates = regenerates
         self.tags = tags
+        self.scanTimeResolvedParent = scanTimeResolvedParent
+    }
+
+    /// Returns a copy with the parent-chain resolution recorded, for the
+    /// pre-delete symlink-swap guard. Must be called while the filesystem
+    /// still reflects scan time — i.e. by `RemnantScanner.plan` as remnants
+    /// are gathered, not at uninstall time. Non-absolute paths and
+    /// already-recorded items pass through unchanged.
+    public func recordingScanTimeAncestry() -> RemnantItem {
+        guard scanTimeResolvedParent == nil, path.hasPrefix("/") else { return self }
+        var copy = self
+        copy.scanTimeResolvedParent = URL(fileURLWithPath: path)
+            .standardizedFileURL
+            .deletingLastPathComponent()
+            .resolvingSymlinksInPath()
+            .path
+        return copy
     }
 }

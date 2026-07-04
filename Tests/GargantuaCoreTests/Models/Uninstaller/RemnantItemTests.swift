@@ -117,4 +117,40 @@ struct RemnantItemTests {
         )
         #expect(item.receiptPkgID == nil)
     }
+
+    // MARK: - Scan-time symlink ancestry
+
+    @Test("recordingScanTimeAncestry records the resolved parent for an absolute path")
+    func recordsResolvedParent() {
+        let recorded = Self.sample.recordingScanTimeAncestry()
+        #expect(recorded.scanTimeResolvedParent?.hasSuffix("/Library/Caches") == true)
+    }
+
+    @Test("recordingScanTimeAncestry passes through a non-absolute path")
+    func recordingSkipsRelativePath() {
+        let relative = RemnantItem(
+            id: "x", appBundleID: "com.x", category: .other, path: "relative/thing",
+            size: 1, safety: .review, confidence: 50, explanation: "",
+            source: SourceAttribution(name: "x"), ruleID: "r"
+        )
+        #expect(relative.recordingScanTimeAncestry().scanTimeResolvedParent == nil)
+    }
+
+    @Test("recordingScanTimeAncestry is idempotent once recorded")
+    func recordingIdempotent() {
+        let once = Self.sample.recordingScanTimeAncestry()
+        let twice = once.recordingScanTimeAncestry()
+        #expect(twice.scanTimeResolvedParent == once.scanTimeResolvedParent)
+    }
+
+    @Test("toScanResult threads the recorded scan-time parent")
+    func toScanResultThreadsParent() {
+        let recorded = Self.sample.recordingScanTimeAncestry()
+        #expect(recorded.toScanResult().scanTimeResolvedParent == recorded.scanTimeResolvedParent)
+    }
+
+    @Test("toScanResult carries nil when ancestry was never recorded")
+    func toScanResultNilWithoutRecording() {
+        #expect(Self.sample.toScanResult().scanTimeResolvedParent == nil)
+    }
 }

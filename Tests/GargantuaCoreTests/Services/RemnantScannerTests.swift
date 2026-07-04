@@ -184,4 +184,45 @@ struct RemnantScannerTests {
         #expect(plan.appBundle?.ruleID == "app_bundle")
         #expect(plan.totalBytes > 0)
     }
+
+    @Test("Remnants scanned through a symlinked ancestor record the parent so the swap guard accepts, and a post-scan swap is rejected")
+    func recordsScanTimeAncestryThroughSymlinkedAncestor() throws {
+        let fixture = try FixtureTree()
+        let real = try fixture.makeDir("real")
+        try fixture.makeFile("real/com.google.Chrome/cache.db", contents: "abcdef")
+        let link = fixture.root.appendingPathComponent("link")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+
+        let rule = RemnantRule(
+            id: "generic_caches",
+            name: "Caches",
+            category: .caches,
+            pathTemplates: [link.appendingPathComponent("{bundleID}").path],
+            confidence: 99,
+            explanation: "Disposable cache data.",
+            source: SourceAttribution(name: "{appName}"),
+            regenerates: true,
+            tags: ["cache"]
+        )
+
+        let plan = RemnantScanner(rules: [rule]).plan(for: chromeApp(), includeAppBundle: false)
+        #expect(plan.remnants.count == 1)
+        let remnant = plan.remnants[0]
+        let scan = remnant.toScanResult()
+        #expect(scan.scanTimeResolvedParent != nil)
+
+        // Done-when #1: the symlinked-ancestor remnant is accepted for delete.
+        let url = URL(fileURLWithPath: remnant.path)
+        #expect(SymlinkSwapGuard.isUnchanged(url, scanTimeResolvedParent: scan.scanTimeResolvedParent))
+
+        // Done-when #2: repoint the symlink after the scan → guard rejects.
+        let victim = try fixture.makeDir("victim/com.google.Chrome")
+        try Data("y".utf8).write(to: victim.appendingPathComponent("cache.db"))
+        try FileManager.default.removeItem(at: link)
+        try FileManager.default.createSymbolicLink(
+            at: link,
+            withDestinationURL: fixture.root.appendingPathComponent("victim")
+        )
+        #expect(!SymlinkSwapGuard.isUnchanged(url, scanTimeResolvedParent: scan.scanTimeResolvedParent))
+    }
 }
