@@ -301,6 +301,10 @@ if effectiveTransportMode.includesSSE {
         configuration: sseConfiguration,
         tokenProvider: tokenProvider,
         handler: { request, connection in dispatcher.dispatch(request, connection: connection) },
+        onConnectionClose: { connection in
+            scanSessionCacheRegistry.evict(connection)
+            dispatcher.evictClientIdentity(for: connection)
+        },
         log: stderrLog,
         queue: DispatchQueue(label: "com.gargantua.mcp.sse", qos: .userInitiated)
     )

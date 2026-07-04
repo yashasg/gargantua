@@ -6,14 +6,12 @@ import Foundation
 /// client B's `clean`/`explain`; keying the cache by `MCPConnectionID` closes
 /// that cross-client gap. Caches are created lazily on first use.
 ///
-/// Lifecycle note: entries are never evicted, so each dead SSE session's cache
-/// (its `MCPConnectionID` is a fresh UUID minted per connect — see
-/// `MCPSSERequestRouter.openStream`) is retained for the process lifetime.
-/// For stdio and low-churn SSE that is negligible, but a long-lived SSE daemon
-/// with heavy reconnect churn accumulates orphaned scan-result sets. Wiring
-/// `MCPSSERequestRouter.closeStream` teardown to registry eviction — alongside
-/// the analogous never-evicted `MCPRequestDispatcher.clientIdentities` map — is
-/// tracked as a follow-up (gargantua connection-lifecycle eviction).
+/// Lifecycle note: each SSE session's cache (its `MCPConnectionID` is a fresh
+/// UUID minted per connect — see `MCPSSERequestRouter.openStream`) is retained
+/// until `MCPSSERequestRouter.closeStream` teardown calls `evict(_:)`, which
+/// drops the entry so a long-lived SSE daemon with heavy reconnect churn does
+/// not accumulate orphaned scan-result sets for the process lifetime.
+/// `.stdio` is never evicted — only SSE session teardown drives eviction.
 public final class MCPScanSessionCacheRegistry: @unchecked Sendable {
     private let lock = NSLock()
     private var caches: [MCPConnectionID: MCPScanSessionCache] = [:]
@@ -29,5 +27,16 @@ public final class MCPScanSessionCacheRegistry: @unchecked Sendable {
         let created = MCPScanSessionCache()
         caches[connection] = created
         return created
+    }
+
+    /// Evicts the cache for `connection`, dropping its retained scan-result
+    /// set. Called on SSE session teardown (see `MCPSSERequestRouter.closeStream`)
+    /// so a long-lived SSE daemon does not accumulate orphaned per-connection
+    /// caches for the process lifetime. No-op if the connection has no cache.
+    /// `.stdio` is never evicted — only SSE session teardown drives eviction.
+    public func evict(_ connection: MCPConnectionID) {
+        lock.lock()
+        defer { lock.unlock() }
+        caches.removeValue(forKey: connection)
     }
 }

@@ -62,6 +62,17 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
         return clientIdentities[connection]
     }
 
+    /// Drops the captured client identity for `connection`. Called on SSE
+    /// session teardown so the per-connection `clientIdentities` map does not
+    /// retain orphaned entries for the process lifetime. No-op if the
+    /// connection never completed `initialize`. `.stdio` is never evicted —
+    /// its single session lives for the whole process.
+    public func evictClientIdentity(for connection: MCPConnectionID) {
+        lock.lock()
+        defer { lock.unlock() }
+        clientIdentities.removeValue(forKey: connection)
+    }
+
     /// Back-compat accessor for the stdio connection's captured identity.
     /// Stdio is single-session for the process lifetime, so this is "the
     /// stdio client".

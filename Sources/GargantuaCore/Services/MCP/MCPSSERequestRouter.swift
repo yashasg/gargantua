@@ -13,8 +13,13 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
     /// Callback invoked when an SSE event should be emitted on a session's connection.
     public typealias EventSink = @Sendable (_ event: String, _ data: String) -> Void
 
+    /// Invoked when an SSE session tears down, so callers can evict any
+    /// per-connection state keyed by the session's `MCPConnectionID`.
+    public typealias ConnectionCloseHandler = @Sendable (_ connection: MCPConnectionID) -> Void
+
     private let handler: MCPConnectionMessageHandler
     private let log: MCPTransportLog?
+    private let onClose: ConnectionCloseHandler?
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     private let lock = NSLock()
@@ -23,10 +28,12 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
     /// Creates a router with the supplied JSON-RPC handler and optional log sink.
     public init(
         handler: @escaping MCPConnectionMessageHandler,
-        log: MCPTransportLog? = nil
+        log: MCPTransportLog? = nil,
+        onClose: ConnectionCloseHandler? = nil
     ) {
         self.handler = handler
         self.log = log
+        self.onClose = onClose
         self.encoder = JSONEncoder()
         self.encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         self.decoder = JSONDecoder()
@@ -73,6 +80,9 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
         lock.lock()
         sessions.removeValue(forKey: sessionID)
         lock.unlock()
+        // Fire eviction outside the router lock so the callback can take the
+        // registry/dispatcher locks without nesting under ours.
+        onClose?(.sse(sessionID))
     }
 
     /// Routes a `/message` POST to the matching session's event sink and returns the HTTP response.

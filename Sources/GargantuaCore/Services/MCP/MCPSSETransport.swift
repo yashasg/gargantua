@@ -18,12 +18,13 @@ public final class MCPSSETransport: @unchecked Sendable {
         configuration: MCPSSEServerConfiguration,
         tokenProvider: @escaping TokenProvider,
         handler: @escaping MCPConnectionMessageHandler,
+        onConnectionClose: MCPSSERequestRouter.ConnectionCloseHandler? = nil,
         log: MCPTransportLog? = nil,
         queue: DispatchQueue = DispatchQueue(label: "com.gargantua.mcp.sse")
     ) {
         self.configuration = configuration
         self.tokenProvider = tokenProvider
-        self.router = MCPSSERequestRouter(handler: handler, log: log)
+        self.router = MCPSSERequestRouter(handler: handler, log: log, onClose: onConnectionClose)
         self.log = log
         self.queue = queue
     }
