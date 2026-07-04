@@ -183,10 +183,13 @@ struct SystemInfoBar: View {
     private func refreshRuntimeStatus() {
         mcpStatusModel.refresh()
         let configuration = agentConfigurationStore.load()
-        agentPresentation = SidebarServiceIndicatorPresentation.agent(
+        let updated = SidebarServiceIndicatorPresentation.agent(
             configuration: configuration,
             cliAvailable: (try? agentCLIResolver.resolve(configuration: configuration)) != nil
         )
+        if updated != agentPresentation {
+            agentPresentation = updated
+        }
     }
 
     @MainActor

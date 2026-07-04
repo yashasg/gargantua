@@ -134,6 +134,21 @@ public struct MCPServerStatusSnapshot: Codable, Sendable, Equatable {
 
     public var isRunning: Bool { state == .running }
 
+    /// Equality that ignores `updatedAt`.
+    ///
+    /// Freshly-read snapshots carry a new read timestamp even when nothing
+    /// observable changed (e.g. `readSnapshot` synthesizes `.stopped(updatedAt:
+    /// now)` when the status file is missing). Polling callers use this to
+    /// skip redundant `@Published` assignments that would re-render SwiftUI.
+    public func isEquivalent(to other: MCPServerStatusSnapshot) -> Bool {
+        state == other.state
+            && transportMode == other.transportMode
+            && clients == other.clients
+            && lastErrorMessage == other.lastErrorMessage
+            && recentActions == other.recentActions
+            && processID == other.processID
+    }
+
     public func withRecentActions(_ actions: [MCPServerRecentAction]) -> MCPServerStatusSnapshot {
         MCPServerStatusSnapshot(
             state: state,

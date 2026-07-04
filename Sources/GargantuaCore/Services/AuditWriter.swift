@@ -178,17 +178,47 @@ public final class AuditWriter: Sendable {
         return decoder
     }()
 
+    /// mtime + size identity of the log file at the last successful decode.
+    private struct ReadCache: Sendable {
+        let modificationDate: Date
+        let size: UInt64
+        let entries: [AuditEntry]
+    }
+
+    private let readCache = OSAllocatedUnfairLock<ReadCache?>(initialState: nil)
+
     /// Read all audit entries from the log file.
     ///
     /// Returns an empty array if the log file doesn't exist.
     /// Skips malformed lines rather than failing entirely.
+    ///
+    /// The decoded entries are cached against the file's mtime + size, so
+    /// polling callers (the Dashboard status refresh) pay one stat call per
+    /// tick instead of re-decoding the whole log.
     public func readEntries() throws -> [AuditEntry] {
         guard FileManager.default.fileExists(atPath: logFile.path) else { return [] }
 
+        let attributes = try? FileManager.default.attributesOfItem(atPath: logFile.path)
+        let modificationDate = attributes?[.modificationDate] as? Date
+        let size = (attributes?[.size] as? NSNumber)?.uint64Value
+
+        if let modificationDate, let size,
+           let cached = readCache.withLock({ $0 }),
+           cached.modificationDate == modificationDate, cached.size == size {
+            return cached.entries
+        }
+
         let content = try String(contentsOf: logFile, encoding: .utf8)
-        return content.split(separator: "\n").compactMap { line in
+        let entries = content.split(separator: "\n").compactMap { line in
             try? Self.decoder.decode(AuditEntry.self, from: Data(line.utf8))
         }
+
+        if let modificationDate, let size {
+            readCache.withLock {
+                $0 = ReadCache(modificationDate: modificationDate, size: size, entries: entries)
+            }
+        }
+        return entries
     }
 
     // MARK: - Retention

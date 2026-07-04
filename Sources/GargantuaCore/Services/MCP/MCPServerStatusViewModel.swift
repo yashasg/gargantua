@@ -27,7 +27,9 @@ public final class MCPServerStatusViewModel: ObservableObject {
         stopAction: @escaping ControlAction = {
             try MCPServerStatusPersistence().stopRunningServer()
         },
-        auditReader: @escaping AuditReader = { try AuditWriter().readEntries() }
+        // Capture one writer so its mtime+size read cache survives across
+        // refresh ticks; a fresh instance per call would re-decode every time.
+        auditReader: @escaping AuditReader = { [writer = AuditWriter()] in try writer.readEntries() }
     ) {
         self.snapshot = initialSnapshot
         self.snapshotProvider = snapshotProvider
@@ -40,9 +42,15 @@ public final class MCPServerStatusViewModel: ObservableObject {
     public func refresh() {
         guard snapshot.state != .starting else { return }
         do {
-            snapshot = try snapshotProvider().withRecentActions(recentMCPActions())
+            let updated = try snapshotProvider().withRecentActions(recentMCPActions())
+            if !updated.isEquivalent(to: snapshot) {
+                snapshot = updated
+            }
         } catch {
-            snapshot = errorSnapshot(message: Self.clientFacingMessage(for: error))
+            let failure = errorSnapshot(message: Self.clientFacingMessage(for: error))
+            if !failure.isEquivalent(to: snapshot) {
+                snapshot = failure
+            }
         }
     }
 
