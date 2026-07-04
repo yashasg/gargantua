@@ -69,6 +69,11 @@ public struct MCPScanItem: Codable, Sendable, Equatable {
     public let lastAccessed: Date?
     /// Cleanup category associated with the item.
     public let category: String
+    /// Where `path`'s parent chain resolved at scan time, carried across the
+    /// wire so the host-side scan mirror can hand it to `SymlinkSwapGuard`
+    /// instead of losing it and refusing every symlink ancestor. `nil` when
+    /// the producing scan didn't record one.
+    public let scanTimeResolvedParent: String?
 
     /// Creates a scan item row for MCP responses.
     public init(
@@ -81,7 +86,8 @@ public struct MCPScanItem: Codable, Sendable, Equatable {
         explanation: String,
         source: String,
         lastAccessed: Date? = nil,
-        category: String
+        category: String,
+        scanTimeResolvedParent: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -93,11 +99,13 @@ public struct MCPScanItem: Codable, Sendable, Equatable {
         self.source = source
         self.lastAccessed = lastAccessed
         self.category = category
+        self.scanTimeResolvedParent = scanTimeResolvedParent
     }
 
     enum CodingKeys: String, CodingKey {
         case id, name, path, size, safety, confidence, explanation, source, category
         case lastAccessed = "last_accessed"
+        case scanTimeResolvedParent = "scan_time_resolved_parent"
     }
 }
 
