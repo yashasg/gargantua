@@ -49,7 +49,9 @@ public struct RemnantItem: Codable, Sendable, Identifiable {
     public let tags: [String]
 
     /// Where `path`'s parent directory chain resolved at *discovery*
-    /// (uninstall-scan) time, recorded by `RemnantScanner.plan` so the
+    /// (uninstall-scan) time, recorded as each remnant is constructed
+    /// (`RemnantScanner.makeItem`/`makeAppBundleItem`, `ReceiptRemnantBuilder`)
+    /// with `RemnantScanner.plan` as an idempotent backstop, so the
     /// pre-delete `SymlinkSwapGuard` can tell a symlink ancestor that
     /// already existed when the remnant was found (e.g. a relocated
     /// `~/Library/Caches` → `/Volumes/Ext/Caches`) from one swapped in

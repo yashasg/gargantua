@@ -33,7 +33,11 @@ extension RemnantScanner {
             tags: tags
         )
         counter += 1
-        return item
+        // Record the parent-chain resolution now, at discovery — while the
+        // filesystem still reflects what the scan saw. `plan` maps over the
+        // gathered items again as an idempotent backstop, but binding it here
+        // closes the in-scan window between this stat and plan's return.
+        return item.recordingScanTimeAncestry()
     }
 
     static func makeAppBundleItem(for app: AppInfo) -> RemnantItem? {
@@ -56,7 +60,7 @@ extension RemnantScanner {
             lastAccessed: metadata(at: path)?.lastAccessed ?? app.lastUsedDate,
             regenerates: false,
             tags: ["app_bundle"]
-        )
+        ).recordingScanTimeAncestry()
     }
 
     private static func metadata(at path: String) -> (size: Int64, lastAccessed: Date?)? {

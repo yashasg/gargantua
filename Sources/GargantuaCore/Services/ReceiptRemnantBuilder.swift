@@ -95,7 +95,7 @@ public struct ReceiptRemnantBuilder: Sendable {
                 lastAccessed: metadata.lastAccessed,
                 regenerates: false,
                 tags: [Self.receiptTag]
-            )
+            ).recordingScanTimeAncestry()
             items.append(item)
             seenPaths.insert(candidate.path)
             counter += 1

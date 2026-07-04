@@ -225,4 +225,38 @@ struct RemnantScannerTests {
         )
         #expect(!SymlinkSwapGuard.isUnchanged(url, scanTimeResolvedParent: scan.scanTimeResolvedParent))
     }
+
+    @Test("makeItem records scan-time ancestry at construction, before plan() maps over the results")
+    func makeItemRecordsAncestryAtConstruction() throws {
+        // Binding the recording at construction (not only at plan's return)
+        // closes the in-scan TOCTOU window between an item's stat and the end
+        // of the scan. Proven by calling makeItem directly and asserting the
+        // returned item already carries the resolved parent.
+        let fixture = try FixtureTree()
+        let real = try fixture.makeDir("real")
+        try fixture.makeFile("real/cache.db", contents: "abcdef")
+        let link = fixture.root.appendingPathComponent("link")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+
+        let rule = RemnantRule(
+            id: "generic_caches",
+            name: "Caches",
+            category: .caches,
+            pathTemplates: [link.path],
+            confidence: 99,
+            explanation: "Disposable cache data.",
+            source: SourceAttribution(name: "{appName}"),
+            regenerates: true,
+            tags: ["cache"]
+        )
+
+        var counter = 0
+        let item = try #require(RemnantScanner.makeItem(
+            rule: rule,
+            app: chromeApp(),
+            path: link.appendingPathComponent("cache.db").path,
+            counter: &counter
+        ))
+        #expect(item.scanTimeResolvedParent == real.resolvingSymlinksInPath().path)
+    }
 }
