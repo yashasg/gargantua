@@ -134,7 +134,8 @@ struct MCPToolSchemasTests {
                     explanation: "Browser cache files. Regenerated automatically.",
                     source: "Google Chrome",
                     lastAccessed: Date(timeIntervalSince1970: 1_700_000_000),
-                    category: "browser_cache"
+                    category: "browser_cache",
+                    scanTimeResolvedParent: "/Volumes/Ext/dev"
                 ),
             ],
             summary: MCPScanSummary(
@@ -154,9 +155,28 @@ struct MCPToolSchemasTests {
         #expect(s.contains("\"total_reclaimable\""))
         #expect(s.contains("\"safe_count\""))
         #expect(s.contains("\"last_accessed\""))
+        #expect(s.contains("\"scan_time_resolved_parent\""))
 
         let decoded = try decoder.decode(MCPScanOutput.self, from: data)
         #expect(decoded == output)
+    }
+
+    @Test("scan item omits scan_time_resolved_parent from JSON when nil")
+    func scanItemOmitsResolvedParentWhenNil() throws {
+        let item = MCPScanItem(
+            id: "chrome_cache_001",
+            name: "Chrome Browser Cache",
+            path: "~/Library/Caches/Google/Chrome",
+            size: "10.5 GB",
+            safety: "safe",
+            confidence: 99,
+            explanation: "Browser cache files. Regenerated automatically.",
+            source: "Google Chrome",
+            category: "browser_cache"
+        )
+        let data = try JSONEncoder().encode(item)
+        let s = String(data: data, encoding: .utf8) ?? ""
+        #expect(!s.contains("scan_time_resolved_parent"))
     }
 
     @Test("analyze output uses health_score and top_consumers snake_case")

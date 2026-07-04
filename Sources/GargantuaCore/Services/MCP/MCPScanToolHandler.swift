@@ -191,7 +191,8 @@ public struct MCPScanToolHandler: Sendable {
                 explanation: trimmedExplanation(result.explanation),
                 source: result.source.name,
                 lastAccessed: result.lastAccessed,
-                category: result.category
+                category: result.category,
+                scanTimeResolvedParent: result.scanTimeResolvedParent
             )
         }
 
