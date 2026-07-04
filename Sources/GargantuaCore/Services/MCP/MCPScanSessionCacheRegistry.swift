@@ -33,8 +33,10 @@ public final class MCPScanSessionCacheRegistry: @unchecked Sendable {
     /// set. Called on SSE session teardown (see `MCPSSERequestRouter.closeStream`)
     /// so a long-lived SSE daemon does not accumulate orphaned per-connection
     /// caches for the process lifetime. No-op if the connection has no cache.
-    /// `.stdio` is never evicted — only SSE session teardown drives eviction.
+    /// `.stdio` is a single lifetime session and is never evicted — the guard
+    /// enforces that invariant even if the method is called directly.
     public func evict(_ connection: MCPConnectionID) {
+        guard connection != .stdio else { return }
         lock.lock()
         defer { lock.unlock() }
         caches.removeValue(forKey: connection)

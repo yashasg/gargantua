@@ -138,6 +138,59 @@ struct MCPConnectionTeardownEvictionTests {
         #expect(box.value == .sse("s1"))
     }
 
+    @Test("evict is a no-op for .stdio — the single lifetime session is never evicted")
+    func evictDoesNotDropStdio() {
+        let registry = MCPScanSessionCacheRegistry()
+        let stdioCache = registry.cache(for: .stdio)
+
+        registry.evict(.stdio)
+
+        // Same instance back: the guard prevented eviction of the stdio cache.
+        #expect(registry.cache(for: .stdio) === stdioCache)
+    }
+
+    @Test("evictClientIdentity is a no-op for .stdio — the single lifetime session is never evicted")
+    func evictClientIdentityDoesNotDropStdio() {
+        let dispatcher = MCPRequestDispatcher(serverInfo: Self.serverInfo)
+        _ = dispatcher.dispatch(
+            request(method: "initialize", params: initializeParams(clientName: "client-stdio")),
+            connection: .stdio
+        )
+        #expect(dispatcher.currentClientIdentity(for: .stdio) != nil)
+
+        dispatcher.evictClientIdentity(for: .stdio)
+
+        #expect(dispatcher.currentClientIdentity(for: .stdio) != nil)
+    }
+
+    @Test("closeStream releases the router lock before firing onClose (re-entrant router call does not deadlock)")
+    func closeStreamReleasesLockBeforeOnClose() {
+        let holder = RouterHolder()
+        let fired = ConnectionCaptureBox()
+        let router = MCPSSERequestRouter(
+            handler: { _, _ in nil },
+            onClose: { connection in
+                // Re-enter the router from within onClose: openStream takes the
+                // same NSLock closeStream holds while mutating `sessions`. The
+                // lock is non-recursive, so if closeStream still held it here
+                // this would deadlock; reaching the assertion below proves it
+                // was released before onClose fired.
+                _ = holder.router?.openStream(
+                    request: MCPHTTPRequest(method: "GET", path: "/sse"),
+                    configuration: MCPSSEServerConfiguration(),
+                    storedToken: nil,
+                    eventSink: { _, _ in }
+                )
+                fired.value = connection
+            }
+        )
+        holder.router = router
+
+        router.closeStream(sessionID: "s1")
+
+        #expect(fired.value == .sse("s1"))
+    }
+
     @Test("SSE teardown evicts both maps; a reused session cannot resolve the closed session's item_ids")
     func sseTeardownEvictsBothMapsEndToEnd() throws {
         let dispatcher = MCPRequestDispatcher(
@@ -225,4 +278,12 @@ struct MCPConnectionTeardownEvictionTests {
 /// `MCPScanSessionCachePartitionTests`.
 private final class ConnectionCaptureBox: @unchecked Sendable {
     var value: MCPConnectionID?
+}
+
+/// Late-bound holder so an `onClose` closure can re-enter the very router it is
+/// attached to (the router does not exist yet when the closure is built). Only
+/// the deadlock-freedom test uses it; tests run synchronously so the plain
+/// store is safe.
+private final class RouterHolder: @unchecked Sendable {
+    var router: MCPSSERequestRouter?
 }

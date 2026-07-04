@@ -81,7 +81,11 @@ public final class MCPSSERequestRouter: @unchecked Sendable {
         sessions.removeValue(forKey: sessionID)
         lock.unlock()
         // Fire eviction outside the router lock so the callback can take the
-        // registry/dispatcher locks without nesting under ours.
+        // registry/dispatcher locks without nesting under ours. Fired
+        // unconditionally (even when the session was already removed, e.g. a
+        // double `.cancelled`/`.failed`) so teardown always evicts the
+        // connection's per-connection state; the key is `.sse(sessionID)`, so
+        // this can only ever drop that one session's own cache/identity.
         onClose?(.sse(sessionID))
     }
 

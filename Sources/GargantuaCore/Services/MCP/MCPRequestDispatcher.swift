@@ -66,8 +66,10 @@ public final class MCPRequestDispatcher: @unchecked Sendable {
     /// session teardown so the per-connection `clientIdentities` map does not
     /// retain orphaned entries for the process lifetime. No-op if the
     /// connection never completed `initialize`. `.stdio` is never evicted —
-    /// its single session lives for the whole process.
+    /// its single session lives for the whole process; the guard enforces that
+    /// invariant even if the method is called directly.
     public func evictClientIdentity(for connection: MCPConnectionID) {
+        guard connection != .stdio else { return }
         lock.lock()
         defer { lock.unlock() }
         clientIdentities.removeValue(forKey: connection)
