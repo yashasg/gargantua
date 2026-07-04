@@ -38,6 +38,7 @@ Gargantua-PRD-*.md
 docs/design-brief-*.md
 docs/designs/
 docs/handoffs/
+docs/metrics/
 docs/plans/
 docs/scans/
 .healthcheck/
