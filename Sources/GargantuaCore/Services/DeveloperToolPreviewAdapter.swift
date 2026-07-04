@@ -60,12 +60,56 @@ public struct DeveloperToolPreviewAdapter: Sendable {
 
         let rawOutput = output.stdout.isEmpty ? output.stderr : output.stdout
         let commandPreview = [executable.path] + arguments
-        return DeveloperToolPreview(
+        let base = DeveloperToolPreview(
             tool: tool,
             commandPreview: commandPreview,
             items: Self.previewItems(tool: tool, commandPreview: commandPreview, output: rawOutput),
             rawOutput: rawOutput
         )
+        guard tool == .homebrew else { return base }
+        return DeveloperToolPreview(
+            tool: base.tool,
+            commandPreview: base.commandPreview,
+            items: base.items,
+            rawOutput: base.rawOutput,
+            error: base.error,
+            homebrewAutoremove: homebrewAutoremovePreview(executable: executable)
+        )
+    }
+
+    func homebrewAutoremovePreview(executable: URL) -> HomebrewAutoremovePreview? {
+        guard let dry = try? runner.run(
+            executable: executable, arguments: ["autoremove", "-n"],
+            timeout: timeout, maxCapturedBytes: DefaultProcessRunner.defaultMaxCapturedBytes
+        ), dry.exitCode == 0 else { return nil }
+
+        let output = dry.stdout.isEmpty ? dry.stderr : dry.stdout
+        let names = Self.parseHomebrewAutoremoveFormulae(output)
+        guard !names.isEmpty else { return HomebrewAutoremovePreview(formulae: []) }
+
+        guard let cellar = try? runner.run(
+            executable: executable, arguments: ["--cellar"],
+            timeout: timeout, maxCapturedBytes: DefaultProcessRunner.defaultMaxCapturedBytes
+        ), cellar.exitCode == 0 else { return nil }
+        let rootPath = cellar.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard rootPath.hasPrefix("/") else { return nil }
+        let root = URL(fileURLWithPath: rootPath)
+        let command = [executable.path, "autoremove"]
+
+        let formulae = names.map { name -> DeveloperToolPreviewItem in
+            let dir = root.appendingPathComponent(URL(fileURLWithPath: name).lastPathComponent)
+            let bytes: Int64? = (Self.isSafeCacheRoot(at: dir) && Self.directoryExists(at: dir))
+                ? Self.directorySize(at: dir) : nil
+            return DeveloperToolPreviewItem(
+                id: "homebrew-autoremove-\(name)",
+                tool: .homebrew,
+                title: name,
+                detail: dir.path,
+                reclaimableBytes: bytes,
+                commandPreview: command
+            )
+        }
+        return HomebrewAutoremovePreview(formulae: formulae)
     }
 
     static func previewArguments(for tool: DeveloperTool) -> [String] {

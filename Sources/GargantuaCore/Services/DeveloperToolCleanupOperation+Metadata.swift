@@ -209,7 +209,7 @@ extension DeveloperToolCleanupOperation {
         case .homebrewCleanup, .homebrewPruneAll:
             return preview.reclaimableBytes
         case .homebrewAutoremove:
-            return nil
+            return preview.homebrewAutoremove?.totalBytes
         default:
             return nil
         }

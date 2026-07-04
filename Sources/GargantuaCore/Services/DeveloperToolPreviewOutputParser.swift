@@ -44,6 +44,10 @@ extension DeveloperToolPreviewAdapter {
     static func parseSize(_ token: String) -> Int64? {
         DeveloperToolPreviewOutputParser.parseSize(token)
     }
+
+    static func parseHomebrewAutoremoveFormulae(_ output: String) -> [String] {
+        DeveloperToolPreviewOutputParser.parseHomebrewAutoremoveFormulae(output: output)
+    }
 }
 
 enum DeveloperToolPreviewOutputParser {
@@ -152,6 +156,21 @@ enum DeveloperToolPreviewOutputParser {
             return nil
         }
         return Int64(product)
+    }
+
+    static func parseHomebrewAutoremoveFormulae(output: String) -> [String] {
+        output.split(separator: "\n").compactMap { rawLine in
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty, !line.hasPrefix("==>"), isFormulaName(line) else { return nil }
+            return line
+        }
+    }
+
+    static func isFormulaName(_ token: String) -> Bool {
+        guard !token.isEmpty else { return false }
+        let allowed = CharacterSet(charactersIn:
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@._+-/")
+        return token.unicodeScalars.allSatisfy { allowed.contains($0) }
     }
 
     private static func parseHomebrewCleanupPreview(

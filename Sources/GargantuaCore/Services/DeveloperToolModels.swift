@@ -83,19 +83,26 @@ public struct DeveloperToolPreview: Equatable, Sendable {
     public let items: [DeveloperToolPreviewItem]
     public let rawOutput: String
     public let error: String?
+    /// Orphan formulae `brew autoremove` would remove, plus each one's Cellar
+    /// size. Populated only for `.homebrew` previews. `nil` when the
+    /// autoremove dry-run couldn't be run; an empty `formulae` list means it
+    /// ran successfully and found no orphans.
+    public let homebrewAutoremove: HomebrewAutoremovePreview?
 
     public init(
         tool: DeveloperTool,
         commandPreview: [String],
         items: [DeveloperToolPreviewItem],
         rawOutput: String,
-        error: String? = nil
+        error: String? = nil,
+        homebrewAutoremove: HomebrewAutoremovePreview? = nil
     ) {
         self.tool = tool
         self.commandPreview = commandPreview
         self.items = items
         self.rawOutput = rawOutput
         self.error = error
+        self.homebrewAutoremove = homebrewAutoremove
     }
 
     /// Sum of per-item reclaimable bytes. Saturates at `Int64.max` on
@@ -110,6 +117,20 @@ public struct DeveloperToolPreview: Equatable, Sendable {
 
     public var hasKnownReclaimableBytes: Bool {
         items.contains { $0.reclaimableBytes != nil }
+    }
+}
+
+/// The result of a `brew autoremove -n` dry-run: the orphan formulae it would
+/// remove, each paired (where measurable) with its Cellar directory size.
+public struct HomebrewAutoremovePreview: Equatable, Sendable {
+    public let formulae: [DeveloperToolPreviewItem]
+    public init(formulae: [DeveloperToolPreviewItem]) { self.formulae = formulae }
+    /// Sum of each orphan formula's Cellar size, saturating at Int64.max.
+    public var totalBytes: Int64 {
+        formulae.compactMap(\.reclaimableBytes).reduce(Int64(0)) { acc, next in
+            let (sum, overflow) = acc.addingReportingOverflow(next)
+            return overflow ? .max : sum
+        }
     }
 }
 

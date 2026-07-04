@@ -201,4 +201,19 @@ struct DeveloperToolPreviewAdapterParserTests {
         )
         #expect(preview.reclaimableBytes == 0)
     }
+
+    // MARK: - parseHomebrewAutoremoveFormulae
+
+    @Test("parseHomebrewAutoremoveFormulae keeps full_names and drops the header")
+    func parsesAutoremoveFormulae() {
+        let out = "==> Would autoremove 3 unneeded formulae:\nlibyaml\nhomebrew/core/readline\npython@3.11"
+        #expect(DeveloperToolPreviewAdapter.parseHomebrewAutoremoveFormulae(out)
+            == ["libyaml", "homebrew/core/readline", "python@3.11"])
+    }
+
+    @Test("parseHomebrewAutoremoveFormulae ignores env hints and blank lines")
+    func autoremoveParserIgnoresNoise() {
+        let out = "==> Would autoremove 1 unneeded formula:\n\nfoo\nDisable this behaviour by setting `X`."
+        #expect(DeveloperToolPreviewAdapter.parseHomebrewAutoremoveFormulae(out) == ["foo"])
+    }
 }
