@@ -84,4 +84,66 @@ extension DeveloperToolPreviewAdapterTests {
             .estimatedReclaimableBytes(in: preview) == 0)
         #expect(runner.calls.map(\.arguments) == [["cleanup", "-n"], ["autoremove", "-n"]])
     }
+
+    // The failure branch must yield `homebrewAutoremove == nil` (row stays
+    // "Exact reclaim estimate unavailable") — never a present-but-empty 0,
+    // which would read as a misleading "0 B previewed". This distinction is
+    // the most regression-prone part of the feature, so guard each way it
+    // can fail.
+
+    @Test("A non-zero `brew autoremove -n` exit leaves the autoremove estimate unavailable")
+    func homebrewAutoremoveDryRunFailure() throws {
+        let brew = try makeScratchBinary(name: "brew")
+        defer { try? FileManager.default.removeItem(at: brew.deletingLastPathComponent()) }
+        let runner = StubRunner(outputs: [
+            "brew cleanup -n": ProcessOutput(stdout: "", stderr: "", exitCode: 0),
+            "brew autoremove -n": ProcessOutput(stdout: "", stderr: "boom", exitCode: 1),
+        ])
+        let adapter = DeveloperToolPreviewAdapter(
+            resolver: DeveloperToolBinaryResolver(environment: [
+                DeveloperToolBinaryResolver.homebrewEnvVarName: brew.path]),
+            runner: runner)
+        let preview = try adapter.preview(.homebrew)
+        #expect(preview.homebrewAutoremove == nil)
+        #expect(DeveloperToolCleanupOperation.homebrewAutoremove
+            .estimatedReclaimableBytes(in: preview) == nil)
+    }
+
+    @Test("A failing `brew --cellar` while orphans exist leaves the estimate unavailable")
+    func homebrewAutoremoveCellarFailure() throws {
+        let brew = try makeScratchBinary(name: "brew")
+        defer { try? FileManager.default.removeItem(at: brew.deletingLastPathComponent()) }
+        let runner = StubRunner(outputs: [
+            "brew cleanup -n": ProcessOutput(stdout: "", stderr: "", exitCode: 0),
+            "brew autoremove -n": ProcessOutput(
+                stdout: "==> Would autoremove 1 unneeded formula:\nlibyaml",
+                stderr: "", exitCode: 0),
+            "brew --cellar": ProcessOutput(stdout: "", stderr: "nope", exitCode: 1),
+        ])
+        let adapter = DeveloperToolPreviewAdapter(
+            resolver: DeveloperToolBinaryResolver(environment: [
+                DeveloperToolBinaryResolver.homebrewEnvVarName: brew.path]),
+            runner: runner)
+        let preview = try adapter.preview(.homebrew)
+        #expect(preview.homebrewAutoremove == nil)
+    }
+
+    @Test("A non-absolute Cellar root leaves the autoremove estimate unavailable")
+    func homebrewAutoremoveNonAbsoluteCellarRoot() throws {
+        let brew = try makeScratchBinary(name: "brew")
+        defer { try? FileManager.default.removeItem(at: brew.deletingLastPathComponent()) }
+        let runner = StubRunner(outputs: [
+            "brew cleanup -n": ProcessOutput(stdout: "", stderr: "", exitCode: 0),
+            "brew autoremove -n": ProcessOutput(
+                stdout: "==> Would autoremove 1 unneeded formula:\nlibyaml",
+                stderr: "", exitCode: 0),
+            "brew --cellar": ProcessOutput(stdout: "   \n", stderr: "", exitCode: 0),
+        ])
+        let adapter = DeveloperToolPreviewAdapter(
+            resolver: DeveloperToolBinaryResolver(environment: [
+                DeveloperToolBinaryResolver.homebrewEnvVarName: brew.path]),
+            runner: runner)
+        let preview = try adapter.preview(.homebrew)
+        #expect(preview.homebrewAutoremove == nil)
+    }
 }
