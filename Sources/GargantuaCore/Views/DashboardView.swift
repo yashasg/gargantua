@@ -8,10 +8,16 @@ import SwiftUI
 /// The dashboard leads with a triage pass that ranks the deeper cleanup tools,
 /// then keeps supporting system metrics and evidence below the roadmap.
 public struct DashboardView: View {
+    /// Probes the total on-demand Homebrew reclaimable bytes. Returns `nil`
+    /// when Homebrew isn't installed or the dry-run fails. Blocking — invoked
+    /// off the main actor. Injectable so tests don't shell out to `brew`.
+    public typealias HomebrewReclaimableProvider = @Sendable () -> Int64?
+
     @Binding var sidebarSelection: String?
 
     @Bindable private var session: DashboardSessionState
     private let persistence: PersistenceController?
+    private let homebrewReclaimableProvider: HomebrewReclaimableProvider
     /// Opens a fresh store for reads the scheduler process writes. The app's
     /// boot-time `persistence` caches settings in its long-lived context and
     /// never sees another process's write, so — like the menu bar — the
@@ -45,12 +51,14 @@ public struct DashboardView: View {
         sidebarSelection: Binding<String?>,
         session: DashboardSessionState,
         persistence: PersistenceController? = nil,
-        makeFreshPersistence: @escaping @MainActor () throws -> PersistenceController = { try PersistenceController() }
+        makeFreshPersistence: @escaping @MainActor () throws -> PersistenceController = { try PersistenceController() },
+        homebrewReclaimableProvider: @escaping HomebrewReclaimableProvider = { HomebrewReclaimableProbe.probe() }
     ) {
         self._sidebarSelection = sidebarSelection
         self.session = session
         self.persistence = persistence
         self.makeFreshPersistence = makeFreshPersistence
+        self.homebrewReclaimableProvider = homebrewReclaimableProvider
     }
 
     public var body: some View {
@@ -70,6 +78,7 @@ public struct DashboardView: View {
                     VStack(spacing: GargantuaSpacing.space5) {
                         triageOverviewSection
                         roadmapSection
+                        homebrewSignpostSection
                         scheduledScanSection
                         triageEvidenceSection
                     }
@@ -166,6 +175,18 @@ public struct DashboardView: View {
         )
     }
 
+    // MARK: - Homebrew Signpost
+
+    @ViewBuilder
+    private var homebrewSignpostSection: some View {
+        if let bytes = session.homebrewReclaimableBytes, bytes > 0 {
+            DashboardHomebrewSignpost(
+                reclaimableBytes: bytes,
+                onOpen: { sidebarSelection = "devTools" }
+            )
+        }
+    }
+
     // MARK: - Alerts Section
 
     @ViewBuilder
@@ -221,6 +242,7 @@ public struct DashboardView: View {
         // double-click can't spawn a second overlapping scan in the window
         // before the adapter flips `scanProgress.isScanning`.
         guard session.beginTriageScan() else { return }
+        refreshHomebrewSignpost()
         let progress = session.scanProgress
         // Resolve the user's active profile up-front on MainActor so the
         // background scan honours their setting instead of always running
@@ -243,6 +265,20 @@ public struct DashboardView: View {
                 progress.recordError(error.localizedDescription)
                 progress.finish(itemsFound: 0)
             }
+        }
+    }
+
+    /// Probe the on-demand Homebrew reclaimable total off the main actor
+    /// (it shells out to `brew`) and cache it for the signpost. Fired
+    /// alongside each triage so a user who never opens Developer Tools still
+    /// learns there's space to reclaim there. A `nil` result (Homebrew absent
+    /// or dry-run failed) leaves the prior value untouched rather than hiding
+    /// a still-valid signpost on a transient failure.
+    private func refreshHomebrewSignpost() {
+        let provider = homebrewReclaimableProvider
+        Task {
+            let bytes = await Task.detached(priority: .utility) { provider() }.value
+            if let bytes { session.homebrewReclaimableBytes = bytes }
         }
     }
 

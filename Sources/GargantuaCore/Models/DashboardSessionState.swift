@@ -13,6 +13,11 @@ public final class DashboardSessionState {
     public var scanProgress = ScanProgress()
     public var hasRunTriageScan: Bool = false
     public var lastTriageAt: Date?
+    /// Total on-demand Homebrew reclaimable bytes (cache + old versions +
+    /// orphans) probed alongside triage, cached here so a nav away-and-back
+    /// doesn't re-shell out to `brew`. `nil` = not yet probed / Homebrew not
+    /// installed; the dashboard signpost only shows when this is `> 0`.
+    public var homebrewReclaimableBytes: Int64?
     /// True from the moment a triage scan is requested until its task
     /// finishes. `scanProgress.isScanning` only flips once the adapter
     /// starts (and can flicker false between adapters), so guarding
