@@ -55,7 +55,7 @@ extension DeveloperToolPanel {
                         .lineLimit(2)
                     }
                     if let bytes = operation.estimatedReclaimableBytes(in: preview) {
-                        Text(Self.formatBytes(bytes) + " previewed")
+                        Text(Self.formatBytes(bytes) + " previewed" + Self.autoremoveFormulaSuffix(operation, preview: preview))
                             .font(GargantuaFonts.monoData)
                             .foregroundStyle(GargantuaColors.ink2)
                     } else {
@@ -81,6 +81,20 @@ extension DeveloperToolPanel {
                     .stroke(GargantuaColors.protected_.opacity(0.55), lineWidth: 1)
             }
         }
+    }
+
+    /// Appends an orphan formula count to the `.homebrewAutoremove` estimate
+    /// line (e.g. " · 3 formulae"). Empty for every other operation, and for
+    /// autoremove itself when there are no orphans to report.
+    static func autoremoveFormulaSuffix(
+        _ operation: DeveloperToolCleanupOperation,
+        preview: DeveloperToolPreview
+    ) -> String {
+        guard operation == .homebrewAutoremove,
+              let count = preview.homebrewAutoremove?.formulae.count, count > 0 else {
+            return ""
+        }
+        return " · \(count) formula\(count == 1 ? "" : "e")"
     }
 
     func safetyLabel(for operation: DeveloperToolCleanupOperation) -> some View {
