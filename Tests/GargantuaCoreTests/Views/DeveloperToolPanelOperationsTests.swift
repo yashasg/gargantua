@@ -5,7 +5,7 @@ import Testing
 @Suite("DeveloperToolPanel autoremove suffix")
 struct DeveloperToolPanelOperationsTests {
     private func homebrewPreview(orphans: Int) -> DeveloperToolPreview {
-        let formulae = (0..<orphans).map { i in
+        let formulae = (0 ..< orphans).map { i in
             DeveloperToolPreviewItem(
                 id: "homebrew-autoremove-\(i)", tool: .homebrew, title: "f\(i)",
                 reclaimableBytes: 10, commandPreview: ["brew", "autoremove"])
