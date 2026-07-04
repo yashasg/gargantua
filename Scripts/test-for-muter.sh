@@ -90,5 +90,11 @@ exec /usr/bin/perl -e '
     alarm $secs;
     waitpid($pid, 0);
     my $status = $?;
-    exit ($status >> 8) || ($status & 127 ? 128 + ($status & 127) : 0);
+    # Propagate the child result faithfully. `exit ($status >> 8) || ...` would
+    # bind the parens as exit()'s argument, making the signal branch dead code
+    # and reporting a signal-killed child (exit-code bits are 0) as exit 0 —
+    # which Muter would read as a surviving mutant. A process either exits or is
+    # signalled, so check the signal bits first, then the normal exit code.
+    my $code = ($status & 127) ? 128 + ($status & 127) : ($status >> 8);
+    exit $code;
 ' "$TIMEOUT_SECS" "$_SCRIPT_DIR/test.sh" "$@"

@@ -21,10 +21,19 @@
 # detects that mismatch on the first build, wipes `.build`, and then delegates
 # to Scripts/test.sh — which handles MLX metallib staging that `swift test`
 # requires for the GargantuaCoreTests bundle.
+#
+# Do NOT add `--parallel` here. This suite is 100% swift-testing, and
+# `swift test --parallel` cranks in-process concurrency high enough to race
+# a handful of async tests (e.g. ClaudeCodeAgentSessionController), which then
+# fail nondeterministically. Under Muter that nondeterminism produces FALSE
+# SURVIVORS: a mutant whose only killing test is a racy async one intermittently
+# "passes", so Muter under-reports the score (see gargantua-hwzj — ScanFilter
+# read 68%/7 survivors under `--parallel`, but all 22 mutants die when the same
+# mutation runs against the deterministic serial suite). The serial run is
+# slower (~33s vs ~6s) but that is the right trade for an accuracy tool.
 executable: /bin/bash
 arguments:
   - Scripts/test-for-muter.sh
-  - --parallel
 
 # Skip files Muter should never mutate. Muter uses substring matching, so
 # entries here match anywhere in the file path.
