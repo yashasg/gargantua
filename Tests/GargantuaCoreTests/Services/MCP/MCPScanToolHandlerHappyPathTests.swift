@@ -14,7 +14,8 @@ private func makeResult(
     source: String = "TestApp",
     confidence: Int = 95,
     explanation: String = "test explanation",
-    lastAccessed: Date? = fixedDate
+    lastAccessed: Date? = fixedDate,
+    scanTimeResolvedParent: String? = nil
 ) -> ScanResult {
     ScanResult(
         id: id,
@@ -26,7 +27,8 @@ private func makeResult(
         explanation: explanation,
         source: SourceAttribution(name: source),
         lastAccessed: lastAccessed,
-        category: category
+        category: category,
+        scanTimeResolvedParent: scanTimeResolvedParent
     )
 }
 
@@ -64,7 +66,12 @@ struct MCPScanToolHandlerHappyPathTests {
                 name: "Chrome Browser Cache",
                 source: "Google Chrome",
                 confidence: 99,
-                explanation: "Browser cache files. Regenerated automatically."
+                explanation: "Browser cache files. Regenerated automatically.",
+                // Deliberately NOT the literal parent of `path` — the scan
+                // pipeline resolves symlinked ancestors, so this proves the
+                // emit path carries the recorded value verbatim rather than
+                // re-deriving it from `path`.
+                scanTimeResolvedParent: "/Volumes/Ext/Caches/Google/Chrome"
             ),
         ]
         let subject = makeHandler(scanner: { _ in results })
@@ -83,6 +90,7 @@ struct MCPScanToolHandlerHappyPathTests {
         #expect(item.source == "Google Chrome")
         #expect(item.category == "browser_cache")
         #expect(item.lastAccessed == fixedDate)
+        #expect(item.scanTimeResolvedParent == "/Volumes/Ext/Caches/Google/Chrome")
     }
 
     @Test("totalReclaimable sums safe and review bytes but excludes protected")

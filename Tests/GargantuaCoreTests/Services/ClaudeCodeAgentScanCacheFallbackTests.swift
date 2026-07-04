@@ -17,10 +17,14 @@ struct ClaudeCodeAgentScanCacheFallbackTests {
             explanation: "Browser cache files. Regenerated automatically.",
             source: "Google Chrome",
             category: "dev_artifacts",
-            scanTimeResolvedParent: "/Volumes/Ext/dev"
+            // Distinct from `path`'s literal parent (`/Volumes/Ext/dev`) — a
+            // symlinked ancestor resolves elsewhere. Asserting this exact value
+            // proves the wire value is carried through, not re-derived from
+            // `path` at rehydration time.
+            scanTimeResolvedParent: "/mnt/real/dev"
         )
         let result = ClaudeCodeAgentSessionController.scanResult(from: item)
-        #expect(result?.scanTimeResolvedParent == "/Volumes/Ext/dev")
+        #expect(result?.scanTimeResolvedParent == "/mnt/real/dev")
     }
 
     @Test("scanResult(from:) leaves scan_time_resolved_parent nil when the wire item didn't carry one")
