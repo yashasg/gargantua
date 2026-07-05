@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6] - 2026-07-05
+
+### Added
+
+- **Homebrew reclaim visibility.** Developer Tools now estimates brew autoremove savings from orphaned Cellar sizes and shows the orphan formula count right on the autoremove row, and the dashboard surfaces a signpost linking straight to it when there's space to reclaim.
+
+### Changed
+
+- **Faster Deep Clean scans.** Scan rules now evaluate concurrently with shared directory-size caching and a smarter `**` walk, cutting a typical scan from over two minutes to about 22 seconds with identical results.
+- **Faster app signature checks.** Code-signature validation skips redundant resource hashing, turning multi-second "Verifying…" stalls (e.g. Xcode, Final Cut Pro) into milliseconds while still fully validating identity and trust.
+- **Snappier process search and lists.** Process search reuses scan environment and matches launch sources in constant time, Deep Clean's result grouping is memoized, disk-explorer subtrees skip re-walking on re-expand, and trash/command actions run off the main thread.
+- **Quieter, cooler idle dashboard.** The status bar no longer re-parses the full audit log every 2 seconds, dropping idle CPU from ~5% to ~0.07%.
+
+### Fixed
+
+- **Correct Apple Silicon CPU readings.** Process CPU usage is now converted from Mach ticks to real time, so the "high CPU" flag can actually fire on Apple Silicon Macs instead of always under-reporting.
+- **More reliable scheduled scans.** Scheduled scans now catch up correctly after sleep, don't advance the schedule on failure, refresh the dashboard across processes, and only notify once for a persistent error instead of every poll.
+- **Accurate space-freed totals.** Cleanup now counts only bytes actually reclaimed, de-dupes overlapping selections, and correctly sizes directories whose contents are hidden, so the "space freed" number matches reality.
+- **Safer file-matching and IDs.** Rule size filters (e.g. `100MB`) now match the same 1000-based units shown in the UI, exact filename patterns no longer sweep similarly-named files, and a duplicate rule or item ID no longer crashes the app.
+- **Uninstaller no longer over-attributes.** Uninstalling an app no longer flags a sibling app from the same vendor (e.g. Excel remnants when removing Word) as belonging to the target app.
+- **Steadier navigation during cleanup flows.** Leaving the Dev Purge screen mid-clean no longer orphans the running task or loses the summary; duplicate scans, triage scans, and process searches are now guarded against overlapping/stale runs.
+- **Deterministic mutation-test results.** The test suite now runs serially under Muter to eliminate flaky false survivors, and a timeout-wrapper bug that misreported killed tests as passing is fixed.
+- **Idle CPU fix carried through.** Stopped a redundant 2-second status poll from burning CPU at idle.
+
+### Security
+
+- **Safer protected-path and symlink handling.** Protected system paths can no longer be bypassed via case-twisted spellings, and symlink-swap protection now tracks ancestry from scan time so legitimate symlinked scan roots work while post-scan swaps are still blocked.
+
 ## [0.4.5] - 2026-06-23
 
 ### Added
